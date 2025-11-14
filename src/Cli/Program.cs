@@ -1,4 +1,5 @@
 using ARK.Cli.Infrastructure;
+using ARK.Cli.Commands;
 using ARK.Core.Tools;
 using ARK.Core.Hashing;
 
@@ -25,6 +26,8 @@ public class Program
                 "doctor" => await RunDoctorAsync(args),
                 "scan" => await RunScanAsync(args),
                 "verify" => await RunVerifyAsync(args),
+                "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await PsxRenameCommand.ExecuteAsync(args[2..]),
+                "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await PsxConvertCommand.ExecuteAsync(args[2..]),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -269,6 +272,21 @@ public class Program
         Console.WriteLine("  verify              Verify ROM integrity with hash checking");
         Console.WriteLine("    --root <path>     Root directory to verify (required)");
         Console.WriteLine();
+        Console.WriteLine("  rename psx          Rename PlayStation (PSX) disc images to canonical format");
+        Console.WriteLine("    --root <path>     Root directory to scan (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
+        Console.WriteLine("    --apply           Apply rename operations (default: dry-run)");
+        Console.WriteLine("    --cheats <mode>   Cheat disc handling: omit|standalone|as-disc (default: standalone)");
+        Console.WriteLine("    --json            Output plan in JSON format");
+        Console.WriteLine();
+        Console.WriteLine("  convert psx         Convert PlayStation (PSX) BIN/CUE to CHD format");
+        Console.WriteLine("    --root <path>     Root directory to scan (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
+        Console.WriteLine("    --apply           Apply conversion operations (default: dry-run)");
+        Console.WriteLine("    --delete-source   Delete BIN/CUE files after successful conversion (requires --apply)");
+        Console.WriteLine("    --cheats <mode>   Cheat disc handling: omit|standalone|as-disc (default: standalone)");
+        Console.WriteLine("    --json            Output plan in JSON format");
+        Console.WriteLine();
         Console.WriteLine("  --help, -h          Show this help message");
         Console.WriteLine("  --version, -v       Show version information");
         Console.WriteLine();
@@ -276,6 +294,9 @@ public class Program
         Console.WriteLine("  ark-retro-forge doctor");
         Console.WriteLine("  ark-retro-forge scan --root C:\\ROMs");
         Console.WriteLine("  ark-retro-forge verify --root C:\\ROMs");
+        Console.WriteLine("  ark-retro-forge rename psx --root C:\\PSX --recursive");
+        Console.WriteLine("  ark-retro-forge rename psx --root C:\\PSX --recursive --apply");
+        Console.WriteLine("  ark-retro-forge convert psx --root C:\\PSX --recursive --apply --delete-source");
         Console.WriteLine();
         Console.WriteLine("💡 Run 'doctor' first to check your environment");
     }
