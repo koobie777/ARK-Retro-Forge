@@ -1,0 +1,26 @@
+# CODEOWNERS file for ARK-Retro-Forge
+# These owners will be the default owners for everything in the repo.
+# They will be requested for review when someone opens a pull request.
+
+# Global owners
+* @koobie777
+
+# Core library
+/src/Core/ @koobie777
+
+# CLI application
+/src/Cli/ @koobie777
+
+# Tests
+/tests/ @koobie777
+
+# GitHub Actions and workflows
+/.github/ @koobie777
+
+# Documentation
+*.md @koobie777
+
+# Configuration files
+*.props @koobie777
+*.config @koobie777
+.editorconfig @koobie777

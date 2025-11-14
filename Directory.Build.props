@@ -1,0 +1,61 @@
+<Project>
+  <PropertyGroup>
+    <!-- Language and Framework Settings -->
+    <LangVersion>preview</LangVersion>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    
+    <!-- Build Settings -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    
+    <!-- Performance Optimizations -->
+    <TieredPGO>true</TieredPGO>
+    <TieredCompilation>true</TieredCompilation>
+    
+    <!-- Globalization -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    
+    <!-- Assembly Information -->
+    <Authors>ARK-Retro-Forge Contributors</Authors>
+    <Company>ARK-Retro-Forge</Company>
+    <Product>ARK-Retro-Forge</Product>
+    <Copyright>Copyright © 2024 ARK-Retro-Forge Contributors</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/koobie777/ARK-Retro-Forge</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/koobie777/ARK-Retro-Forge</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    
+    <!-- Versioning with MinVer -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
+    
+    <!-- Code Analysis -->
+    <NoWarn>$(NoWarn);CA1014</NoWarn> <!-- Mark assemblies with CLSCompliant -->
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <DebugType>portable</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <Optimize>false</Optimize>
+  </PropertyGroup>
+
+  <!-- Common Package References -->
+  <ItemGroup>
+    <PackageReference Include="MinVer" Version="5.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>
