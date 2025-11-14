@@ -1,0 +1,128 @@
+name: Bug Report
+description: Report a bug or issue with ARK-Retro-Forge
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the information below to help us diagnose and fix the issue.
+        
+        **IMPORTANT**: Do NOT include ROM files, BIOS files, or any copyrighted content in your bug report.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight Checklist
+      description: Please ensure you've completed these steps before submitting
+      options:
+        - label: I have searched existing issues to ensure this is not a duplicate
+          required: true
+        - label: I have run `doctor` command to check for missing tools
+          required: true
+        - label: I am using the latest version of ARK-Retro-Forge
+          required: true
+        - label: I have NOT included any ROM files, BIOS files, or copyrighted content
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: What version of ARK-Retro-Forge are you using?
+      placeholder: "e.g., 1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      description: What operating system are you using?
+      options:
+        - Windows 11
+        - Windows 10
+        - Other (please specify in additional context)
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of the bug
+      placeholder: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Run command '...'
+        2. With options '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: dry-run-logs
+    attributes:
+      label: Dry-Run Output
+      description: Please include the output from running the command with `--dry-run --verbose`
+      placeholder: Paste the output here
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log Files
+      description: Please include relevant log files from `.\logs\` directory (sanitize any sensitive paths)
+      placeholder: Paste log content here
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Add any other context about the problem here (screenshots, error messages, etc.)
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: external-tools
+    attributes:
+      label: External Tools Used
+      description: Which external tools are you using? (check all that apply)
+      options:
+        - label: chdman.exe
+        - label: maxcso.exe
+        - label: DolphinTool.exe
+        - label: Other (specify in additional context)
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is this issue?
+      options:
+        - Low - Minor inconvenience
+        - Medium - Affects functionality but has workaround
+        - High - Blocks important functionality
+        - Critical - Data loss or security issue
+    validations:
+      required: true
