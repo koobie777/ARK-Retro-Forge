@@ -5,20 +5,22 @@ namespace ARK.Tests.Systems.PSX;
 public class PsxRenamePlannerTests
 {
     [Fact]
-    public void PlanRename_DiscOfFormat_ShouldNormalize()
+    public void PlanRenames_DiscOfFormat_ShouldNormalize()
     {
         // Arrange
         var planner = new PsxRenamePlanner();
-        var testFile = "/tmp/test/Test Game (USA) [SLUS-12345] (Disc 1 of 3).bin";
+        var testDir = "/tmp/test-" + Guid.NewGuid();
+        var testFile = Path.Combine(testDir, "Test Game (USA) [SLUS-12345] (Disc 1 of 3).bin");
         
         // Create temp directory and file
-        Directory.CreateDirectory(Path.GetDirectoryName(testFile)!);
+        Directory.CreateDirectory(testDir);
         File.WriteAllText(testFile, "");
         
         try
         {
             // Act
-            var operation = planner.PlanRename(testFile);
+            var operations = planner.PlanRenames(testDir, recursive: false);
+            var operation = operations.Single();
             
             // Debug output
             var currentFileName = Path.GetFileName(testFile);
@@ -35,9 +37,9 @@ public class PsxRenamePlannerTests
         finally
         {
             // Cleanup
-            if (File.Exists(testFile))
+            if (Directory.Exists(testDir))
             {
-                File.Delete(testFile);
+                Directory.Delete(testDir, recursive: true);
             }
         }
     }
