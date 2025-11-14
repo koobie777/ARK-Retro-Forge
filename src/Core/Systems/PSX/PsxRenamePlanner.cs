@@ -32,7 +32,8 @@ public class PsxRenamePlanner
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var psxExtensions = new[] { ".bin", ".cue", ".chd", ".pbp", ".iso" };
         
-        var operations = new List<PsxRenameOperation>();
+        // First pass: collect all disc info
+        var allDiscs = new List<PsxDiscInfo>();
         
         foreach (var ext in psxExtensions)
         {
@@ -40,22 +41,53 @@ public class PsxRenamePlanner
             
             foreach (var file in files)
             {
-                var operation = PlanRename(file);
-                operations.Add(operation);
+                var discInfo = _parser.Parse(file);
+                
+                // Skip audio track BINs - they shouldn't be renamed independently
+                if (discInfo.IsAudioTrack)
+                {
+                    continue;
+                }
+                
+                allDiscs.Add(discInfo);
             }
+        }
+        
+        // Group by title+region to detect multi-disc sets
+        var multiDiscSets = allDiscs
+            .Where(d => !string.IsNullOrWhiteSpace(d.Title) && !string.IsNullOrWhiteSpace(d.Region))
+            .GroupBy(d => (d.Title, d.Region, d.Extension))
+            .Where(g => g.Count() > 1 || g.Any(d => d.DiscNumber.HasValue))
+            .ToDictionary(g => g.Key, g => g.Count());
+        
+        // Second pass: create operations with corrected disc count
+        var operations = new List<PsxRenameOperation>();
+        
+        foreach (var discInfo in allDiscs)
+        {
+            var key = (discInfo.Title, discInfo.Region, discInfo.Extension);
+            
+            // If this title/region/extension combo has multiple entries, set DiscCount
+            var correctedDiscInfo = discInfo;
+            if (multiDiscSets.TryGetValue(key, out var count) && count > 1)
+            {
+                correctedDiscInfo = discInfo with { DiscCount = count };
+            }
+            
+            var operation = PlanRename(correctedDiscInfo);
+            operations.Add(operation);
         }
         
         return operations;
     }
     
     /// <summary>
-    /// Plan a rename operation for a single file
+    /// Plan a rename operation for a single file (or PsxDiscInfo with pre-computed DiscCount)
     /// </summary>
-    public PsxRenameOperation PlanRename(string filePath)
+    private PsxRenameOperation PlanRename(PsxDiscInfo discInfo)
     {
-        var discInfo = _parser.Parse(filePath);
-        var currentFileName = Path.GetFileName(filePath);
-        var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
+        var currentFileName = Path.GetFileName(discInfo.FilePath);
+        var directory = Path.GetDirectoryName(discInfo.FilePath) ?? string.Empty;
         
         // Generate canonical name
         var canonicalName = PsxNameFormatter.Format(discInfo);
@@ -68,14 +100,14 @@ public class PsxRenamePlanner
         
         // Check for conflicts
         string? warning = discInfo.Warning;
-        if (File.Exists(destinationPath) && !string.Equals(filePath, destinationPath, StringComparison.OrdinalIgnoreCase))
+        if (File.Exists(destinationPath) && !string.Equals(discInfo.FilePath, destinationPath, StringComparison.OrdinalIgnoreCase))
         {
             warning = warning != null ? $"{warning}; Destination file already exists" : "Destination file already exists";
         }
         
         return new PsxRenameOperation
         {
-            SourcePath = filePath,
+            SourcePath = discInfo.FilePath,
             DestinationPath = destinationPath,
             DiscInfo = discInfo,
             IsAlreadyNamed = isAlreadyNamed,
