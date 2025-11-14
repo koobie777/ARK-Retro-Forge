@@ -41,12 +41,12 @@ public class FileHasher
         while ((bytesRead = await stream.ReadAsync(buffer.AsMemory(0, _options.BufferSize), cancellationToken)) > 0)
         {
             crc32Hasher?.Append(buffer.AsSpan(0, bytesRead));
-            
+
             if (md5Hasher != null)
             {
                 md5Hasher.TransformBlock(buffer, 0, bytesRead, null, 0);
             }
-            
+
             if (sha1Hasher != null)
             {
                 sha1Hasher.TransformBlock(buffer, 0, bytesRead, null, 0);

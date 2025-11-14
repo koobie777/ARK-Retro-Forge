@@ -8,7 +8,7 @@ namespace ARK.Core.Tools;
 public class ToolManager
 {
     private readonly string _toolsDirectory;
-    
+
     private static readonly ExternalTool[] KnownTools =
     [
         new() { Name = "chdman", ExecutableName = "chdman.exe", MinimumVersion = "0.261", Description = "MAME CHD Manager - PS1/PS2/Dreamcast CHD compression" },

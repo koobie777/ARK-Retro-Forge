@@ -1,6 +1,7 @@
+using ARK.Cli.Commands.Psx;
 using ARK.Cli.Infrastructure;
-using ARK.Core.Tools;
 using ARK.Core.Hashing;
+using ARK.Core.Tools;
 
 namespace ARK.Cli;
 
@@ -25,6 +26,9 @@ public class Program
                 "doctor" => await RunDoctorAsync(args),
                 "scan" => await RunScanAsync(args),
                 "verify" => await RunVerifyAsync(args),
+                "psx" => await RunPsxAsync(args),
+                "rename" => await RunRenameAsync(args),
+                "convert" => await RunConvertAsync(args),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -45,15 +49,15 @@ public class Program
     private static async Task<int> RunDoctorAsync(string[] args)
     {
         var json = args.Contains("--json");
-        
+
         var toolManager = new ToolManager();
         var results = toolManager.CheckAllTools().ToList();
 
         if (json)
         {
-            var jsonOutput = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var jsonOutput = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
             });
             Console.WriteLine(jsonOutput);
         }
@@ -70,7 +74,7 @@ public class Program
                 var version = result.Version ?? "N/A";
                 var minVersion = result.MinimumVersion ?? "-";
                 var path = result.Path ?? result.ErrorMessage ?? "Not found";
-                
+
                 if (path.Length > 40)
                 {
                     path = "..." + path[^37..];
@@ -80,12 +84,12 @@ public class Program
             }
 
             Console.WriteLine("══════════════════════════════════════════════════════════════════════");
-            
+
             var missingRequired = results.Where(r => !r.IsFound).ToList();
             var foundCount = results.Count(r => r.IsFound);
-            
+
             Console.WriteLine($"\nSummary: {foundCount}/{results.Count} tools found");
-            
+
             if (missingRequired.Any())
             {
                 Console.WriteLine("\n⚠️  Missing required tools:");
@@ -213,6 +217,91 @@ public class Program
         return (int)ExitCode.OK;
     }
 
+    private static async Task<int> RunPsxAsync(string[] args)
+    {
+        var root = GetArgValue(args, "--root");
+        if (string.IsNullOrEmpty(root))
+        {
+            Console.WriteLine("☄️ [IMPACT] | Component: psx | Context: Missing --root argument | Fix: Specify --root <path>");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var recursive = args.Contains("--recursive");
+        var apply = args.Contains("--apply");
+
+        return await PsxInteractiveCommand.ExecuteAsync(root, recursive, apply);
+    }
+
+    private static async Task<int> RunRenameAsync(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("☄️ [IMPACT] | Component: rename | Context: Missing subcommand | Fix: Specify 'rename psx'");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var subcommand = args[1].ToLowerInvariant();
+        if (subcommand != "psx")
+        {
+            Console.WriteLine($"☄️ [IMPACT] | Component: rename | Context: Unknown subcommand '{subcommand}' | Fix: Use 'rename psx'");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var root = GetArgValue(args, "--root");
+        if (string.IsNullOrEmpty(root))
+        {
+            Console.WriteLine("☄️ [IMPACT] | Component: rename psx | Context: Missing --root argument | Fix: Specify --root <path>");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var recursive = args.Contains("--recursive");
+        var flattenMultidisc = args.Contains("--flatten-multidisc");
+        var apply = args.Contains("--apply");
+
+        return await PsxRenameCommand.ExecuteAsync(root, recursive, flattenMultidisc, apply);
+    }
+
+    private static async Task<int> RunConvertAsync(string[] args)
+    {
+        if (args.Length < 2)
+        {
+            Console.WriteLine("☄️ [IMPACT] | Component: convert | Context: Missing subcommand | Fix: Specify 'convert psx'");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var subcommand = args[1].ToLowerInvariant();
+        if (subcommand != "psx")
+        {
+            Console.WriteLine($"☄️ [IMPACT] | Component: convert | Context: Unknown subcommand '{subcommand}' | Fix: Use 'convert psx'");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var root = GetArgValue(args, "--root");
+        if (string.IsNullOrEmpty(root))
+        {
+            Console.WriteLine("☄️ [IMPACT] | Component: convert psx | Context: Missing --root argument | Fix: Specify --root <path>");
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var recursive = args.Contains("--recursive");
+        var flattenMultidisc = args.Contains("--flatten-multidisc");
+        var targetFormat = GetArgValue(args, "--target-format") ?? "chd";
+        var fromChdToBinCue = args.Contains("--from-chd-to-bincue");
+        var deleteSource = args.Contains("--delete-source");
+        var apply = args.Contains("--apply");
+        var force = args.Contains("--force");
+
+        return await PsxConvertCommand.ExecuteAsync(
+            root,
+            recursive,
+            flattenMultidisc,
+            targetFormat,
+            fromChdToBinCue,
+            deleteSource,
+            apply,
+            force);
+    }
+
     private static string? GetArgValue(string[] args, string flag)
     {
         for (int i = 0; i < args.Length - 1; i++)
@@ -269,6 +358,27 @@ public class Program
         Console.WriteLine("  verify              Verify ROM integrity with hash checking");
         Console.WriteLine("    --root <path>     Root directory to verify (required)");
         Console.WriteLine();
+        Console.WriteLine("  psx                 Interactive PSX helper (rename/convert)");
+        Console.WriteLine("    --root <path>     Root directory to process (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --apply           Apply changes (default is dry-run)");
+        Console.WriteLine();
+        Console.WriteLine("  rename psx          Rename PSX files to standard format");
+        Console.WriteLine("    --root <path>     Root directory to process (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --flatten-multidisc  Move multi-disc files out of game folders");
+        Console.WriteLine("    --apply           Apply changes (default is dry-run)");
+        Console.WriteLine();
+        Console.WriteLine("  convert psx         Convert PSX files between BIN/CUE and CHD");
+        Console.WriteLine("    --root <path>     Root directory to process (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --flatten-multidisc  Move multi-disc files out of game folders");
+        Console.WriteLine("    --target-format <fmt>  Target format: chd (default)");
+        Console.WriteLine("    --from-chd-to-bincue  Convert CHD to BIN/CUE instead");
+        Console.WriteLine("    --delete-source   Delete source files after successful conversion");
+        Console.WriteLine("    --apply           Apply changes (default is dry-run)");
+        Console.WriteLine("    --force           Force operation even with warnings");
+        Console.WriteLine();
         Console.WriteLine("  --help, -h          Show this help message");
         Console.WriteLine("  --version, -v       Show version information");
         Console.WriteLine();
@@ -276,6 +386,9 @@ public class Program
         Console.WriteLine("  ark-retro-forge doctor");
         Console.WriteLine("  ark-retro-forge scan --root C:\\ROMs");
         Console.WriteLine("  ark-retro-forge verify --root C:\\ROMs");
+        Console.WriteLine("  ark-retro-forge psx --root C:\\PSX --recursive --apply");
+        Console.WriteLine("  ark-retro-forge rename psx --root C:\\PSX --recursive");
+        Console.WriteLine("  ark-retro-forge convert psx --root C:\\PSX --delete-source --apply");
         Console.WriteLine();
         Console.WriteLine("💡 Run 'doctor' first to check your environment");
     }

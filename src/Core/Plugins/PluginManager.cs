@@ -64,7 +64,7 @@ public class PluginManager
         _loadContexts.Add(loadContext);
 
         var assembly = loadContext.LoadFromAssemblyPath(pluginPath);
-        
+
         foreach (var type in assembly.GetTypes())
         {
             if (typeof(ISystemModule).IsAssignableFrom(type) && !type.IsInterface && !type.IsAbstract)
@@ -86,12 +86,12 @@ public class PluginManager
     public void UnloadPlugins()
     {
         _loadedModules.Clear();
-        
+
         foreach (var context in _loadContexts)
         {
             context.Unload();
         }
-        
+
         _loadContexts.Clear();
     }
 

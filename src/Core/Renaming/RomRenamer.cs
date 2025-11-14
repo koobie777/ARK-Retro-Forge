@@ -16,24 +16,24 @@ public partial class RomRenamer
     public static string GenerateStandardName(RomMetadata metadata)
     {
         var parts = new List<string>();
-        
+
         if (!string.IsNullOrWhiteSpace(metadata.Title))
         {
             parts.Add(metadata.Title.Trim());
         }
-        
+
         if (!string.IsNullOrWhiteSpace(metadata.Region))
         {
             parts.Add($"({metadata.Region.Trim()})");
         }
-        
+
         if (!string.IsNullOrWhiteSpace(metadata.Id))
         {
             parts.Add($"[{metadata.Id.Trim()}]");
         }
 
         var filename = string.Join(" ", parts);
-        
+
         if (!string.IsNullOrWhiteSpace(metadata.Extension))
         {
             filename += metadata.Extension;
@@ -62,7 +62,7 @@ public partial class RomRenamer
         var newPath = Path.Combine(directory, newFileName);
 
         var isAlreadyNamed = string.Equals(currentFileName, newFileName, StringComparison.OrdinalIgnoreCase);
-        
+
         string? warning = null;
         if (File.Exists(newPath) && !string.Equals(filePath, newPath, StringComparison.OrdinalIgnoreCase))
         {
