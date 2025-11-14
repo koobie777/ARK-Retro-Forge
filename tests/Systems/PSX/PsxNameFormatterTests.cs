@@ -1,0 +1,118 @@
+using ARK.Core.Systems.PSX;
+
+namespace ARK.Tests.Systems.PSX;
+
+public class PsxNameFormatterTests
+{
+    [Fact]
+    public void Format_SingleDisc_NoDiscSuffix()
+    {
+        // Arrange
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "Final Fantasy VII",
+            Region = "USA",
+            Serial = "SCUS-94163",
+            Extension = ".bin",
+            DiscNumber = null,
+            DiscCount = null
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("Final Fantasy VII (USA) [SCUS-94163].bin", result);
+    }
+    
+    [Fact]
+    public void Format_MultiDisc_IncludesDiscSuffix()
+    {
+        // Arrange
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "Alone in the Dark - The New Nightmare",
+            Region = "USA",
+            Serial = "SLUS-01201",
+            Extension = ".bin",
+            DiscNumber = 1,
+            DiscCount = 2
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("Alone in the Dark - The New Nightmare (USA) [SLUS-01201] (Disc 1).bin", result);
+    }
+    
+    [Fact]
+    public void Format_MultiDiscCHD_IncludesDiscSuffix()
+    {
+        // Arrange
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.chd",
+            Title = "Alone in the Dark - The New Nightmare",
+            Region = "USA",
+            Serial = "SLUS-01377",
+            Extension = ".chd",
+            DiscNumber = 2,
+            DiscCount = 2
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("Alone in the Dark - The New Nightmare (USA) [SLUS-01377] (Disc 2).chd", result);
+    }
+    
+    [Fact]
+    public void NormalizeDiscSuffix_ConvertsOfFormat()
+    {
+        // Arrange
+        var filename = "Game Title (USA) [SLUS-12345] (Disc 1 of 2).bin";
+        
+        // Act
+        var result = PsxNameFormatter.NormalizeDiscSuffix(filename);
+        
+        // Assert
+        Assert.Equal("Game Title (USA) [SLUS-12345] (Disc 1).bin", result);
+    }
+    
+    [Fact]
+    public void NormalizeDiscSuffix_PreservesAlreadyNormalized()
+    {
+        // Arrange
+        var filename = "Game Title (USA) [SLUS-12345] (Disc 2).cue";
+        
+        // Act
+        var result = PsxNameFormatter.NormalizeDiscSuffix(filename);
+        
+        // Assert
+        Assert.Equal("Game Title (USA) [SLUS-12345] (Disc 2).cue", result);
+    }
+    
+    [Fact]
+    public void Format_NoSerial_OmitsSerialBrackets()
+    {
+        // Arrange
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "Educational Title",
+            Region = "USA",
+            Serial = null,
+            Extension = ".bin"
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("Educational Title (USA).bin", result);
+    }
+}

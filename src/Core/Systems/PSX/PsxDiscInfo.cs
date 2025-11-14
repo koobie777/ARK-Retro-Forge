@@ -1,0 +1,62 @@
+namespace ARK.Core.Systems.PSX;
+
+/// <summary>
+/// Represents metadata for a PSX disc, including multi-disc information and classification
+/// </summary>
+public record PsxDiscInfo
+{
+    /// <summary>
+    /// Original file path
+    /// </summary>
+    public required string FilePath { get; init; }
+    
+    /// <summary>
+    /// Game title (e.g., "Alone in the Dark - The New Nightmare")
+    /// </summary>
+    public string? Title { get; init; }
+    
+    /// <summary>
+    /// Region code (e.g., "USA", "Europe", "Japan")
+    /// </summary>
+    public string? Region { get; init; }
+    
+    /// <summary>
+    /// PSX serial number (e.g., "SLUS-01201")
+    /// </summary>
+    public string? Serial { get; init; }
+    
+    /// <summary>
+    /// Disc number (1-based) for multi-disc titles, or null for single-disc
+    /// </summary>
+    public int? DiscNumber { get; init; }
+    
+    /// <summary>
+    /// Total number of discs for this title, or null if unknown/single-disc
+    /// </summary>
+    public int? DiscCount { get; init; }
+    
+    /// <summary>
+    /// Content classification
+    /// </summary>
+    public PsxContentType ContentType { get; init; } = PsxContentType.Mainline;
+    
+    /// <summary>
+    /// File extension (e.g., ".bin", ".cue", ".chd")
+    /// </summary>
+    public string? Extension { get; init; }
+    
+    /// <summary>
+    /// Whether this is part of a multi-disc set
+    /// </summary>
+    public bool IsMultiDisc => DiscCount.HasValue && DiscCount.Value > 1;
+    
+    /// <summary>
+    /// Whether a standard PSX serial was found
+    /// </summary>
+    public bool HasSerial => !string.IsNullOrWhiteSpace(Serial);
+    
+    /// <summary>
+    /// Diagnostic message for missing or non-standard data
+    /// </summary>
+    public string? Warning { get; init; }
+}
