@@ -1,0 +1,111 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop, copilot/** ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for MinVer
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+    
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+    
+    - name: Restore dependencies
+      run: dotnet restore
+    
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+    
+    - name: Run tests
+      run: dotnet test --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage"
+    
+    - name: Run doctor command
+      run: dotnet run --project src/Cli/ARK.Cli.csproj --no-build --configuration Release -- doctor --json > doctor-report.json
+      continue-on-error: true
+    
+    - name: Upload doctor report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: doctor-report
+        path: doctor-report.json
+    
+    - name: Upload test results
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: test-results
+        path: '**/TestResults/**/*'
+    
+    - name: Publish CLI (win-x64)
+      run: |
+        dotnet publish src/Cli/ARK.Cli.csproj `
+          --configuration Release `
+          --runtime win-x64 `
+          --self-contained true `
+          --output ./publish/cli `
+          -p:PublishSingleFile=true `
+          -p:PublishTrimmed=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true
+    
+    - name: Check CLI artifact size
+      shell: pwsh
+      run: |
+        $exePath = "./publish/cli/ARK.Cli.exe"
+        if (Test-Path $exePath) {
+          $size = (Get-Item $exePath).Length / 1MB
+          Write-Host "CLI EXE size: $([math]::Round($size, 2)) MB"
+          if ($size -gt 25) {
+            Write-Warning "CLI EXE is larger than 25 MB target"
+          }
+        }
+    
+    - name: Upload CLI artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ark-retro-forge-cli-win-x64
+        path: ./publish/cli/
+    
+    - name: Create build summary
+      shell: pwsh
+      run: |
+        echo "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "- ✅ Build: Success" >> $env:GITHUB_STEP_SUMMARY
+        echo "- ✅ Tests: Completed" >> $env:GITHUB_STEP_SUMMARY
+        if (Test-Path "./publish/cli/ARK.Cli.exe") {
+          $size = (Get-Item "./publish/cli/ARK.Cli.exe").Length / 1MB
+          echo "- ✅ CLI Published: $([math]::Round($size, 2)) MB" >> $env:GITHUB_STEP_SUMMARY
+        }
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "### Artifacts" >> $env:GITHUB_STEP_SUMMARY
+        echo "- CLI executable (win-x64)" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Doctor report (JSON)" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Test results" >> $env:GITHUB_STEP_SUMMARY
