@@ -27,7 +27,10 @@ public class PsxConvertPlanner
     /// <summary>
     /// Plan convert operations for CUE files in a directory
     /// </summary>
-    public List<PsxConvertOperation> PlanConversions(string rootPath, bool recursive = false)
+    /// <param name="rootPath">Root directory to scan</param>
+    /// <param name="recursive">Whether to scan recursively</param>
+    /// <param name="rebuild">Force rebuild even if CHD exists</param>
+    public List<PsxConvertOperation> PlanConversions(string rootPath, bool recursive = false, bool rebuild = false)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var operations = new List<PsxConvertOperation>();
@@ -36,7 +39,7 @@ public class PsxConvertPlanner
         
         foreach (var cueFile in cueFiles)
         {
-            var operation = PlanConversion(cueFile);
+            var operation = PlanConversion(cueFile, rebuild);
             operations.Add(operation);
         }
         
@@ -46,7 +49,9 @@ public class PsxConvertPlanner
     /// <summary>
     /// Plan a conversion operation for a single CUE file
     /// </summary>
-    public PsxConvertOperation PlanConversion(string cuePath)
+    /// <param name="cuePath">Path to the CUE file</param>
+    /// <param name="rebuild">Force rebuild even if CHD exists</param>
+    public PsxConvertOperation PlanConversion(string cuePath, bool rebuild = false)
     {
         var discInfo = _parser.Parse(cuePath);
         var directory = Path.GetDirectoryName(cuePath) ?? string.Empty;
@@ -56,8 +61,8 @@ public class PsxConvertPlanner
         var chdFileName = PsxNameFormatter.Format(chdDiscInfo);
         var chdPath = Path.Combine(directory, chdFileName);
         
-        // Check if already converted
-        var alreadyConverted = File.Exists(chdPath);
+        // Check if already converted (unless rebuild is requested)
+        var alreadyConverted = !rebuild && File.Exists(chdPath);
         
         string? warning = discInfo.Warning;
         
