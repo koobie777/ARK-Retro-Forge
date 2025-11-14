@@ -15,6 +15,13 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Emulator launch functionality with JSON templates
 - SQLite database for caching and metadata
 - Serilog logging with rolling files
+- **PSX rename/convert pipeline**
+  - Interactive `psx` helper command
+  - `rename psx` command for standardized file naming
+  - `convert psx` command for BIN/CUE ↔ CHD conversion
+  - Multi-disc title support with playlist (.m3u) handling
+  - Flatten multi-disc option to organize files
+  - Safe defaults: dry-run mode and optional source deletion
 
 ### CLI Features
 - `scan` - Scan directories for ROM files
@@ -25,6 +32,9 @@ This file contains release notes for ARK-Retro-Forge releases.
 - `dat sync` - Synchronize with DAT files
 - `doctor` - Check for missing external tools
 - `launch` - Launch games in emulators
+- **`psx`** - Interactive PSX operations (rename/convert)
+- **`rename psx`** - Rename PSX files to standard format
+- **`convert psx`** - Convert PSX files between BIN/CUE and CHD formats
 
 ### Global Options
 - `--dry-run` (default) - Preview changes without applying
@@ -40,3 +50,8 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Deterministic builds
 - SBOM included
 - MIT License
+
+### Bug Fixes
+- Fixed Spectre.Console markup crash when displaying PSX serials and metadata
+  - Serial strings (e.g., SLUS-01201) are now properly escaped to prevent interpretation as markup tags
+  - All dynamic user content in PSX commands now uses `Markup.Escape()` for safe rendering
