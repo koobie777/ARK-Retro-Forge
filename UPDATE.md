@@ -2,6 +2,56 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.1.0-preview.7 (2025-11-14)
+
+### PSX Toolchain Enhancements
+
+#### Multi-Disc Support
+- **Disc suffix enforcement**: All image types (BIN/CUE/CHD) now retain `(Disc N)` suffix for multi-disc titles
+- **Improved CHD naming**: Convert planner generates canonical CHD filenames matching rename conventions
+- **CHD skip logic**: Existing CHDs are detected and skipped during conversion (use `--rebuild` to force reconversion)
+
+#### .m3u Playlist Management
+- **Automatic playlist creation**: Multi-disc titles now get `.m3u` playlists (e.g., `Final Fantasy VIII (USA).m3u`)
+- **Playlist updates**: Playlists are updated when filenames change or format switches (BIN/CUE → CHD)
+- **Smart file selection**: Prefers CHD > CUE > BIN for playlist entries
+- **Backup on update**: Creates `.bak` backup when updating existing playlists
+- **Configurable behavior**: Use `--playlists create|update|off` on rename, `--playlist-mode chd|bin|off` on convert
+
+#### Multi-Track Awareness
+- **Track detection**: Identifies multi-track disc layouts (e.g., `(Track 02)`, `(Track 03)`)
+- **Audio track filtering**: Audio tracks (Track 02+) excluded from playlists and skip unnecessary processing
+- **CUE-based conversion**: Convert planner operates at disc-level for multi-track games, avoiding per-BIN processing
+
+#### Duplicate Detection
+- **New command**: `duplicates psx` (or `dupes psx`) scans for duplicate disc images
+- **Hash-based detection**: Uses SHA1 (or MD5) to identify identical files
+- **Multi-disc aware**: Groups duplicates by title, serial, and disc number
+- **JSON reports**: Use `--json` to write detailed reports to `logs/` directory
+- **Summary statistics**: Shows duplicate groups, wasted space, and files that could be removed
+
+#### CLI Improvements
+- **Playlist plan tables**: Shows planned .m3u operations with title, region, operation type, and disc count
+- **Better status messages**: "Already converted" instead of "EXISTS" for clarity
+- **Extended help**: Updated help text documents all new flags and commands
+- **Disc column accuracy**: Properly displays `Disc 1`, `Disc 2`, etc. or `Unknown` when appropriate
+
+### Technical Details
+- New `PsxPlaylistPlanner` class for .m3u creation and updates
+- New `PsxDuplicateDetector` class for hash-based duplicate detection
+- Enhanced `PsxDiscInfo` with multi-track properties (TrackNumber, IsAudioTrack, CueFilePath)
+- Updated `PsxNameParser` to detect `(Track N)` patterns
+- Updated `PsxConvertPlanner` with rebuild flag and CHD existence checking
+- Comprehensive test coverage for multi-track detection, playlist planning, and duplicate detection
+
+### Breaking Changes
+- None - all changes are additive and backward-compatible
+
+### Known Limitations
+- Duplicate detection does not auto-delete files (manual review required)
+- Serial extraction from disc images (DAT/probe) not yet implemented
+- Multi-track BIN grouping relies on naming patterns and CUE file presence
+
 ## Upcoming Release
 
 ### Features

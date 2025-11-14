@@ -28,6 +28,8 @@ public class Program
                 "verify" => await RunVerifyAsync(args),
                 "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RenamePsxCommand.RunAsync(args),
                 "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await ConvertPsxCommand.RunAsync(args),
+                "duplicates" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
+                "dupes" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -278,12 +280,22 @@ public class Program
         Console.WriteLine("    --apply           Apply rename operations (default is dry-run)");
         Console.WriteLine("    --verbose         Show full paths");
         Console.WriteLine("    --debug           Show debug information");
+        Console.WriteLine("    --playlists <mode> Playlist handling: create (default), update, or off");
         Console.WriteLine();
         Console.WriteLine("  convert psx         Convert PSX CUE files to CHD format");
         Console.WriteLine("    --root <path>     Root directory (required)");
         Console.WriteLine("    --recursive       Scan subdirectories");
         Console.WriteLine("    --apply           Apply conversions (default is dry-run)");
         Console.WriteLine("    --delete-source   Delete source files after conversion (requires --apply)");
+        Console.WriteLine("    --rebuild         Force reconversion even if CHD exists");
+        Console.WriteLine("    --playlist-mode <mode> Playlist handling: chd (default), bin, or off");
+        Console.WriteLine();
+        Console.WriteLine("  duplicates psx      Detect duplicate PSX disc images");
+        Console.WriteLine("  dupes psx           (alias for duplicates psx)");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
+        Console.WriteLine("    --hash <algo>     Hash algorithm: SHA1 (default), MD5");
+        Console.WriteLine("    --json            Write detailed report to logs/ directory");
         Console.WriteLine();
         Console.WriteLine("  --help, -h          Show this help message");
         Console.WriteLine("  --version, -v       Show version information");
@@ -295,6 +307,7 @@ public class Program
         Console.WriteLine("  ark-retro-forge rename psx --root C:\\PSX --recursive");
         Console.WriteLine("  ark-retro-forge rename psx --root C:\\PSX --recursive --apply");
         Console.WriteLine("  ark-retro-forge convert psx --root C:\\PSX --recursive --apply");
+        Console.WriteLine("  ark-retro-forge duplicates psx --root C:\\PSX --recursive --json");
         Console.WriteLine();
         Console.WriteLine("💡 Run 'doctor' first to check your environment");
     }
