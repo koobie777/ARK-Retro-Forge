@@ -46,11 +46,49 @@ ark-retro-forge scan --root C:\ROMs --workers 4
 # Verify ROM integrity
 ark-retro-forge verify --root C:\ROMs --crc32 --md5 --sha1
 
-# Preview rename operations (dry-run by default)
-ark-retro-forge rename --root C:\ROMs
+# PSX: Rename disc images to canonical format (dry-run by default)
+ark-retro-forge rename psx --root C:\PSX --recursive
 
-# Apply rename operations
-ark-retro-forge rename --root C:\ROMs --apply --force
+# PSX: Apply rename operations
+ark-retro-forge rename psx --root C:\PSX --recursive --apply
+
+# PSX: Convert BIN/CUE to CHD format (dry-run by default)
+ark-retro-forge convert psx --root C:\PSX --recursive
+
+# PSX: Apply conversion and delete source files
+ark-retro-forge convert psx --root C:\PSX --recursive --apply --delete-source
+```
+
+## PlayStation (PSX) Features
+
+### Disc Suffix Normalization
+- Automatically normalizes disc suffixes to canonical `(Disc N)` format
+- Converts `(Disc 1 of 2)`, `(CD 1)`, `(DVD 1)` → `(Disc 1)`
+- Removes disc suffix for single-disc titles
+
+### Serial Validation
+- Extracts serials from filenames: `[SLUS-00001]`, `[SCUS-94163]`
+- Validates serial format (SLUS, SCUS, SLPS, SCPS, SLES, SCES, LSP)
+- Warns when serials are missing or invalid
+
+### Cheat/Educational Disc Handling
+Three modes available via `--cheats` flag:
+- `standalone` (default): Cheat discs kept as separate titles
+- `omit`: Cheat discs excluded from operations
+- `as-disc`: Advanced mode (may associate cheats with games)
+
+Supported cheat types:
+- GameShark, Xploder, Action Replay, CodeBreaker
+- Lightspan educational discs
+
+### Canonical Naming Format
+- Single-disc: `Title (Region) [SERIAL].ext`
+- Multi-disc: `Title (Region) [SERIAL] (Disc N).ext`
+
+Example:
+```
+Before: Final Fantasy VII (USA) (Disc 1 of 3) [SLUS-00001].cue
+After:  Final Fantasy VII (USA) [SLUS-00001] (Disc 1).cue
 ```
 
 ## Global Options

@@ -1,0 +1,4 @@
+#!/bin/bash
+# Mock chdman for testing
+echo "Mock chdman: $@"
+exit 0
