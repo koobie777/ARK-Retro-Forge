@@ -17,6 +17,9 @@
     <TieredPGO>true</TieredPGO>
     <TieredCompilation>true</TieredCompilation>
     
+    <!-- Globalization -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    
     <!-- Assembly Information -->
     <Authors>ARK-Retro-Forge Contributors</Authors>
     <Company>ARK-Retro-Forge</Company>

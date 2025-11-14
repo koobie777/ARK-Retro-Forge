@@ -6,6 +6,7 @@ root = true
 # All files
 [*]
 charset = utf-8
+end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
 indent_style = space
@@ -41,6 +42,9 @@ end_of_line = lf
 
 # Dotnet code style settings:
 [*.{cs,vb}]
+
+# IDE diagnostics
+dotnet_diagnostic.IDE0005.severity = warning
 
 # Sort using and Import directives with System.* appearing first
 dotnet_sort_system_directives_first = true
