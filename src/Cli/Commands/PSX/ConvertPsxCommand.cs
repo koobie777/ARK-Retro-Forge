@@ -170,11 +170,16 @@ public static class ConvertPsxCommand
                 {
                     AnsiConsole.MarkupLine($"[dim]  Converting: {Path.GetFileName(op.SourcePath).EscapeMarkup()}[/]");
 
-                    // Run chdman createcd
+                    // Determine media type and command
+                    var extension = Path.GetExtension(op.SourcePath);
+                    var mediaType = ChdMediaTypeHelper.DetermineFromExtensionOrContext(extension, "PSX");
+                    var chdmanCommand = ChdMediaTypeHelper.GetChdmanCommand(mediaType);
+
+                    // Run chdman with appropriate command (createcd for PSX)
                     var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = chdmanPath,
-                        Arguments = $"createcd -i \"{op.SourcePath}\" -o \"{op.DestinationPath}\"",
+                        Arguments = $"{chdmanCommand} -i \"{op.SourcePath}\" -o \"{op.DestinationPath}\"",
                         UseShellExecute = false,
                         RedirectStandardOutput = true,
                         RedirectStandardError = true,

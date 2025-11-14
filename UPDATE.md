@@ -2,6 +2,33 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.1.0-preview.8 (2025-11-14)
+
+### PSX Toolchain Enhancements - Verification and Documentation
+
+#### Separate SKU Handling
+- **Verified playlist exclusion**: C&C variants (GDI/NOD), Red Alert (Allies/Soviet), Retaliation, and Shockwave Assault episodes are correctly excluded from playlist generation
+- **Title-based grouping**: Playlist planner groups by exact title match, preventing single-disc SKUs from creating playlists
+- **Comprehensive tests**: Added test suite for separate SKU scenarios to prevent regressions
+
+#### Spacing and Formatting
+- **Verified spacing**: Confirmed no double-space issues in formatted filenames (e.g., "16 Tales 1 (USA)" formats correctly)
+- **Title trimming**: PsxNameFormatter properly trims titles, preventing spacing artifacts
+- **Added tests**: Lightspan title formatting tests ensure no regressions
+
+#### CHD Media Type Support
+- **New ChdMediaType enum**: CD, DVD, and Unknown media types for future-proofing
+- **ChdMediaTypeHelper class**: Determines appropriate chdman command based on extension and system context
+- **PSX defaults to CD**: All PSX conversions use `createcd` command with clear extension points for PS2/PSP DVD support
+- **Test coverage**: Full test suite for media type detection and command generation
+
+### Technical Details
+- New `ChdMediaType` enum and `ChdMediaTypeHelper` class in ARK.Core
+- Enhanced `ConvertPsxCommand` to use media type detection
+- Added `PsxSeparateSkuTests` test class for C&C/Shockwave scenarios
+- Added spacing tests to `PsxNameFormatterTests`
+- Added `ChdMediaTypeTests` for media type helper validation
+
 ## v0.1.0-preview.7 (2025-11-14)
 
 ### PSX Toolchain Enhancements

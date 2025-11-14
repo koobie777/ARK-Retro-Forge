@@ -115,4 +115,46 @@ public class PsxNameFormatterTests
         // Assert
         Assert.Equal("Educational Title (USA).bin", result);
     }
+    
+    [Fact]
+    public void Format_LightspanTitle_NoDoubleSpacing()
+    {
+        // Arrange - Test 16 Tales case from problem statement
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "16 Tales 1",
+            Region = "USA",
+            Serial = "LSP-990121",
+            Extension = ".bin"
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("16 Tales 1 (USA) [LSP-990121].bin", result);
+        Assert.DoesNotContain("  ", result); // No double spaces
+    }
+    
+    [Fact]
+    public void Format_TitleWithTrailingSpace_TrimsCorrectly()
+    {
+        // Arrange - Title with trailing space
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "Secret of Googol ",  // Note trailing space
+            Region = "USA",
+            Serial = "LSP-06015",
+            Extension = ".bin"
+        };
+        
+        // Act
+        var result = PsxNameFormatter.Format(discInfo);
+        
+        // Assert
+        Assert.Equal("Secret of Googol (USA) [LSP-06015].bin", result);
+        Assert.DoesNotContain("  ", result); // No double spaces
+    }
 }
