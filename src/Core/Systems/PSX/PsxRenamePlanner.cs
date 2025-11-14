@@ -57,17 +57,14 @@ public class PsxRenamePlanner
         var currentFileName = Path.GetFileName(filePath);
         var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
         
-        // First normalize disc suffix in current name
-        var normalizedCurrent = PsxNameFormatter.NormalizeDiscSuffix(currentFileName);
-        
         // Generate canonical name
         var canonicalName = PsxNameFormatter.Format(discInfo);
         
         // Destination path
         var destinationPath = Path.Combine(directory, canonicalName);
         
-        // Check if already named
-        var isAlreadyNamed = string.Equals(normalizedCurrent, canonicalName, StringComparison.OrdinalIgnoreCase);
+        // Check if already named (compare actual current name with canonical, not normalized)
+        var isAlreadyNamed = string.Equals(currentFileName, canonicalName, StringComparison.OrdinalIgnoreCase);
         
         // Check for conflicts
         string? warning = discInfo.Warning;

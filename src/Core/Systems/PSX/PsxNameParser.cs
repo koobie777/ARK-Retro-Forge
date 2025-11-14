@@ -101,6 +101,11 @@ public partial class PsxNameParser
             {
                 title = title[..discMatch.Index].Trim();
             }
+            // Remove serial brackets from title if present
+            if (!string.IsNullOrWhiteSpace(serial))
+            {
+                title = title.Replace($"[{serial}]", "").Trim();
+            }
         }
         
         // Classify content type
