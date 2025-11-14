@@ -59,4 +59,29 @@ public record PsxDiscInfo
     /// Diagnostic message for missing or non-standard data
     /// </summary>
     public string? Warning { get; init; }
+    
+    /// <summary>
+    /// Track number for multi-track discs (1-based), or null for single-track
+    /// </summary>
+    public int? TrackNumber { get; init; }
+    
+    /// <summary>
+    /// Total number of tracks for this disc, or null if unknown/single-track
+    /// </summary>
+    public int? TrackCount { get; init; }
+    
+    /// <summary>
+    /// Whether this is an audio track (not the main data track)
+    /// </summary>
+    public bool IsAudioTrack { get; init; }
+    
+    /// <summary>
+    /// Whether this disc has multiple tracks (multi-BIN layout)
+    /// </summary>
+    public bool IsMultiTrack => TrackCount.HasValue && TrackCount.Value > 1;
+    
+    /// <summary>
+    /// Referenced CUE file path for this BIN (if applicable)
+    /// </summary>
+    public string? CueFilePath { get; init; }
 }

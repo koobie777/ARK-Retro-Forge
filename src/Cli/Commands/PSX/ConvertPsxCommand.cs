@@ -27,6 +27,7 @@ public static class ConvertPsxCommand
         var recursive = args.Contains("--recursive");
         var apply = args.Contains("--apply");
         var deleteSource = args.Contains("--delete-source");
+        var rebuild = args.Contains("--rebuild");
 
         if (deleteSource && !apply)
         {
@@ -39,6 +40,10 @@ public static class ConvertPsxCommand
         {
             AnsiConsole.MarkupLine("[dim]  Mode: Recursive[/]");
         }
+        if (rebuild)
+        {
+            AnsiConsole.MarkupLine("[yellow]  Rebuild: Force reconversion of existing CHDs[/]");
+        }
         if (!apply)
         {
             AnsiConsole.MarkupLine("[yellow]  DRY RUN (use --apply to execute)[/]");
@@ -50,7 +55,20 @@ public static class ConvertPsxCommand
         AnsiConsole.WriteLine();
 
         var planner = new PsxConvertPlanner();
-        var operations = planner.PlanConversions(root, recursive);
+        var operations = planner.PlanConversions(root, recursive, rebuild);
+        
+        // Plan playlist operations for CHD format
+        var playlistMode = GetArgValue(args, "--playlist-mode") ?? "chd";
+        var updatePlaylists = !args.Contains("--no-playlist-update") && 
+                             !playlistMode.Equals("off", StringComparison.OrdinalIgnoreCase);
+        
+        var playlistPlanner = new PsxPlaylistPlanner();
+        var playlistOperations = updatePlaylists && operations.Any(o => !o.AlreadyConverted)
+            ? playlistPlanner.PlanPlaylists(root, recursive, 
+                preferredExtension: ".chd", 
+                createNew: true,
+                updateExisting: true)
+            : new List<PsxPlaylistOperation>();
 
         // Statistics
         var alreadyConverted = operations.Count(o => o.AlreadyConverted);
@@ -76,7 +94,7 @@ public static class ConvertPsxCommand
                     : "Unknown";
 
                 var status = op.AlreadyConverted
-                    ? "[green]EXISTS[/]"
+                    ? "[green]Already converted[/]"
                     : "[yellow]CONVERT[/]";
 
                 var warning = op.Warning != null ? $"⚠️  {op.Warning}" : "";
@@ -100,6 +118,36 @@ public static class ConvertPsxCommand
         AnsiConsole.MarkupLine($"  Already converted: [green]{alreadyConverted}[/]");
         AnsiConsole.MarkupLine($"  To convert: [yellow]{toConvert}[/]");
         AnsiConsole.MarkupLine("[bold cyan]═══════════════════════════════════════════════════════════[/]");
+
+        // Display playlist operations
+        if (playlistOperations.Any())
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold cyan]🎵 [[PSX PLAYLIST PLAN]][/]");
+            
+            var playlistTable = new Table();
+            playlistTable.Border(TableBorder.Rounded);
+            playlistTable.AddColumn("[cyan]Title[/]");
+            playlistTable.AddColumn("[yellow]Region[/]");
+            playlistTable.AddColumn("[green]Operation[/]");
+            playlistTable.AddColumn("[magenta]Discs[/]");
+            
+            foreach (var plOp in playlistOperations)
+            {
+                var operation = plOp.OperationType == PlaylistOperationType.Create ? "CREATE" : "UPDATE";
+                var discCount = plOp.DiscFilenames.Count;
+                
+                playlistTable.AddRow(
+                    plOp.Title.EscapeMarkup(),
+                    plOp.Region.EscapeMarkup(),
+                    operation,
+                    discCount.ToString()
+                );
+            }
+            
+            AnsiConsole.Write(playlistTable);
+            AnsiConsole.WriteLine();
+        }
 
         // Check for chdman tool
         if (apply && toConvert > 0)
@@ -173,8 +221,31 @@ public static class ConvertPsxCommand
             }
 
             AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Converted {converted} files[/]");
+            
+            // Apply playlist operations
+            if (playlistOperations.Any())
+            {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[yellow]🔥 [BURN] Applying playlist operations...[/]");
+                
+                var playlistsApplied = 0;
+                foreach (var plOp in playlistOperations)
+                {
+                    try
+                    {
+                        playlistPlanner.ApplyOperation(plOp, createBackup: true);
+                        playlistsApplied++;
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]  Error with playlist {Path.GetFileName(plOp.PlaylistPath)}: {ex.Message}[/]");
+                    }
+                }
+                
+                AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Applied {playlistsApplied} playlists[/]");
+            }
         }
-        else if (!apply && toConvert > 0)
+        else if (!apply && (toConvert > 0 || playlistOperations.Any()))
         {
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[yellow]💡 Next step: Add --apply to execute conversions[/]");

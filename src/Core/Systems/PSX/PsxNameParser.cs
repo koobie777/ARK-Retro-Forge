@@ -22,6 +22,10 @@ public partial class PsxNameParser
     [GeneratedRegex(@"^(.+?)\s*\(([^)]+)\)\s*\[([^\]]+)\]", RegexOptions.IgnoreCase)]
     private static partial Regex StandardPattern();
     
+    // Matches: "(Track N)" or "(Track NN)" anywhere in the filename
+    [GeneratedRegex(@"\(Track (\d+)\)", RegexOptions.IgnoreCase)]
+    private static partial Regex TrackPattern();
+    
     public PsxNameParser(IPsxSerialResolver? serialResolver = null, IPsxContentClassifier? contentClassifier = null)
     {
         _serialResolver = serialResolver ?? new PsxSerialResolver();
@@ -101,10 +105,43 @@ public partial class PsxNameParser
             {
                 title = title[..discMatch.Index].Trim();
             }
+            // Remove track suffix from title if present
+            var trackMatchTemp = TrackPattern().Match(title);
+            if (trackMatchTemp.Success)
+            {
+                title = title[..trackMatchTemp.Index].Trim();
+            }
             // Remove serial brackets from title if present
             if (!string.IsNullOrWhiteSpace(serial))
             {
                 title = title.Replace($"[{serial}]", "").Trim();
+            }
+        }
+        
+        // Detect multi-track layout
+        int? trackNumber = null;
+        int? trackCount = null;
+        bool isAudioTrack = false;
+        string? cueFilePath = null;
+        
+        var trackMatch = TrackPattern().Match(nameWithoutExt);
+        if (trackMatch.Success)
+        {
+            trackNumber = int.Parse(trackMatch.Groups[1].Value);
+            // Track 01 is typically the data track, Track 02+ are audio tracks
+            isAudioTrack = trackNumber > 1;
+            
+            // Try to find associated CUE file
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && extension.Equals(".bin", StringComparison.OrdinalIgnoreCase))
+            {
+                // Look for a CUE file with similar name (without track suffix)
+                var baseName = nameWithoutExt[..trackMatch.Index].Trim();
+                var potentialCue = Path.Combine(directory, baseName + ".cue");
+                if (File.Exists(potentialCue))
+                {
+                    cueFilePath = potentialCue;
+                }
             }
         }
         
@@ -128,6 +165,12 @@ public partial class PsxNameParser
             }
         }
         
+        // Additional warning for multi-track audio files
+        if (isAudioTrack && string.IsNullOrWhiteSpace(serial))
+        {
+            warning = warning != null ? $"{warning}; Audio track from multi-track disc" : "Audio track from multi-track disc";
+        }
+        
         return new PsxDiscInfo
         {
             FilePath = filePath,
@@ -138,7 +181,11 @@ public partial class PsxNameParser
             DiscCount = discCount,
             ContentType = contentType,
             Extension = extension,
-            Warning = warning
+            Warning = warning,
+            TrackNumber = trackNumber,
+            TrackCount = trackCount,
+            IsAudioTrack = isAudioTrack,
+            CueFilePath = cueFilePath
         };
     }
 }

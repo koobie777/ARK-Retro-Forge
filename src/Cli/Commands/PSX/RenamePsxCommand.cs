@@ -28,11 +28,21 @@ public static class RenamePsxCommand
         var apply = args.Contains("--apply");
         var verbose = args.Contains("--verbose");
         var debug = args.Contains("--debug");
+        
+        // Parse --playlists flag (create|update|off, default: create)
+        var playlistMode = GetArgValue(args, "--playlists") ?? "create";
+        var createPlaylists = playlistMode.Equals("create", StringComparison.OrdinalIgnoreCase) || 
+                             playlistMode.Equals("update", StringComparison.OrdinalIgnoreCase);
+        var updatePlaylists = playlistMode.Equals("update", StringComparison.OrdinalIgnoreCase);
 
         AnsiConsole.MarkupLine("[cyan]🛰️ [[PSX RENAME]][/] Root: {0}", root.EscapeMarkup());
         if (recursive)
         {
             AnsiConsole.MarkupLine("[dim]  Mode: Recursive[/]");
+        }
+        if (createPlaylists)
+        {
+            AnsiConsole.MarkupLine($"[dim]  Playlists: {playlistMode}[/]");
         }
         if (!apply)
         {
@@ -42,6 +52,14 @@ public static class RenamePsxCommand
 
         var planner = new PsxRenamePlanner();
         var operations = planner.PlanRenames(root, recursive);
+        
+        // Plan playlist operations
+        var playlistPlanner = new PsxPlaylistPlanner();
+        var playlistOperations = createPlaylists 
+            ? playlistPlanner.PlanPlaylists(root, recursive, preferredExtension: ".cue", 
+                createNew: playlistMode.Equals("create", StringComparison.OrdinalIgnoreCase),
+                updateExisting: updatePlaylists)
+            : new List<PsxPlaylistOperation>();
 
         // Statistics
         var alreadyNamed = operations.Count(o => o.IsAlreadyNamed);
@@ -106,6 +124,36 @@ public static class RenamePsxCommand
         AnsiConsole.MarkupLine($"  Missing serials: [red]{missingSerials}[/]");
         AnsiConsole.MarkupLine("[bold cyan]═══════════════════════════════════════════════════════════[/]");
 
+        // Display playlist operations
+        if (playlistOperations.Any())
+        {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[bold cyan]🎵 [[PSX PLAYLIST PLAN]][/]");
+            
+            var playlistTable = new Table();
+            playlistTable.Border(TableBorder.Rounded);
+            playlistTable.AddColumn("[cyan]Title[/]");
+            playlistTable.AddColumn("[yellow]Region[/]");
+            playlistTable.AddColumn("[green]Operation[/]");
+            playlistTable.AddColumn("[magenta]Discs[/]");
+            
+            foreach (var plOp in playlistOperations)
+            {
+                var operation = plOp.OperationType == PlaylistOperationType.Create ? "CREATE" : "UPDATE";
+                var discCount = plOp.DiscFilenames.Count;
+                
+                playlistTable.AddRow(
+                    plOp.Title.EscapeMarkup(),
+                    plOp.Region.EscapeMarkup(),
+                    operation,
+                    discCount.ToString()
+                );
+            }
+            
+            AnsiConsole.Write(playlistTable);
+            AnsiConsole.WriteLine();
+        }
+
         // Show some warnings if present
         if (warnings > 0 && (verbose || debug))
         {
@@ -139,8 +187,31 @@ public static class RenamePsxCommand
             }
 
             AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Renamed {renamed} files[/]");
+            
+            // Apply playlist operations
+            if (playlistOperations.Any())
+            {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[yellow]🔥 [BURN] Applying playlist operations...[/]");
+                
+                var playlistsApplied = 0;
+                foreach (var plOp in playlistOperations)
+                {
+                    try
+                    {
+                        playlistPlanner.ApplyOperation(plOp, createBackup: true);
+                        playlistsApplied++;
+                    }
+                    catch (Exception ex)
+                    {
+                        AnsiConsole.MarkupLine($"[red]  Error with playlist {Path.GetFileName(plOp.PlaylistPath)}: {ex.Message}[/]");
+                    }
+                }
+                
+                AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Applied {playlistsApplied} playlists[/]");
+            }
         }
-        else if (!apply && toRename > 0)
+        else if (!apply && (toRename > 0 || playlistOperations.Any()))
         {
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[yellow]💡 Next step: Add --apply to execute renames[/]");
