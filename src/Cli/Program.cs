@@ -1,3 +1,4 @@
+using ARK.Cli.Commands;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Tools;
 using ARK.Core.Hashing;
@@ -25,6 +26,11 @@ public class Program
                 "doctor" => await RunDoctorAsync(args),
                 "scan" => await RunScanAsync(args),
                 "verify" => await RunVerifyAsync(args),
+                "psx" => await PsxCommand.ExecuteAsync(args),
+                "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) 
+                    => PsxRenameCommand.Execute(args.Skip(2).ToArray()),
+                "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) 
+                    => await PsxConvertCommand.ExecuteAsync(args.Skip(2).ToArray()),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -269,6 +275,28 @@ public class Program
         Console.WriteLine("  verify              Verify ROM integrity with hash checking");
         Console.WriteLine("    --root <path>     Root directory to verify (required)");
         Console.WriteLine();
+        Console.WriteLine("  psx                 Interactive PSX rename/convert helper");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --apply           Apply changes (default: dry-run)");
+        Console.WriteLine();
+        Console.WriteLine("  rename psx          Rename PSX files to standard format");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --flatten-multidisc  Move multi-disc files to parent directory");
+        Console.WriteLine("    --apply           Apply changes (default: dry-run)");
+        Console.WriteLine("    --force           Skip confirmation (requires --apply)");
+        Console.WriteLine();
+        Console.WriteLine("  convert psx         Convert PSX files between BIN/CUE and CHD formats");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories recursively");
+        Console.WriteLine("    --flatten-multidisc  Move converted files to parent directory");
+        Console.WriteLine("    --target-format <format>  Target format (default: chd)");
+        Console.WriteLine("    --from-chd-to-bincue  Convert CHD to BIN/CUE (default: BIN/CUE to CHD)");
+        Console.WriteLine("    --delete-source   Delete source files after successful conversion");
+        Console.WriteLine("    --apply           Apply changes (default: dry-run)");
+        Console.WriteLine("    --force           Skip confirmation (requires --apply)");
+        Console.WriteLine();
         Console.WriteLine("  --help, -h          Show this help message");
         Console.WriteLine("  --version, -v       Show version information");
         Console.WriteLine();
@@ -276,6 +304,9 @@ public class Program
         Console.WriteLine("  ark-retro-forge doctor");
         Console.WriteLine("  ark-retro-forge scan --root C:\\ROMs");
         Console.WriteLine("  ark-retro-forge verify --root C:\\ROMs");
+        Console.WriteLine("  ark-retro-forge psx --root C:\\ROMs\\PSX --recursive");
+        Console.WriteLine("  ark-retro-forge rename psx --root C:\\ROMs\\PSX --recursive --apply");
+        Console.WriteLine("  ark-retro-forge convert psx --root C:\\ROMs\\PSX --recursive --delete-source --apply");
         Console.WriteLine();
         Console.WriteLine("💡 Run 'doctor' first to check your environment");
     }
