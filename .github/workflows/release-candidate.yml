@@ -73,15 +73,8 @@ jobs:
         $exe = "./release/ARK-Retro-Forge-RC/ARK.Cli.exe"
         $sha256 = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
         $size = (Get-Item $exe).Length / 1MB
-        @"
-# ARK-Retro-Forge RC Checksums
-
-## ARK.Cli.exe
-- **SHA256**: ``$sha256``
-- **Size**: $([math]::Round($size, 2)) MB
-
-Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
-"@ | Out-File -FilePath ./release/ARK-Retro-Forge-RC/CHECKSUMS.txt -Encoding UTF8
+        $content = "# ARK-Retro-Forge RC Checksums`n`n## ARK.Cli.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+        $content | Out-File -FilePath ./release/ARK-Retro-Forge-RC/CHECKSUMS.txt -Encoding UTF8
         "$sha256  ARK.Cli.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-RC/SHA256SUMS -Encoding ASCII
 
     - name: Archive RC
