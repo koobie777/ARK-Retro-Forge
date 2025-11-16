@@ -46,7 +46,6 @@ jobs:
           --self-contained true `
           --output ./publish/cli-win-x64 `
           -p:PublishSingleFile=true `
-          -p:PublishTrimmed=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
           -p:DebugType=embedded
