@@ -1,174 +1,176 @@
 # ARK-Retro-Forge
 
-Portable .NET 8 C# ROM manager for PS/Nintendo/Xbox/SEGA: scan/clean/verify/compress/organize + emulator launch. Single-file EXE, no installer, dry-run by default.
+> **ARK Protocol Field Manual** – Portable .NET 8 toolkit for scanning, verifying, converting, and organizing ROM payloads across Sony/Nintendo/SEGA ecosystems. Every verb defaults to **DRY-RUN** and ships as a single-file EXE with zero installers.
 
-## ⚠️ NO-ROM POLICY ⚠️
+## Transmission Overview
 
-**This software does NOT include:**
-- ROM files
-- BIOS files
-- Encryption keys
-- Copyrighted game content
-- External tools (chdman, maxcso, etc.)
+- **Command Deck:** `ark-retro-forge` (no args) launches a Spectre.Console menu with live status, DRY-RUN/APPLY toggle, ROM-root memory, and per-instance routing.
+- **Zero ROM Policy:** No ROMs, BIOS, keys, or third-party tools are bundled. You supply your own assets and utilities (chdman, maxcso, etc.).
+- **Instance Profiles:** `--instance <name>` isolates databases, logs, and DAT caches under `./instances/<profile>/` for parallel RC/dev/stable workflows.
+- **Dat Catalog Sync:** `dat sync` pulls curated Redump / No-Intro DAT files so operations like `clean psx` can cross-reference authoritative metadata.
 
-**You are responsible for:**
-- Legally obtaining your own ROM files
-- Providing your own BIOS/firmware files
-- Downloading external tools from official sources
-- Complying with copyright laws in your jurisdiction
+## Operations Manifest
 
-## Features
+| Operation | Purpose | Highlights |
+|-----------|---------|------------|
+| `doctor` | Environment readiness | Detects missing external tools, prints fixes, JSON export. |
+| `scan` | Inventory ROMs | Recursive Spectre progress, per-extension stats, ROM cache hydration. |
+| `verify` | Hash integrity | Streaming CRC32/MD5/SHA1 updates ROM cache; throughput metrics. |
+| `rename psx` | Deterministic naming | `Title (Region) [Serial]` output, playlist planner integration. |
+| `convert psx` | CHD/BIN/ISO pipelines | Bidirectional CHD↔BIN/ISO with media (CD/DVD) detection, delete-source/rebuild flags. |
+| `merge psx` | Multi-track to single BIN | Validates CUE sheets, rewrites destination BIN/CUE, optional cleanup. |
+| `clean psx` | Organizer & staging | Moves multi-track BINs into dedicated folders, generates missing CUEs, ingests external directories using ROM-cache + DAT intelligence, flattens stray single-disc folders. |
+| `duplicates psx` | Hash-based dedupe | SHA1/MD5 detection, grouped reports, optional JSON to `logs/`. |
+| `extract archives` | ZIP/7Z/RAR | Batch header, ESC cancel, optional delete-source after extraction. |
+| `dat sync` | DAT catalog fetcher | Downloads Redump/No-Intro JSON-defined sources into instance-scoped `dat/` folders. |
 
-- **Scan**: Fast directory scanning with ROM discovery
-- **Verify**: Streaming hash verification (CRC32, MD5, SHA1)
-- **Rename**: Deterministic renaming to "Title (Region) [ID]" format
-- **Convert**: CHD/CSO/RVZ compression via external tools (now bi-directional CHD↔BIN/CUE/ISO with automatic CD/DVD detection)
-- **Merge**: Consolidate PSX multi-track BIN sets into a single BIN + rewritten CUE
-- **Extract**: Built-in ZIP/7Z/RAR extraction workflow with optional source cleanup
-- **Cache**: Local ROM catalog that records scan/verify results for cross-referencing with scraped metadata
-- **Doctor**: Environment validation and tool checking
-- **Portable**: Single-file EXE, no registry, no admin required
+## Mission Console (Interactive Menu)
 
-## Quick Start
+1. **Doctor** – run this first to confirm toolchain alignment.  
+2. **Scan / Verify** – each prompt offers recursive toggle, ROM-root confirmation, and brings Spectre dashboards online.  
+3. **PSX Ops** – rename / convert / merge / clean / duplicates; menu prompts mirror CLI flags and respect global DRY-RUN state.  
+4. **Extract / DAT Sync** – manage archives and DAT catalogs from the same console.
 
-1. Download the latest release
-2. Place external tools (e.g., chdman.exe) in `.\tools\` directory
-3. Run `ark-retro-forge` with no arguments to launch the interactive operations menu
-4. Run `ark-retro-forge doctor` (or pick option 1 in the menu) to verify setup
-5. Run `ark-retro-forge scan --root C:\ROMs` (or set a ROM root from the menu) to build the local ROM cache
-6. Run `ark-retro-forge verify --root C:\ROMs` to update hashes and integrity info in the cache
+> Tip: DRY-RUN mode persists during the session. Switch to APPLY from the menu before executing destructive operations. Sessions reset back to DRY-RUN when restarted.
 
-### Local Development Shortcut
+## Operation Details
 
-When working from source, use the provided `ark-retro-forge.cmd` shim in the repo root:
+### Scan
+- Discovers supported extensions (`.bin/.cue/.iso/.chd/.pbp` plus Nintendo/Sega formats).
+- Populates the per-instance SQLite ROM cache (`file_path`, `size`, `title`, `region`, `rom_id`, timestamps).
+- Presents per-extension totals and file-size aggregation to highlight what was indexed.
+
+```ps1
+ark-retro-forge scan --root F:\ROMs --recursive
+```
+
+### Verify
+- Streaming hashes per file; updates cached CRC32/MD5/SHA1 and throughput metrics.
+- Designed for large libraries (cancellable with Ctrl+C). Works best after `scan`.
+
+```ps1
+ark-retro-forge verify --root F:\ROMs --recursive
+```
+
+### Rename (PSX)
+- Applies the canonical `Title (Region) [Serial]` schema with disc numbering.
+- Integrates playlist planner to build or update `.m3u` multi-disc playlists.
+- Dry-runs by default; `--apply` commits changes.
+
+```ps1
+ark-retro-forge rename psx --root F:\PSX --recursive --apply
+```
+
+### Convert (PSX)
+- Supports `--to chd|bin|iso` with CD/DVD auto-detection; leverages user-supplied `chdman`.
+- `--delete-source` requires `--apply`. Use `--rebuild` to force reconversion even if CHDs exist.
+
+```ps1
+ark-retro-forge convert psx --root F:\PSX --to chd --recursive --apply --delete-source
+```
+
+### Merge (PSX)
+- Uses `PsxBinMergePlanner` to identify multi-track BIN/CUE layouts and rewrites a single BIN with updated CUE references.
+- Optional source deletion (post-merge) safeguarded by prompts/dry-run.
+
+```ps1
+ark-retro-forge merge psx --root F:\PSX --recursive --apply
+```
+
+### Clean (PSX Organizer)
+- Corrals multi-track sets into `PSX MultiTrack/<Game>/` (configurable).
+- Generates missing single-track CUE sheets, flattens stray single-disc directories back into the root, and ingests ROMs from a secondary location if the ROM cache/DAT catalog confirm legitimacy.
+- Prompts to hydrate the ROM cache via `scan` when needed.
+
+```ps1
+ark-retro-forge clean psx --root F:\PSX --recursive --move-multitrack --generate-cues --flatten --ingest-root F:\Imports --apply
+```
+
+### Extract Archives
+- Presents a clean header with root/output metadata, supports recursive scanning, optional delete-source, and ESC/Ctrl+C cancellation.
+
+```ps1
+ark-retro-forge extract archives --root C:\Downloads --output F:\Staging --recursive --apply --delete-source
+```
+
+### DAT Sync
+- Reads `config/dat/dat-sources.json`, fetches each source into `instances/<profile>/dat/<system>/`, and skips downloads unless `--force` is provided.
+
+```ps1
+ark-retro-forge dat sync --system psx --force
+```
+
+## Quick Start Checklist
+
+1. **Download Release:** grab the latest `ark-retro-forge.exe` (RC/stable).
+2. **Provision Tools:** place `chdman.exe`, `maxcso.exe`, etc. inside `.\tools\`.
+3. **Run `doctor`:** ensure all dependencies are detected.
+4. **Set ROM Root:** via menu or CLI `--root`. Save it for future sessions.
+5. **Scan + Verify:** hydrate the ROM cache and record hashes.
+6. **Run Ops:** rename/convert/merge/clean/extract as needed (toggle APPLY to execute).
+
+## CLI Reference
+
+```ps1
+ark-retro-forge doctor
+ark-retro-forge scan --root D:\ROMs --recursive
+ark-retro-forge verify --root D:\ROMs --recursive
+ark-retro-forge rename psx --root D:\PSX --recursive --apply
+ark-retro-forge convert psx --root D:\PSX --to chd --apply --delete-source
+ark-retro-forge merge psx --root D:\PSX --recursive --apply
+ark-retro-forge clean psx --root D:\PSX --ingest-root D:\Imports --apply
+ark-retro-forge extract archives --root C:\Downloads --output D:\Incoming --recursive --apply
+ark-retro-forge dat sync --system psx --force
+```
+
+Global options (available on every command):
+
+- `--dry-run` (default), `--apply`, `--force`
+- `--workers <N>` control parallelism where applicable
+- `--instance <name>` isolates data stores
+- `--report`, `--verbose`, `--theme` for additional diagnostics/preferences
+
+## Development & Building
 
 ```powershell
-# From repo root
-ark-retro-forge doctor
-ark-retro-forge scan --root C:\ROMs --workers 4
-```
-
-Set `ARKRF_CONFIGURATION=Release` before running the script if you want it to invoke the Release build instead of the default Debug configuration.
-
-## CLI Usage
-
-```bash
-# Check environment and tools
-ark-retro-forge doctor
-
-# Launch interactive menu (doctor/scan/verify/rename/convert/merge/extract)
-ark-retro-forge
-# Toggle the persistent DRY-RUN/APPLY mode from the interactive menu (resets to DRY-RUN on next launch)
-# Run a second CLI session with its own database and logs
-ark-retro-forge --instance psx-dev
-
-# Scan for ROMs
-ark-retro-forge scan --root C:\ROMs --workers 4
-
-# Verify ROM integrity
-ark-retro-forge verify --root C:\ROMs --crc32 --md5 --sha1
-
-# Preview rename operations (dry-run by default)
-ark-retro-forge rename --root C:\ROMs
-
-# Apply rename operations
-ark-retro-forge rename --root C:\ROMs --apply --force
-
-# Convert PSX media in either direction (CUE -> CHD, CHD -> BIN/CUE or ISO)
-ark-retro-forge convert psx --root C:\ROMs --to chd --apply
-ark-retro-forge convert psx --root C:\ROMs --to bin --apply --delete-source
-ark-retro-forge convert psx --root C:\ROMs --to iso --apply
-
-# Merge PSX multi-track BINs into a single BIN/CUE (prompts before deleting the sources)
-ark-retro-forge merge psx --root C:\ROMs --recursive --apply
-
-# Extract archives (zip/7z/rar) from a directory tree, optionally deleting the source archives
-ark-retro-forge extract archives --root C:\Downloads --output C:\ROMs\Imports --recursive --apply --delete-source
-```
-
-## Future Plans
-
-- **More Systems**: Extend scan/verify/convert/merge pipelines to PS2/PS3/PSP, Dreamcast, Xbox, N64DD, etc. with system-specific heuristics (no ROMs shipped, per-policy).
-- **GUI**: Ship a cross-platform GUI to wrap the CLI flows (scan/verify/convert) with live progress, filtering, and side-by-side previews.
-- **Metadata Sync**: Cross-reference the local ROM cache against community databases (Redump/No-Intro) for automatic tagging, duplicate detection, and curated playlists.
-- **Automation Profiles**: Allow declarative YAML/JSON workflows so users can script multi-step ops (scan → convert → merge → extract) per console/library.
-- **Remote Nodes**: Add optional agent mode so heavy conversions can run on another host while the primary machine controls orchestration.
-- **Modular Ops**: Continue to improve UI polish (menus, dashboards, future GUI themes) and expose plugin points for additional console-specific features.
-
-## Global Options
-
-- `--dry-run` (default): Preview changes without applying
-- `--apply`: Apply changes to files
-- `--force`: Force operation even with warnings (requires --apply)
-- `--workers N`: Number of parallel workers (default: CPU count)
-- `--verbose`: Verbose output
-- `--report <dir>`: Directory for reports
-- `--theme dark|light`: Color theme
-- `--instance <name>`: Isolate logs, databases, and releases per profile (useful for running multiple RC/production sessions simultaneously)
-
-## Requirements
-
-- Windows 11 or Windows 10
-- .NET 8.0 Runtime (self-contained in single-file EXE)
-- External tools (optional): chdman, maxcso, wit, dolphin-tool
-
-## Building from Source
-
-```bash
-# Restore dependencies
 dotnet restore
-
-# Build
 dotnet build -c Release
-
-# Run tests
 dotnet test -c Release
-
-# Publish single-file EXE
-dotnet publish src/Cli/ARK.Cli.csproj -c Release -r win-x64 \
-  -p:PublishSingleFile=true \
-  -p:SelfContained=true \
-  -p:PublishTrimmed=true
+dotnet publish src/Cli/ARK.Cli.csproj -c Release -r win-x64 ^
+  -p:PublishSingleFile=true -p:SelfContained=true -p:PublishTrimmed=true
 ```
 
-## Project Structure
+Project layout:
 
 ```
 src/
-  Core/        - Core libraries (hashing, DAT, tools, plugins, database)
-  Cli/         - Command-line interface
-tests/         - xUnit tests
-tools/         - External CLI tools (user-supplied)
-plugins/       - Plugin DLLs (drop-in)
-config/        - Configuration files
-  emulators/   - Emulator launch templates
-db/            - SQLite databases
-logs/          - Rolling log files
+  Core/   - hashing, DAT catalog, serializers, database, planners
+  Cli/    - Spectre.Console verbs + interactive menu
+config/   - emulator templates, DAT source catalog
+tools/    - user-supplied external executables
+instances/<profile>/
+  db/     - SQLite ROM cache
+  dat/    - downloaded DAT archives
+  logs/   - rolling Spectre/Serilog logs
 ```
 
-## Security
+## Security & Policy
 
-- See [SECURITY.md](SECURITY.md) for security policy
-- No telemetry by default
-- No internet access required
-- Open source - review the code!
+- Follows the strict **NO ROM / NO BIOS / NO DRM KEYS** rule (see `SECURITY.md`).
+- No telemetry, no network access required (except optional `dat sync`).
+- Open-source under MIT – audit or extend as needed.
 
-## License
+## Support Channels
 
-MIT License - see [LICENSE](LICENSE) for details
+- Issues: [github.com/koobie777/ARK-Retro-Forge/issues](https://github.com/koobie777/ARK-Retro-Forge/issues)
+- Wiki / Docs: ongoing at the same repo.
+- Side Project Inspiration: [ARK-Ecosystem](https://github.com/koobie777/ARK-Ecosystem) – theming/alignment for protocols.
 
-## Contributing
+## Release Flow
 
-Contributions welcome! Please read our contributing guidelines and code of conduct.
+- **RC builds** (`vX.Y.Z-rc.N`) – ship early features for testers. Tag and push to trigger the “Release Candidate” workflow.
+- **Stable builds** (`vX.Y.Z`) – once RC feedback lands, tag/push to run the “Release” workflow.
 
-## Support
+---
 
-- GitHub Issues: https://github.com/koobie777/ARK-Retro-Forge/issues
-- Documentation: https://github.com/koobie777/ARK-Retro-Forge/wiki
-
-## Disclaimer
-
-This tool is for managing legally obtained ROM files only. Users are responsible for complying with all applicable laws and regulations regarding ROM files, BIOS files, and copyrighted content in their jurisdiction.
-
-- **Release Candidates**: Tagged `v*-rc*` builds (published as prereleases) so early adopters can validate new features without waiting for stable tags. Use `git tag v0.2.0-rc.1 && git push origin v0.2.0-rc.1` or trigger the `Release Candidate` workflow manually.
-- **Stable Releases**: Tagged `v*` builds via the `Release` workflow. Run `git tag v0.2.0 && git push origin v0.2.0` once RC feedback looks good.
+*ARK-Retro-Forge is part of the broader ARK tooling experiments. Treat every operation like a mission: plan with DRY-RUN, confirm with APPLY, and keep your ROM cache synchronized.*

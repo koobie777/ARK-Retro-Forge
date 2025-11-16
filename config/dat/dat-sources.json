@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Redump - Sony PlayStation (PSX)",
+    "system": "psx",
+    "author": "Redump.org",
+    "format": "clrmamepro",
+    "url": "https://archive.org/download/redumpSonyPlayStationDatfile/Sony%20-%20PlayStation%20-%20Redump.dat",
+    "description": "Latest public Redump DAT snapshot for Sony PlayStation (BIN/CUE)"
+  },
+  {
+    "name": "Redump - Sony PlayStation 2",
+    "system": "ps2",
+    "author": "Redump.org",
+    "format": "clrmamepro",
+    "url": "https://archive.org/download/redumpSonyPlayStation2Datfile/Sony%20-%20PlayStation%202%20-%20Redump.dat",
+    "description": "Redump DAT snapshot covering PS2 optical releases"
+  },
+  {
+    "name": "No-Intro - Nintendo 64",
+    "system": "n64",
+    "author": "No-Intro",
+    "format": "clrmamepro",
+    "url": "https://archive.org/download/no-intro-nintendo-64-20240201/Nintendo%20-%2064%20(Nintendo%2064)%20(2024-02-01).dat",
+    "description": "No-Intro DAT for Nintendo 64 ROM sets"
+  },
+  {
+    "name": "No-Intro - Game Boy Advance",
+    "system": "gba",
+    "author": "No-Intro",
+    "format": "clrmamepro",
+    "url": "https://archive.org/download/no-intro-nintendo-game-boy-advance-20240201/Nintendo%20-%20Game%20Boy%20Advance%20(2024-02-01).dat",
+    "description": "No-Intro DAT for GBA cartridges"
+  },
+  {
+    "name": "Redump - Sega Dreamcast",
+    "system": "dc",
+    "author": "Redump.org",
+    "format": "clrmamepro",
+    "url": "https://archive.org/download/redumpSegaDreamcastDatfile/Sega%20-%20Dreamcast%20-%20Redump.dat",
+    "description": "Optical media DAT for Sega Dreamcast by Redump"
+  }
+]

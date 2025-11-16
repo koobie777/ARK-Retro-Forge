@@ -2,6 +2,30 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.2.0-rc.5 (2025-11-16)
+
+### CLI
+- Added a `dat sync` verb/menu entry that pulls curated Redump/No-Intro DAT snapshots (PSX/PS2/GBA/N64/Dreamcast) into the per-instance `dat/` cache so scan/clean flows can lean on verified metadata.
+- `clean psx` grew optional flattening for stray single-disc folders, smarter detection of true multi-disc sets vs. separate SKUs (C&C, Shockwave, etc.), and DAT-aware ingest filtering to avoid false positives when hoovering a secondary ROM directory.
+- Cleaner prompts now cover multi-track moves, cue generation, imports, flattening, and will hydrate the ROM cache on demand if none exists.
+
+### Infrastructure & DB
+- Instance resolution is centralized via `InstancePathResolver`, ensuring CLI verbs, the cleaner, and DAT sync share the same per-instance db/dat directories.
+- `RomRepository.GetRomsAsync()` exposes ROM summaries so import/clean flows can cross-reference cached metadata.
+- DAT catalog metadata lives in `config/dat/dat-sources.json` and is copied alongside the CLI binary for offline use.
+
+## v0.2.0-rc.4 (2025-11-16)
+
+### CLI
+- `scan` and `verify` were rewritten to use Spectre.Console dashboards with recursive toggles, live throughput, extension stats, and ROM-cache summaries (no more mojibake output).
+- The interactive menu gained prompts for recursive scan/verify, persistent ROM root management, and clearer DRY-RUN/APPLY status.
+- `clean psx` debuted with multi-track corralling, missing CUE generation, and import staging (preview-only unless `--apply`).
+- Archive extraction now renders a polished header/progress experience and documents cancel hotkeys.
+
+### Tooling
+- Help/usage text documents the new flags (recursive scan/verify, cleaner options).
+- UPDATE.md/README were refreshed to capture RC-specific behavior.
+
 ## v0.2.0-rc.3 (2025-11-16)
 
 ### CLI
@@ -33,6 +57,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 
 ### ROM Cache
 - Scan and verify now populate a per-instance SQLite ROM cache capturing size, hashes, titles, and regions to cross-reference future scrapers and speed up downstream tooling.
+- Instance selection is now centralized via a resolver so every command (including the new cleaner) resolves the same per-instance database paths and warns when metadata is missing.
 
 ## v0.1.0-preview.8 (2025-11-14)
 

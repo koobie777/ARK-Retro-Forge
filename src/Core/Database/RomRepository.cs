@@ -69,6 +69,18 @@ WHERE file_path = @FilePath;
         const string sql = "SELECT * FROM rom_cache WHERE file_path = @FilePath LIMIT 1;";
         return _connection.QuerySingleOrDefaultAsync<RomCacheEntry>(sql, new { FilePath = filePath });
     }
+
+    public async Task<IReadOnlyList<RomSummary>> GetRomsAsync(string? systemId = null)
+    {
+        var sql = "SELECT file_path AS FilePath, rom_id AS RomId, title AS Title, region AS Region FROM rom_cache";
+        if (!string.IsNullOrWhiteSpace(systemId))
+        {
+            sql += " WHERE system_id = @SystemId";
+        }
+
+        var rows = await _connection.QueryAsync<RomSummary>(sql, new { SystemId = systemId });
+        return rows.ToList();
+    }
 }
 
 public record RomRecord(
@@ -102,3 +114,5 @@ public record RomCacheEntry
     public string? Region { get; init; }
     public string? Rom_Id { get; init; }
 }
+
+public record RomSummary(string FilePath, string? RomId, string? Title, string? Region);

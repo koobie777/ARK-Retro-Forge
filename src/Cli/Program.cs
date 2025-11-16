@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Cli.Commands.PSX;
 using ARK.Cli.Commands.Archives;
+using ARK.Cli.Commands.Dat;
 using ARK.Core.Tools;
 using ARK.Core.Hashing;
 using ARK.Core.Database;
@@ -13,7 +14,21 @@ public class Program
 {
     private static bool _menuDryRun = true;
     private static string? _rememberedRomRoot;
-    private static string _instanceName = Environment.GetEnvironmentVariable("ARKRF_INSTANCE") ?? "default";
+    private static readonly HashSet<string> ScanExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",
+        ".z64", ".n64", ".v64",
+        ".gb", ".gbc", ".gba",
+        ".nes", ".smc", ".sfc",
+        ".gcm", ".wbfs", ".rvz", ".wux",
+        ".xci", ".nsp", ".nsz",
+        ".gdi", ".cdi"
+    };
+
+    private static readonly HashSet<string> VerifyExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".bin", ".iso", ".chd", ".cso", ".pbp"
+    };
     public static async Task<int> Main(string[] args)
     {
         ParseGlobalArgs(ref args);
@@ -42,9 +57,11 @@ public class Program
                 "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RenamePsxCommand.RunAsync(args),
                 "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await ConvertPsxCommand.RunAsync(args),
                 "merge" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await MergePsxCommand.RunAsync(args),
+                "clean" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await CleanPsxCommand.RunAsync(args),
                 "duplicates" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
                 "dupes" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
                 "extract" when args.Length > 1 && args[1].Equals("archives", StringComparison.OrdinalIgnoreCase) => await ExtractArchivesCommand.RunAsync(args),
+                "dat" when args.Length > 1 && args[1].Equals("sync", StringComparison.OrdinalIgnoreCase) => await DatSyncCommand.RunAsync(args),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -125,61 +142,117 @@ public class Program
         return (int)ExitCode.OK;
     }
 
-    private static async Task<int> RunScanAsync(string[] args)
+    internal static async Task<int> RunScanAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
-        if (string.IsNullOrEmpty(root))
+        if (string.IsNullOrWhiteSpace(root))
         {
-            Console.WriteLine("Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>");
+            AnsiConsole.MarkupLine("[red][IMPACT] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            Console.WriteLine($"Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: scan | Context: Directory not found: {root} | Fix: Verify the --root path exists");
+            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: scan | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
-        Console.WriteLine($"â‰¡Æ’Â¢â–‘âˆ©â••Ã… [SCAN] Scanning: {root}");
-        Console.WriteLine();
+        var recursive = HasFlag(args, "--recursive");
+        AnsiConsole.MarkupLine($"[cyan][SCAN][/]: {(recursive ? "Recursive" : "Top-level")} scan of {root.EscapeMarkup()}");
+        AnsiConsole.WriteLine();
 
-        var dbPath = Path.Combine(GetInstanceRoot(), "db");
+        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var files = Directory.EnumerateFiles(root, "*.*", searchOption)
+            .Where(file => ScanExtensions.Contains(Path.GetExtension(file)))
+            .OrderBy(file => file, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]No ROM files found with supported extensions.[/]");
+            return (int)ExitCode.OK;
+        }
+
+        var dbPath = Path.Combine(InstancePathResolver.GetInstanceRoot(), "db");
         await using var dbManager = new DatabaseManager(dbPath);
         await dbManager.InitializeAsync();
         var romRepository = new RomRepository(dbManager.GetConnection());
         var scanTimestamp = DateTime.UtcNow;
-
-        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",
-            ".z64", ".n64", ".v64",
-            ".gb", ".gbc", ".gba",
-            ".nes", ".smc", ".sfc",
-            ".gcm", ".wbfs", ".rvz", ".wux",
-            ".xci", ".nsp", ".nsz",
-            ".gdi", ".cdi"
-        };
-
-        var files = new List<string>();
+        var extensionStats = new Dictionary<string, (int Count, long Bytes)>(StringComparer.OrdinalIgnoreCase);
+        long totalBytes = 0;
         var startTime = DateTime.UtcNow;
 
-        foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
+        var progressColumns = new ProgressColumn[]
         {
-            if (supportedExtensions.Contains(Path.GetExtension(file)))
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
+
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .StartAsync(async ctx =>
             {
-                files.Add(file);
-                var romRecord = BuildRomRecord(file, scanTimestamp);
-                await romRepository.UpsertRomAsync(romRecord);
-            }
-        }
+                var task = ctx.AddTask("Indexing ROMs", maxValue: files.Count);
+                foreach (var file in files)
+                {
+                    var info = new FileInfo(file);
+                    totalBytes += info.Length;
+
+                    var ext = info.Extension.ToLowerInvariant();
+                    extensionStats.TryGetValue(ext, out var stats);
+                    stats.Count++;
+                    stats.Bytes += info.Length;
+                    extensionStats[ext] = stats;
+
+                    var romRecord = BuildRomRecord(file, scanTimestamp);
+                    await romRepository.UpsertRomAsync(romRecord);
+
+                    task.Description = $"Indexing {TruncateLabel(Path.GetFileName(file))}";
+                    task.Increment(1);
+                }
+            });
 
         var duration = DateTime.UtcNow - startTime;
 
-        Console.WriteLine($"Î“Â£Â¿ [DOCKED] Scan complete");
-        Console.WriteLine($"  Files found: {files.Count}");
-        Console.WriteLine($"  Duration: {duration.TotalSeconds:F2}s");
-        Console.WriteLine("  ROM cache updated");
-        Console.WriteLine($"\nÎ“â‚§Ã­âˆ©â••Ã… Next step: verify --root {root}");
+        var summary = new Table().Border(TableBorder.Rounded);
+        summary.AddColumn("[cyan]Metric[/]");
+        summary.AddColumn("[green]Value[/]");
+        summary.AddRow("ROM files", files.Count.ToString("N0"));
+        summary.AddRow("Scope", recursive ? "Recursive" : "Top-level");
+        summary.AddRow("Total size", FormatSize(totalBytes));
+        summary.AddRow("Duration", $"{duration.TotalSeconds:F1}s");
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[green]Scan complete. ROM cache updated.[/]");
+        AnsiConsole.Write(summary);
+
+        if (extensionStats.Count > 0)
+        {
+            var topExtensions = extensionStats
+                .OrderByDescending(kv => kv.Value.Count)
+                .ThenByDescending(kv => kv.Value.Bytes)
+                .Take(6)
+                .ToList();
+
+            var extTable = new Table { Title = new TableTitle("[cyan]Top Extensions[/]") };
+            extTable.AddColumn("Ext");
+            extTable.AddColumn("Count");
+            extTable.AddColumn("Size");
+
+            foreach (var (ext, stats) in topExtensions)
+            {
+                extTable.AddRow(ext, stats.Count.ToString("N0"), FormatSize(stats.Bytes));
+            }
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(extTable);
+        }
+
+        AnsiConsole.MarkupLine($"\n[dim]Next: run [bold]verify --root \"{root}\"[/] to hash files.[/]");
 
         return (int)ExitCode.OK;
     }
@@ -187,77 +260,99 @@ public class Program
     private static async Task<int> RunVerifyAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
-        if (string.IsNullOrEmpty(root))
+        if (string.IsNullOrWhiteSpace(root))
         {
-            Console.WriteLine("Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>");
+            AnsiConsole.MarkupLine("[red][IMPACT] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            Console.WriteLine($"Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: verify | Context: Directory not found: {root} | Fix: Verify the --root path exists");
+            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: verify | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
-        Console.WriteLine($"â‰¡Æ’Â¢â–‘âˆ©â••Ã… [VERIFY] Hashing files in: {root}");
-        Console.WriteLine();
+        var recursive = HasFlag(args, "--recursive");
+        AnsiConsole.MarkupLine($"[cyan][VERIFY][/]: Hashing {(recursive ? "recursive" : "top-level")} files in {root.EscapeMarkup()}");
+        AnsiConsole.WriteLine();
 
-        var dbPath = Path.Combine(GetInstanceRoot(), "db");
+        var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+        var files = Directory.EnumerateFiles(root, "*.*", searchOption)
+            .Where(f => VerifyExtensions.Contains(Path.GetExtension(f)))
+            .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (files.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]No supported ROM files found to verify.[/]");
+            return (int)ExitCode.OK;
+        }
+
+        var dbPath = Path.Combine(InstancePathResolver.GetInstanceRoot(), "db");
         await using var dbManager = new DatabaseManager(dbPath);
         await dbManager.InitializeAsync();
         var romRepository = new RomRepository(dbManager.GetConnection());
 
         var hasher = new FileHasher();
-        var supportedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".bin", ".iso", ".chd", ".cso" };
-        var files = Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
-            .Where(f => supportedExtensions.Contains(Path.GetExtension(f)))
-            .ToList();
-
-        if (files.Count == 0)
-        {
-            Console.WriteLine("Î“ÃœÃ¡âˆ©â••Ã… [ANOMALY] No files found to verify");
-            return (int)ExitCode.OK;
-        }
-
-        var processed = 0;
-        var totalBytes = 0L;
         var startTime = DateTime.UtcNow;
+        var totalBytes = 0L;
+        var processed = 0;
 
-        foreach (var file in files)
+        var progressColumns = new ProgressColumn[]
         {
-            processed++;
-            Console.Write($"\râ‰¡Æ’Ã¶Ã‘ [BURN] [{processed}/{files.Count}] {Path.GetFileName(file)}".PadRight(80));
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
 
-            var metadataRecord = BuildRomRecord(file, DateTime.UtcNow);
-            await romRepository.UpsertRomAsync(metadataRecord);
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("Hashing ROMs", maxValue: files.Count);
+                foreach (var file in files)
+                {
+                    task.Description = $"Hashing {TruncateLabel(Path.GetFileName(file))}";
 
-            var result = await hasher.ComputeHashesAsync(file);
-            totalBytes += result.FileSize;
-            await romRepository.UpdateHashesAsync(new RomHashUpdate(
-                result.FilePath,
-                result.Crc32,
-                result.Md5,
-                result.Sha1,
-                result.FileSize,
-                DateTime.UtcNow));
-        }
+                    var metadataRecord = BuildRomRecord(file, DateTime.UtcNow);
+                    await romRepository.UpsertRomAsync(metadataRecord);
 
-        Console.WriteLine();
+                    var result = await hasher.ComputeHashesAsync(file);
+                    totalBytes += result.FileSize;
+                    await romRepository.UpdateHashesAsync(new RomHashUpdate(
+                        result.FilePath,
+                        result.Crc32,
+                        result.Md5,
+                        result.Sha1,
+                        result.FileSize,
+                        DateTime.UtcNow));
+
+                    processed++;
+                    task.Increment(1);
+                }
+            });
+
         var duration = DateTime.UtcNow - startTime;
-        var throughputMBps = totalBytes / 1024.0 / 1024.0 / Math.Max(duration.TotalSeconds, 0.001);
+        var throughput = totalBytes / 1024.0 / 1024.0 / Math.Max(duration.TotalSeconds, 0.001);
 
-        Console.WriteLine($"\nÎ“Â£Â¿ [DOCKED] Verification complete");
-        Console.WriteLine($"  Files processed: {processed}");
-        Console.WriteLine($"  Total size: {totalBytes / 1024.0 / 1024.0:F2} MB");
-        Console.WriteLine($"  Duration: {duration.TotalSeconds:F2}s");
-        Console.WriteLine($"  Throughput: {throughputMBps:F2} MB/s");
-        Console.WriteLine("  ROM cache updated with latest hash values");
-        Console.WriteLine($"\nÎ“â‚§Ã­âˆ©â••Ã… Next step: Hashes computed successfully");
+        var summary = new Table().Border(TableBorder.Rounded);
+        summary.AddColumn("[cyan]Metric[/]");
+        summary.AddColumn("[green]Value[/]");
+        summary.AddRow("Files hashed", processed.ToString("N0"));
+        summary.AddRow("Scope", recursive ? "Recursive" : "Top-level");
+        summary.AddRow("Total size", FormatSize(totalBytes));
+        summary.AddRow("Duration", $"{duration.TotalSeconds:F1}s");
+        summary.AddRow("Throughput", $"{throughput:F2} MB/s");
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[green]Verification complete. Hashes stored in ROM cache.[/]");
+        AnsiConsole.Write(summary);
 
         return (int)ExitCode.OK;
-    }
-
-    private static async Task<int> ShowMenuAsync()
+    }    private static async Task<int> ShowMenuAsync()
     {
         while (true)
         {
@@ -276,7 +371,9 @@ public class Program
                         "Rename - PSX",
                         "Convert - PSX",
                         "Merge - PSX BIN Tracks",
+                        "Clean - PSX Organizer",
                         "Duplicates - PSX",
+                        "DAT - Sync Catalog",
                         "Extract - Archives",
                         "Set ROM Root Directory",
                         "Set Instance Profile",
@@ -310,8 +407,16 @@ public class Program
                     await RunMenuMergePsxAsync();
                     Pause();
                     break;
+                case "Clean - PSX Organizer":
+                    await RunMenuCleanPsxAsync();
+                    Pause();
+                    break;
                 case "Duplicates - PSX":
                     await RunMenuDuplicatesPsxAsync();
+                    Pause();
+                    break;
+                case "DAT - Sync Catalog":
+                    await RunMenuDatSyncAsync();
                     Pause();
                     break;
                 case "Extract - Archives":
@@ -349,7 +454,7 @@ public class Program
             ? "[red]ROM root: Not set[/]"
             : $"[dim]ROM root:[/] {_rememberedRomRoot.EscapeMarkup()}";
 
-        var instanceText = $"[dim]Instance:[/] {SanitizeInstanceName(_instanceName).EscapeMarkup()}";
+        var instanceText = $"[dim]Instance:[/] {InstancePathResolver.CurrentInstance.EscapeMarkup()}";
         var tip = "[grey]Tip: Use arrow keys to navigate and Enter to run. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
         var version = GetVersion();
 
@@ -376,7 +481,14 @@ public class Program
             return;
         }
 
-        await RunScanAsync(new[] { "scan", "--root", root });
+        var recursive = PromptYesNo("Scan recursively?", true);
+        var args = new List<string> { "scan", "--root", root };
+        if (recursive)
+        {
+            args.Add("--recursive");
+        }
+
+        await RunScanAsync(args.ToArray());
     }
 
     private static async Task RunMenuVerifyAsync()
@@ -387,7 +499,14 @@ public class Program
             return;
         }
 
-        await RunVerifyAsync(new[] { "verify", "--root", root });
+        var recursive = PromptYesNo("Scan recursively?", true);
+        var args = new List<string> { "verify", "--root", root };
+        if (recursive)
+        {
+            args.Add("--recursive");
+        }
+
+        await RunVerifyAsync(args.ToArray());
     }
 
     private static async Task RunMenuRenamePsxAsync()
@@ -522,6 +641,92 @@ public class Program
         await DuplicatesPsxCommand.RunAsync(args.ToArray());
     }
 
+    private static async Task RunMenuDatSyncAsync()
+    {
+        var system = PromptForOptional("Filter by system code (psx, ps2, gba, etc.) or leave blank");
+        var force = PromptYesNo("Force download even if cached?", false);
+
+        var args = new List<string> { "dat", "sync" };
+        if (!string.IsNullOrWhiteSpace(system))
+        {
+            args.Add("--system");
+            args.Add(system);
+        }
+        if (force)
+        {
+            args.Add("--force");
+        }
+
+        await DatSyncCommand.RunAsync(args.ToArray());
+    }
+
+    private static async Task RunMenuCleanPsxAsync()
+    {
+        var root = EnsureRomRoot("Enter PSX root folder");
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return;
+        }
+
+        var recursive = PromptYesNo("Scan recursively?", true);
+        var moveMultiTrack = PromptYesNo("Move multi-track BIN/CUE sets into a dedicated folder?", true);
+        var generateCues = PromptYesNo("Generate missing CUE files when detected?", true);
+        var flattenSingles = PromptYesNo("Flatten single-disc folders back into the root?", true);
+        var ingestRoot = PromptForOptional("Optional import directory to ingest (blank to skip)");
+        var ingestMove = !string.IsNullOrWhiteSpace(ingestRoot) && PromptYesNo("Move imported ROMs into the PSX root?", true);
+        var multiDirName = PromptForOptional("Multi-track folder name (blank for 'PSX MultiTrack')");
+        var importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
+        var apply = !_menuDryRun && PromptYesNo("Apply changes (moves/writes)?", true);
+
+        var args = new List<string> { "clean", "psx", "--root", root };
+        if (recursive)
+        {
+            args.Add("--recursive");
+        }
+        if (apply)
+        {
+            args.Add("--apply");
+        }
+        if (moveMultiTrack)
+        {
+            args.Add("--move-multitrack");
+        }
+        if (generateCues)
+        {
+            args.Add("--generate-cues");
+        }
+        if (flattenSingles)
+        {
+            args.Add("--flatten");
+        }
+        if (!string.IsNullOrWhiteSpace(ingestRoot))
+        {
+            args.Add("--ingest-root");
+            args.Add(ingestRoot);
+            if (ingestMove)
+            {
+                args.Add("--ingest-move");
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(multiDirName))
+        {
+            args.Add("--multitrack-dir");
+            args.Add(multiDirName);
+        }
+        if (!string.IsNullOrWhiteSpace(importDirName))
+        {
+            args.Add("--import-dir");
+            args.Add(importDirName);
+        }
+
+        if (!apply)
+        {
+            AnsiConsole.MarkupLine("[yellow]Global dry-run mode: cleaner will preview without moving files.[/]");
+        }
+
+        await CleanPsxCommand.RunAsync(args.ToArray());
+    }
+
     private static async Task RunMenuExtractArchivesAsync()
     {
         var root = EnsureRomRoot("Enter archive root folder");
@@ -642,14 +847,47 @@ public class Program
         var newInstance = PromptForOptional("Enter instance name (leave blank for 'default')");
         if (string.IsNullOrWhiteSpace(newInstance))
         {
-            _instanceName = "default";
+            InstancePathResolver.SetInstanceName("default");
             AnsiConsole.MarkupLine("[yellow]Switched to default instance profile.[/]");
         }
         else
         {
-            _instanceName = newInstance;
-            AnsiConsole.MarkupLine($"[green]Instance profile set to {SanitizeInstanceName(_instanceName).EscapeMarkup()}[/]");
+            InstancePathResolver.SetInstanceName(newInstance);
+            AnsiConsole.MarkupLine($"[green]Instance profile set to {InstancePathResolver.CurrentInstance.EscapeMarkup()}[/]");
         }
+    }
+
+    private static bool HasFlag(string[] args, string flag)
+        => args.Any(arg => arg.Equals(flag, StringComparison.OrdinalIgnoreCase));
+
+    private static string TruncateLabel(string? value, int maxLength = 48)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "...";
+        }
+
+        var text = value.Trim();
+        if (text.Length <= maxLength)
+        {
+            return text.EscapeMarkup();
+        }
+
+        return $"{text[..Math.Max(1, maxLength - 3)].EscapeMarkup()}...";
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        var order = (int)Math.Floor(Math.Log(bytes, 1024));
+        order = Math.Clamp(order, 0, units.Length - 1);
+        var value = bytes / Math.Pow(1024, order);
+        return $"{value:F2} {units[order]}";
     }
 
     private static readonly Regex TitleRegionPattern = new(@"^(?<title>.+?)\s*\((?<region>[^)]+)\)", RegexOptions.Compiled);
@@ -759,9 +997,11 @@ public class Program
         Console.WriteLine();
         Console.WriteLine("  scan                Scan directories for ROM files");
         Console.WriteLine("    --root <path>     Root directory to scan (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
         Console.WriteLine();
         Console.WriteLine("  verify              Verify ROM integrity with hash checking");
         Console.WriteLine("    --root <path>     Root directory to verify (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
         Console.WriteLine();
         Console.WriteLine("  rename psx          Rename PSX files to standard format");
         Console.WriteLine("    --root <path>     Root directory (required)");
@@ -778,6 +1018,22 @@ public class Program
         Console.WriteLine("    --delete-source   Delete source files after conversion (requires --apply)");
         Console.WriteLine("    --rebuild         Force reconversion even if CHD exists");
         Console.WriteLine("    --playlist-mode <mode> Playlist handling: chd (default), bin, or off");
+        Console.WriteLine();
+        Console.WriteLine("  clean psx          Organize PSX ROM directories");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
+        Console.WriteLine("    --apply           Apply moves/writes (default is preview)");
+        Console.WriteLine("    --multitrack-dir <name>  Destination folder for multi-track sets");
+        Console.WriteLine("    --ingest-root <path>    Optional import directory to ingest");
+        Console.WriteLine("    --import-dir <name>     Target folder for ingested ROMs");
+        Console.WriteLine("    --move-multitrack  Move detected multi-track BIN/CUE sets");
+        Console.WriteLine("    --generate-cues    Generate missing CUE files");
+        Console.WriteLine("    --ingest-move      Move imported ROMs into the root");
+        Console.WriteLine("    --flatten          Flatten single-disc folders back into the root");
+        Console.WriteLine();
+        Console.WriteLine("  dat sync            Download DAT catalogs from known sources");
+        Console.WriteLine("    --system <id>     Filter to a specific system (psx, ps2, gba, etc.)");
+        Console.WriteLine("    --force           Re-download even if cached locally");
         Console.WriteLine();
         Console.WriteLine("  duplicates psx      Detect duplicate PSX disc images");
         Console.WriteLine("  dupes psx           (alias for duplicates psx)");
@@ -831,24 +1087,6 @@ public class Program
         return AnsiConsole.Profile.Capabilities.Interactive;
     }
 
-    private static string GetInstanceRoot()
-    {
-        var sanitized = SanitizeInstanceName(_instanceName);
-        var path = Path.Combine(AppContext.BaseDirectory, "instances", sanitized);
-        Directory.CreateDirectory(path);
-        return path;
-    }
-
-    private static string SanitizeInstanceName(string name)
-    {
-        var trimmed = string.IsNullOrWhiteSpace(name) ? "default" : name.Trim();
-        foreach (var ch in Path.GetInvalidFileNameChars())
-        {
-            trimmed = trimmed.Replace(ch, '_');
-        }
-        return string.IsNullOrWhiteSpace(trimmed) ? "default" : trimmed;
-    }
-
     private static void ParseGlobalArgs(ref string[] args)
     {
         if (args.Length == 0)
@@ -863,7 +1101,7 @@ public class Program
             {
                 if (i + 1 < args.Length)
                 {
-                    _instanceName = args[++i];
+                    InstancePathResolver.SetInstanceName(args[++i]);
                 }
                 continue;
             }
@@ -874,6 +1112,8 @@ public class Program
         args = filtered.ToArray();
     }
 }
+
+
 
 
 
