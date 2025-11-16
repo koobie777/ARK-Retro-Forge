@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
@@ -10,6 +11,7 @@ namespace ARK.Cli.Commands.PSX;
 /// </summary>
 public static class DuplicatesPsxCommand
 {
+    [RequiresUnreferencedCode("JSON output relies on System.Text.Json without source generation when trimming.")]
     public static async Task<int> RunAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");

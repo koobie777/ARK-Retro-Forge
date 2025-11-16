@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 
 namespace ARK.Core.Dat;
@@ -25,6 +26,7 @@ public sealed class DatCatalog
             .ToList();
     }
 
+    [RequiresUnreferencedCode("System.Text.Json source generation not configured for catalog deserialization when trimming.")]
     public static DatCatalog Load(string catalogPath)
     {
         if (!File.Exists(catalogPath))

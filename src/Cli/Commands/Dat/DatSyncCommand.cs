@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Dat;
 using Spectre.Console;
@@ -8,6 +9,7 @@ public static class DatSyncCommand
 {
     private static readonly string CatalogPath = Path.Combine(AppContext.BaseDirectory, "config", "dat", "dat-sources.json");
 
+    [RequiresUnreferencedCode("DAT catalog deserialization uses System.Text.Json without source generation when trimming.")]
     public static async Task<int> RunAsync(string[] args)
     {
         var system = GetArgValue(args, "--system");

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Runtime.Loader;
 
@@ -22,6 +23,7 @@ public class PluginManager
     /// <summary>
     /// Discover and load all plugins from the plugins directory
     /// </summary>
+    [RequiresUnreferencedCode("Plugin loading uses reflection and dynamic instantiation which can't be trimmed safely.")]
     public async Task<int> LoadPluginsAsync(CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(_pluginsDirectory))
@@ -58,6 +60,7 @@ public class PluginManager
     /// <summary>
     /// Load a single plugin file
     /// </summary>
+    [RequiresUnreferencedCode("Plugin loading uses reflection and dynamic instantiation which can't be trimmed safely.")]
     private ISystemModule? LoadPlugin(string pluginPath)
     {
         var loadContext = new PluginLoadContext(pluginPath);
@@ -107,6 +110,7 @@ public class PluginManager
             _resolver = new AssemblyDependencyResolver(pluginPath);
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Plugins resolve assemblies dynamically at runtime.")]
         protected override Assembly? Load(AssemblyName assemblyName)
         {
             var assemblyPath = _resolver.ResolveAssemblyToPath(assemblyName);
@@ -118,6 +122,7 @@ public class PluginManager
             return null;
         }
 
+        [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Plugins resolve unmanaged libraries dynamically at runtime.")]
         protected override IntPtr LoadUnmanagedDll(string unmanagedDllName)
         {
             var libraryPath = _resolver.ResolveUnmanagedDllToPath(unmanagedDllName);

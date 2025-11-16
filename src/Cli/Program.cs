@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Cli.Commands.PSX;
@@ -79,6 +80,7 @@ public class Program
         }
     }
 
+    [RequiresUnreferencedCode("Doctor command serializes tool results to JSON when requested.")]
     private static async Task<int> RunDoctorAsync(string[] args)
     {
         var json = args.Contains("--json");
