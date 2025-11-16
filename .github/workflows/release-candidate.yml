@@ -17,12 +17,15 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      VERSION: ${{ github.ref_name }}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        ref: ${{ github.ref }}
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -53,7 +56,7 @@ jobs:
     - name: Prepare artifact layout
       shell: pwsh
       run: |
-        $root = "./release/ARK-Retro-Forge-RC"
+        $root = "./release/ARK-Retro-Forge-$env:VERSION"
         New-Item -ItemType Directory -Force -Path $root | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/tools" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/plugins" | Out-Null
@@ -70,18 +73,18 @@ jobs:
     - name: Generate checksums
       shell: pwsh
       run: |
-        $exe = "./release/ARK-Retro-Forge-RC/ark-retro-forge.exe"
+        $exe = "./release/ARK-Retro-Forge-$env:VERSION/ark-retro-forge.exe"
         $sha256 = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
         $size = (Get-Item $exe).Length / 1MB
         $content = "# ARK-Retro-Forge RC Checksums`n`n## ark-retro-forge.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
-        $content | Out-File -FilePath ./release/ARK-Retro-Forge-RC/CHECKSUMS.txt -Encoding UTF8
-        "$sha256  ark-retro-forge.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-RC/SHA256SUMS -Encoding ASCII
+        $content | Out-File -FilePath ./release/ARK-Retro-Forge-$env:VERSION/CHECKSUMS.txt -Encoding UTF8
+        "$sha256  ark-retro-forge.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-$env:VERSION/SHA256SUMS -Encoding ASCII
 
     - name: Archive RC
       shell: pwsh
       run: |
-        Compress-Archive -Path ./release/ARK-Retro-Forge-RC/* `
-          -DestinationPath ./ARK-Retro-Forge-RC-win-x64.zip `
+        Compress-Archive -Path "./release/ARK-Retro-Forge-$env:VERSION/*" `
+          -DestinationPath "./ARK-Retro-Forge-$env:VERSION-win-x64.zip" `
           -CompressionLevel Optimal
 
     - name: Extract release notes
@@ -103,8 +106,8 @@ jobs:
         draft: false
         body_path: ./RELEASE_NOTES_RC.md
         files: |
-          ./ARK-Retro-Forge-RC-win-x64.zip
-          ./release/ARK-Retro-Forge-RC/CHECKSUMS.txt
-          ./release/ARK-Retro-Forge-RC/SHA256SUMS
+          ./ARK-Retro-Forge-${{ env.VERSION }}-win-x64.zip
+          ./release/ARK-Retro-Forge-${{ env.VERSION }}/CHECKSUMS.txt
+          ./release/ARK-Retro-Forge-${{ env.VERSION }}/SHA256SUMS
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

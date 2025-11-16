@@ -74,7 +74,6 @@ jobs:
           --self-contained true `
           --output ./publish/cli `
           -p:PublishSingleFile=true `
-          -p:PublishTrimmed=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true
     
