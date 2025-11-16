@@ -2,12 +2,12 @@
 
 ## Project Structure & Module Organization
 
-* **Repository**: ARK‑Retro‑Forge
-* `src/RetroForge.Core` — scan/verify/rename/combine/convert/DAT/doctor/launch
-* `src/RetroForge.Cli` — Spectre.Console CLI verbs
-* `src/RetroForge.Gui` — WPF (.NET 8) MVVM GUI (themes: void/orbital/plain)
-* `plugins/` feature packs • `config/` profiles/templates/scraper catalog • `tools/` user CLIs (e.g., chdman, ffmpeg)
-* `tests/` (`RetroForge.*.Tests`) • `logs/` • `reports/` • `.docs/`
+* **Repository**: ARK-Retro-Forge
+* `src/RetroForge.Core` - scan/verify/rename/combine/convert/DAT/doctor/launch
+* `src/RetroForge.Cli` - Spectre.Console CLI verbs
+* `src/RetroForge.Gui` - WPF (.NET 8) MVVM GUI (themes: void/orbital/plain)
+* `plugins/` feature packs; `config/` profiles/templates/scraper catalog; `tools/` user CLIs (e.g., chdman, ffmpeg)
+* `tests/` (`RetroForge.*.Tests`); `logs/`; `reports/`; `.docs/`
 
 ## Build, Test, and Development Commands
 
@@ -29,8 +29,8 @@
 ## Testing Guidelines
 
 * Framework: **xUnit**; one test project per module.
-* Test names: `Method_Scenario_Expected()` using AAA (Arrange–Act–Assert).
-* Fixtures under `tests/Fixtures/`. Aim ≥70% line coverage for Core; justify exceptions in PR.
+* Test names: `Method_Scenario_Expected()` using AAA (Arrange-Act-Assert).
+* Fixtures under `tests/Fixtures/`. Aim >=70% line coverage for Core; justify exceptions in PR.
 
 ## Commit & Pull Request Guidelines
 
@@ -40,7 +40,7 @@
 
 ## Security & Configuration Tips
 
-* **No ROMs/keys/firmware.** Portable only; don’t write outside the repo folder.
+* **No ROMs/keys/firmware.** Portable only; do not write outside the repo folder.
 * Verify checksums for downloaded tools; keep `tools/` quarantined. Redact personal paths in logs.
 
 ## Agent-Specific Instructions (for AI/Copilot)
