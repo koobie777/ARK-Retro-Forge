@@ -1,4 +1,4 @@
-name: Build and Test
+﻿name: Build and Test
 
 on:
   push:
@@ -81,7 +81,7 @@ jobs:
     - name: Check CLI artifact size
       shell: pwsh
       run: |
-        $exePath = "./publish/cli/ARK.Cli.exe"
+        $exePath = "./publish/cli/ark-retro-forge.exe"
         if (Test-Path $exePath) {
           $size = (Get-Item $exePath).Length / 1MB
           Write-Host "CLI EXE size: $([math]::Round($size, 2)) MB"
@@ -101,14 +101,15 @@ jobs:
       run: |
         echo "## Build Summary" >> $env:GITHUB_STEP_SUMMARY
         echo "" >> $env:GITHUB_STEP_SUMMARY
-        echo "- ✅ Build: Success" >> $env:GITHUB_STEP_SUMMARY
-        echo "- ✅ Tests: Completed" >> $env:GITHUB_STEP_SUMMARY
-        if (Test-Path "./publish/cli/ARK.Cli.exe") {
-          $size = (Get-Item "./publish/cli/ARK.Cli.exe").Length / 1MB
-          echo "- ✅ CLI Published: $([math]::Round($size, 2)) MB" >> $env:GITHUB_STEP_SUMMARY
+        echo "- âœ… Build: Success" >> $env:GITHUB_STEP_SUMMARY
+        echo "- âœ… Tests: Completed" >> $env:GITHUB_STEP_SUMMARY
+        if (Test-Path "./publish/cli/ark-retro-forge.exe") {
+          $size = (Get-Item "./publish/cli/ark-retro-forge.exe").Length / 1MB
+          echo "- �o. CLI Published: $([math]::Round($size, 2)) MB" >> $env:GITHUB_STEP_SUMMARY
         }
         echo "" >> $env:GITHUB_STEP_SUMMARY
         echo "### Artifacts" >> $env:GITHUB_STEP_SUMMARY
         echo "- CLI executable (win-x64)" >> $env:GITHUB_STEP_SUMMARY
         echo "- Doctor report (JSON)" >> $env:GITHUB_STEP_SUMMARY
         echo "- Test results" >> $env:GITHUB_STEP_SUMMARY
+

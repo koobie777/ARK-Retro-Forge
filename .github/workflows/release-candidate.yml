@@ -60,7 +60,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$root/config/emulators" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/db" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/logs" | Out-Null
-        Copy-Item -Path ./publish/cli-win-x64/ARK.Cli.exe -Destination $root/
+        Copy-Item -Path ./publish/cli-win-x64/ark-retro-forge.exe -Destination $root/
         Copy-Item -Path ./README.md,./LICENSE,./SECURITY.md,./UPDATE.md -Destination $root/
         Copy-Item -Path ./tools/README.md -Destination "$root/tools/" -ErrorAction SilentlyContinue
         Copy-Item -Path ./plugins/README.md -Destination "$root/plugins/" -ErrorAction SilentlyContinue
@@ -70,12 +70,12 @@ jobs:
     - name: Generate checksums
       shell: pwsh
       run: |
-        $exe = "./release/ARK-Retro-Forge-RC/ARK.Cli.exe"
+        $exe = "./release/ARK-Retro-Forge-RC/ark-retro-forge.exe"
         $sha256 = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
         $size = (Get-Item $exe).Length / 1MB
-        $content = "# ARK-Retro-Forge RC Checksums`n`n## ARK.Cli.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+        $content = "# ARK-Retro-Forge RC Checksums`n`n## ark-retro-forge.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
         $content | Out-File -FilePath ./release/ARK-Retro-Forge-RC/CHECKSUMS.txt -Encoding UTF8
-        "$sha256  ARK.Cli.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-RC/SHA256SUMS -Encoding ASCII
+        "$sha256  ark-retro-forge.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-RC/SHA256SUMS -Encoding ASCII
 
     - name: Archive RC
       shell: pwsh

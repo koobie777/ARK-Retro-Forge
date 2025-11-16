@@ -1,4 +1,4 @@
-using ARK.Cli.Infrastructure;
+﻿using ARK.Cli.Infrastructure;
 using ARK.Core.Archives;
 using Spectre.Console;
 
@@ -13,13 +13,13 @@ public static class ExtractArchivesCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: extract archives | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]ï¿½~,ï¿½,? [IMPACT] | Component: extract archives | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]�~,�,? [IMPACT] | Component: extract archives | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]ï¿½~,ï¿½,? [IMPACT] | Component: extract archives | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -30,11 +30,11 @@ public static class ExtractArchivesCommand
 
         if (deleteSource && !apply)
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: extract archives | Context: --delete-source requires --apply | Fix: Add --apply[/]");
+            AnsiConsole.MarkupLine("[red]ï¿½~,ï¿½,? [IMPACT] | Component: extract archives | Context: --delete-source requires --apply | Fix: Add --apply[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
-        AnsiConsole.MarkupLine("[cyan]dY>��,? [[ARCHIVE EXTRACT]][/] Root: {0}", root.EscapeMarkup());
+        AnsiConsole.MarkupLine("[cyan]dY>ï¿½ï¿½,? [[ARCHIVE EXTRACT]][/] Root: {0}", root.EscapeMarkup());
         AnsiConsole.MarkupLine($"[dim]  Output: {output.EscapeMarkup()}[/]");
         AnsiConsole.MarkupLine($"[dim]  Mode: {(recursive ? "Recursive" : "Top-level only")}[/]");
         AnsiConsole.MarkupLine(apply ? "[yellow]  Apply mode enabled[/]" : "[yellow]  DRY RUN (use --apply to extract)[/]");
@@ -48,7 +48,7 @@ public static class ExtractArchivesCommand
 
         if (archivePaths.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]�s��,?  No ZIP/7Z/RAR archives found[/]");
+            AnsiConsole.MarkupLine("[yellow]ï¿½sï¿½ï¿½,?  No ZIP/7Z/RAR archives found[/]");
             return (int)ExitCode.OK;
         }
 
@@ -73,9 +73,16 @@ public static class ExtractArchivesCommand
 
         if (!apply)
         {
-            AnsiConsole.MarkupLine("[yellow]dY'� Next step: Add --apply to extract[/]");
+            AnsiConsole.MarkupLine("[yellow]dY'��� Next step: Add --apply to extract[/]");
             return (int)ExitCode.OK;
         }
+
+        AnsiConsole.Clear();
+        AnsiConsole.MarkupLine($"[cyan]Extracting {plans.Count} archive(s)...[/]");
+        AnsiConsole.MarkupLine($"[dim]Root: {root.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine($"[dim]Output: {output.EscapeMarkup()}[/]");
+        AnsiConsole.MarkupLine("[dim]Press ESC or Ctrl+C to cancel the active archive (completed items remain).[/]");
+        AnsiConsole.WriteLine();
 
         var extracted = 0;
         var cancelled = false;
@@ -88,54 +95,82 @@ public static class ExtractArchivesCommand
             cancelMonitor = MonitorCancellationKeyAsync(extractionCts);
         }
 
-        foreach (var plan in plans)
+        var progressColumns = new ProgressColumn[]
         {
-            if (extractionCts.IsCancellationRequested)
-            {
-                cancelled = true;
-                break;
-            }
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn(),
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
 
-            var destination = plan.DestinationPath;
-
-            if (plan.RequiresSubdirectory && Directory.Exists(destination))
+        AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .Start(ctx =>
             {
-                try
-                {
-                    Directory.Delete(destination, recursive: true);
-                    AnsiConsole.MarkupLine($"[dim]  Overwriting existing directory: {destination.EscapeMarkup()}[/]");
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLine($"[red]  Failed to clean destination {destination.EscapeMarkup()}: {ex.Message}[/]");
-                    continue;
-                }
-            }
+                var progressTask = ctx.AddTask("Extracting archives", maxValue: plans.Count);
 
-            try
-            {
-                var result = ArchiveExtractor.Extract(plan.ArchivePath, destination, extractionCts.Token);
-                if (result.Success)
+                foreach (var plan in plans)
                 {
-                    extracted++;
-                    if (deleteSource)
+                    if (extractionCts.IsCancellationRequested)
                     {
-                        File.Delete(plan.ArchivePath);
+                        cancelled = true;
+                        break;
                     }
+
+                    var destination = plan.DestinationPath;
+                    var archiveName = Path.GetFileName(plan.ArchivePath).EscapeMarkup();
+                    progressTask.Description = $"Extracting {archiveName}";
+
+                    var prepFailed = false;
+                    if (plan.RequiresSubdirectory && Directory.Exists(destination))
+                    {
+                        try
+                        {
+                            Directory.Delete(destination, recursive: true);
+                            AnsiConsole.MarkupLine($"[dim]  Overwriting existing directory: {destination.EscapeMarkup()}[/]");
+                        }
+                        catch (Exception ex)
+                        {
+                            AnsiConsole.MarkupLine($"[red]  Failed to clean destination {destination.EscapeMarkup()}: {ex.Message}[/]");
+                            prepFailed = true;
+                        }
+                    }
+
+                    if (prepFailed)
+                    {
+                        progressTask.Increment(1);
+                        continue;
+                    }
+
+                    try
+                    {
+                        var result = ArchiveExtractor.Extract(plan.ArchivePath, destination, extractionCts.Token);
+                        if (result.Success)
+                        {
+                            extracted++;
+                            if (deleteSource)
+                            {
+                                File.Delete(plan.ArchivePath);
+                            }
+                        }
+                        else
+                        {
+                            AnsiConsole.MarkupLine($"[red]  Error extracting {Path.GetFileName(plan.ArchivePath)}: {result.Error}[/]");
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        cancelled = true;
+                        cancelledArchive = plan.ArchivePath;
+                        SafeDeleteDirectory(destination);
+                        break;
+                    }
+
+                    progressTask.Increment(1);
                 }
-                else
-                {
-                    AnsiConsole.MarkupLine($"[red]  Error extracting {Path.GetFileName(plan.ArchivePath)}: {result.Error}[/]");
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                cancelled = true;
-                cancelledArchive = plan.ArchivePath;
-                SafeDeleteDirectory(destination);
-                break;
-            }
-        }
+            });
 
         extractionCts.Cancel();
         if (cancelMonitor != null)
@@ -150,7 +185,7 @@ public static class ExtractArchivesCommand
         }
         else
         {
-            AnsiConsole.MarkupLine($"[green]�o\" [DOCKED] Extracted {extracted} archive(s)[/]");
+            AnsiConsole.MarkupLine($"[green]���o\" [DOCKED] Extracted {extracted} archive(s)[/]");
             if (deleteSource)
             {
                 AnsiConsole.MarkupLine("[dim]  Source archives deleted after extraction[/]");
@@ -250,3 +285,4 @@ public static class ExtractArchivesCommand
 
     private sealed record ArchivePlan(string ArchivePath, string DestinationPath, bool RequiresSubdirectory);
 }
+

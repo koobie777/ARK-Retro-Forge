@@ -21,6 +21,12 @@ public class Program
 
         if (args.Length == 0)
         {
+            if (!HasInteractiveConsole())
+            {
+                Console.WriteLine("Interactive menu requires a terminal. Run `ark-retro-forge --help` for usage.");
+                return (int)ExitCode.InvalidArgs;
+            }
+
             return await ShowMenuAsync();
         }
 
@@ -51,7 +57,7 @@ public class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"\n☄️ [IMPACT] | Component: {command} | Context: {ex.Message}");
+            Console.WriteLine($"\nÎ“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: {command} | Context: {ex.Message}");
             return (int)ExitCode.GeneralError;
         }
     }
@@ -74,13 +80,13 @@ public class Program
         else
         {
             Console.WriteLine("External Tools Check");
-            Console.WriteLine("══════════════════════════════════════════════════════════════════════");
+            Console.WriteLine("Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰");
             Console.WriteLine($"{"Tool",-15} {"Found",-8} {"Version",-15} {"Min Ver",-10} {"Path",-40}");
-            Console.WriteLine("──────────────────────────────────────────────────────────────────────");
+            Console.WriteLine("Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡");
 
             foreach (var result in results)
             {
-                var found = result.IsFound ? "✓" : "✗";
+                var found = result.IsFound ? "Î“Â£Ã´" : "Î“Â£Ã¹";
                 var version = result.Version ?? "N/A";
                 var minVersion = result.MinimumVersion ?? "-";
                 var path = result.Path ?? result.ErrorMessage ?? "Not found";
@@ -93,7 +99,7 @@ public class Program
                 Console.WriteLine($"{result.Name,-15} {found,-8} {version,-15} {minVersion,-10} {path,-40}");
             }
 
-            Console.WriteLine("══════════════════════════════════════════════════════════════════════");
+            Console.WriteLine("Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰");
             
             var missingRequired = results.Where(r => !r.IsFound).ToList();
             var foundCount = results.Count(r => r.IsFound);
@@ -102,17 +108,17 @@ public class Program
             
             if (missingRequired.Any())
             {
-                Console.WriteLine("\n⚠️  Missing required tools:");
+                Console.WriteLine("\nÎ“ÃœÃ¡âˆ©â••Ã…  Missing required tools:");
                 foreach (var missing in missingRequired)
                 {
                     Console.WriteLine($"   - {missing.Name}: {missing.ErrorMessage}");
                 }
-                Console.WriteLine("\n💡 Next step: Download missing tools and place them in .\\tools\\ directory");
+                Console.WriteLine("\nâ‰¡Æ’Ã†Ã­ Next step: Download missing tools and place them in .\\tools\\ directory");
                 return (int)ExitCode.ToolMissing;
             }
 
-            Console.WriteLine("\n✨ All tools found and ready");
-            Console.WriteLine("\n💡 Next step: Run 'scan --root <path>' to discover ROMs");
+            Console.WriteLine("\nÎ“Â£Â¿ All tools found and ready");
+            Console.WriteLine("\nâ‰¡Æ’Ã†Ã­ Next step: Run 'scan --root <path>' to discover ROMs");
         }
 
         await Task.CompletedTask;
@@ -124,17 +130,17 @@ public class Program
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrEmpty(root))
         {
-            Console.WriteLine("☄️ [IMPACT] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>");
+            Console.WriteLine("Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            Console.WriteLine($"☄️ [IMPACT] | Component: scan | Context: Directory not found: {root} | Fix: Verify the --root path exists");
+            Console.WriteLine($"Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: scan | Context: Directory not found: {root} | Fix: Verify the --root path exists");
             return (int)ExitCode.InvalidArgs;
         }
 
-        Console.WriteLine($"🛰️ [SCAN] Scanning: {root}");
+        Console.WriteLine($"â‰¡Æ’Â¢â–‘âˆ©â••Ã… [SCAN] Scanning: {root}");
         Console.WriteLine();
 
         var dbPath = Path.Combine(GetInstanceRoot(), "db");
@@ -169,11 +175,11 @@ public class Program
 
         var duration = DateTime.UtcNow - startTime;
 
-        Console.WriteLine($"✨ [DOCKED] Scan complete");
+        Console.WriteLine($"Î“Â£Â¿ [DOCKED] Scan complete");
         Console.WriteLine($"  Files found: {files.Count}");
         Console.WriteLine($"  Duration: {duration.TotalSeconds:F2}s");
         Console.WriteLine("  ROM cache updated");
-        Console.WriteLine($"\n➡️ Next step: verify --root {root}");
+        Console.WriteLine($"\nÎ“â‚§Ã­âˆ©â••Ã… Next step: verify --root {root}");
 
         return (int)ExitCode.OK;
     }
@@ -183,17 +189,17 @@ public class Program
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrEmpty(root))
         {
-            Console.WriteLine("☄️ [IMPACT] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>");
+            Console.WriteLine("Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            Console.WriteLine($"☄️ [IMPACT] | Component: verify | Context: Directory not found: {root} | Fix: Verify the --root path exists");
+            Console.WriteLine($"Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: verify | Context: Directory not found: {root} | Fix: Verify the --root path exists");
             return (int)ExitCode.InvalidArgs;
         }
 
-        Console.WriteLine($"🛰️ [VERIFY] Hashing files in: {root}");
+        Console.WriteLine($"â‰¡Æ’Â¢â–‘âˆ©â••Ã… [VERIFY] Hashing files in: {root}");
         Console.WriteLine();
 
         var dbPath = Path.Combine(GetInstanceRoot(), "db");
@@ -209,7 +215,7 @@ public class Program
 
         if (files.Count == 0)
         {
-            Console.WriteLine("⚠️ [ANOMALY] No files found to verify");
+            Console.WriteLine("Î“ÃœÃ¡âˆ©â••Ã… [ANOMALY] No files found to verify");
             return (int)ExitCode.OK;
         }
 
@@ -220,7 +226,7 @@ public class Program
         foreach (var file in files)
         {
             processed++;
-            Console.Write($"\r🔥 [BURN] [{processed}/{files.Count}] {Path.GetFileName(file)}".PadRight(80));
+            Console.Write($"\râ‰¡Æ’Ã¶Ã‘ [BURN] [{processed}/{files.Count}] {Path.GetFileName(file)}".PadRight(80));
 
             var metadataRecord = BuildRomRecord(file, DateTime.UtcNow);
             await romRepository.UpsertRomAsync(metadataRecord);
@@ -240,13 +246,13 @@ public class Program
         var duration = DateTime.UtcNow - startTime;
         var throughputMBps = totalBytes / 1024.0 / 1024.0 / Math.Max(duration.TotalSeconds, 0.001);
 
-        Console.WriteLine($"\n✨ [DOCKED] Verification complete");
+        Console.WriteLine($"\nÎ“Â£Â¿ [DOCKED] Verification complete");
         Console.WriteLine($"  Files processed: {processed}");
         Console.WriteLine($"  Total size: {totalBytes / 1024.0 / 1024.0:F2} MB");
         Console.WriteLine($"  Duration: {duration.TotalSeconds:F2}s");
         Console.WriteLine($"  Throughput: {throughputMBps:F2} MB/s");
         Console.WriteLine("  ROM cache updated with latest hash values");
-        Console.WriteLine($"\n➡️ Next step: Hashes computed successfully");
+        Console.WriteLine($"\nÎ“â‚§Ã­âˆ©â••Ã… Next step: Hashes computed successfully");
 
         return (int)ExitCode.OK;
     }
@@ -260,18 +266,18 @@ public class Program
 
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("[bold cyan]Select an operation[/] [grey](Use ↑/↓ and Enter)[/]")
+                    .Title("[bold cyan]Select an operation[/] [grey](Use arrow keys and Enter)[/]")
                     .PageSize(10)
                     .HighlightStyle(Style.Parse("cyan bold"))
                     .AddChoices(
-                        "Doctor ▸ Tool Check",
-                        "Scan ▸ Directory Scan",
-                        "Verify ▸ Hash Integrity",
-                        "Rename ▸ PSX",
-                        "Convert ▸ PSX",
-                        "Merge ▸ PSX BIN Tracks",
-                        "Duplicates ▸ PSX",
-                        "Extract ▸ Archives",
+                        "Doctor - Tool Check",
+                        "Scan - Directory Scan",
+                        "Verify - Hash Integrity",
+                        "Rename - PSX",
+                        "Convert - PSX",
+                        "Merge - PSX BIN Tracks",
+                        "Duplicates - PSX",
+                        "Extract - Archives",
                         "Set ROM Root Directory",
                         "Set Instance Profile",
                         _menuDryRun ? "Switch to APPLY mode" : "Switch to DRY-RUN mode",
@@ -280,35 +286,35 @@ public class Program
 
             switch (choice)
             {
-                case "Doctor ▸ Tool Check":
+                case "Doctor - Tool Check":
                     await RunDoctorAsync(new[] { "doctor" });
                     Pause();
                     break;
-                case "Scan ▸ Directory Scan":
+                case "Scan - Directory Scan":
                     await RunMenuScanAsync();
                     Pause();
                     break;
-                case "Verify ▸ Hash Integrity":
+                case "Verify - Hash Integrity":
                     await RunMenuVerifyAsync();
                     Pause();
                     break;
-                case "Rename ▸ PSX":
+                case "Rename - PSX":
                     await RunMenuRenamePsxAsync();
                     Pause();
                     break;
-                case "Convert ▸ PSX":
+                case "Convert - PSX":
                     await RunMenuConvertPsxAsync();
                     Pause();
                     break;
-                case "Merge ▸ PSX BIN Tracks":
+                case "Merge - PSX BIN Tracks":
                     await RunMenuMergePsxAsync();
                     Pause();
                     break;
-                case "Duplicates ▸ PSX":
+                case "Duplicates - PSX":
                     await RunMenuDuplicatesPsxAsync();
                     Pause();
                     break;
-                case "Extract ▸ Archives":
+                case "Extract - Archives":
                     await RunMenuExtractArchivesAsync();
                     Pause();
                     break;
@@ -344,10 +350,11 @@ public class Program
             : $"[dim]ROM root:[/] {_rememberedRomRoot.EscapeMarkup()}";
 
         var instanceText = $"[dim]Instance:[/] {SanitizeInstanceName(_instanceName).EscapeMarkup()}";
-        var tip = "[grey]Tip: Use ↑/↓ to navigate, Enter to run. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
+        var tip = "[grey]Tip: Use arrow keys to navigate and Enter to run. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
+        var version = GetVersion();
 
         var header = new Panel(
-            new Markup($"[bold silver]ARK-Retro-Forge[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{instanceText}\n\n{tip}")
+            new Markup($"[bold silver]ARK-Retro-Forge v{version}[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{instanceText}\n\n{tip}")
         )
         {
             Border = BoxBorder.Rounded,
@@ -517,7 +524,7 @@ public class Program
 
     private static async Task RunMenuExtractArchivesAsync()
     {
-        var root = PromptForPath("Enter archive root folder");
+        var root = EnsureRomRoot("Enter archive root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
             return;
@@ -725,7 +732,7 @@ public class Program
 
     private static int ShowUnknownCommand(string command)
     {
-        Console.WriteLine($"☄️ [IMPACT] Unknown command: {command}");
+        Console.WriteLine($"Î“Ã¿Ã¤âˆ©â••Ã… [IMPACT] Unknown command: {command}");
         Console.WriteLine();
         PrintHelp();
         return (int)ExitCode.InvalidArgs;
@@ -733,11 +740,12 @@ public class Program
 
     private static void PrintBanner()
     {
-        Console.WriteLine("═══════════════════════════════════════════════════════════");
-        Console.WriteLine("  🚀 ARK-Retro-Forge v{0}", GetVersion());
-        Console.WriteLine("  Spaceflight Toolchain — Portable • Deterministic");
-        Console.WriteLine("  No ROMs/BIOS/Keys included • User-supplied tools");
-        Console.WriteLine("═══════════════════════════════════════════════════════════");
+        var border = new string('=', 59);
+        Console.WriteLine(border);
+        Console.WriteLine("  ARK-Retro-Forge v{0}", GetVersion());
+        Console.WriteLine("  Spaceflight Toolchain - Portable - Deterministic");
+        Console.WriteLine("  No ROMs/BIOS/Keys included - User-supplied tools");
+        Console.WriteLine(border);
         Console.WriteLine();
     }
 
@@ -790,7 +798,7 @@ public class Program
         Console.WriteLine("  ark-retro-forge convert psx --root C:\\PSX --recursive --apply");
         Console.WriteLine("  ark-retro-forge duplicates psx --root C:\\PSX --recursive --json");
         Console.WriteLine();
-        Console.WriteLine("💡 Run 'doctor' first to check your environment");
+        Console.WriteLine("â‰¡Æ’Ã†Ã­ Run 'doctor' first to check your environment");
     }
 
     private static string GetVersion()
@@ -800,6 +808,27 @@ public class Program
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
             .FirstOrDefault()?.InformationalVersion ?? "0.1.0-dev";
         return version;
+    }
+
+    private static bool HasInteractiveConsole()
+    {
+        try
+        {
+            if (Console.IsOutputRedirected || Console.IsInputRedirected)
+            {
+                return false;
+            }
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return false;
+        }
+
+        return AnsiConsole.Profile.Capabilities.Interactive;
     }
 
     private static string GetInstanceRoot()
@@ -845,3 +874,11 @@ public class Program
         args = filtered.ToArray();
     }
 }
+
+
+
+
+
+
+
+

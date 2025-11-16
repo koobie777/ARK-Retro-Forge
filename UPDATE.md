@@ -2,6 +2,15 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.2.0-rc.3 (2025-11-16)
+
+### CLI
+- Menu header now shows the running RC version, uses ASCII prompts, and refuses to open when there is no interactive console to avoid Spectre exceptions.
+- Archive extraction reuses the saved ROM root, clears the planning log before applying, and shows a progress bar with per-archive status plus ESC/Ctrl+C cancellation.
+
+### Packaging
+- Windows build outputs `ark-retro-forge.exe` (and workflows/checksums were updated) so RC artifacts match the CLI shim name.
+
 ## v0.1.0-preview.12 (2025-11-16)
 
 ### CLI Ergonomics
