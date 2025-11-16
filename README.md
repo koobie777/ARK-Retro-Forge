@@ -86,6 +86,15 @@ ark-retro-forge merge psx --root C:\ROMs --recursive --apply
 ark-retro-forge extract archives --root C:\Downloads --output C:\ROMs\Imports --recursive --apply --delete-source
 ```
 
+## Future Plans
+
+- **More Systems**: Extend scan/verify/convert/merge pipelines to PS2/PS3/PSP, Dreamcast, Xbox, N64DD, etc. with system-specific heuristics (no ROMs shipped, per-policy).
+- **GUI**: Ship a cross-platform GUI to wrap the CLI flows (scan/verify/convert) with live progress, filtering, and side-by-side previews.
+- **Metadata Sync**: Cross-reference the local ROM cache against community databases (Redump/No-Intro) for automatic tagging, duplicate detection, and curated playlists.
+- **Automation Profiles**: Allow declarative YAML/JSON workflows so users can script multi-step ops (scan → convert → merge → extract) per console/library.
+- **Remote Nodes**: Add optional agent mode so heavy conversions can run on another host while the primary machine controls orchestration.
+- **Modular Ops**: Continue to improve UI polish (menus, dashboards, future GUI themes) and expose plugin points for additional console-specific features.
+
 ## Global Options
 
 - `--dry-run` (default): Preview changes without applying
