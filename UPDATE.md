@@ -2,6 +2,27 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.1.0-preview.12 (2025-11-16)
+
+### CLI Ergonomics
+- Added a Windows `ark-retro-forge.cmd` shim that shells out to the CLI project so the documented `ark-retro-forge <verb>` commands work from the repo root without extra arguments
+- Allow switching between Debug/Release by setting `ARKRF_CONFIGURATION` before running the shim and documented the workflow in README
+- Added an interactive CLI menu (run `ark-retro-forge` with no args) that surfaces doctor/scan/verify/rename/convert/merge/extract flows without memorizing verbs
+- Menu now renders with Spectre.Console panels/prompts, exposes a persistent DRY-RUN/APPLY toggle, remembers the ROM root, and now supports named instance profiles (via menu or `--instance`) so multiple conversions/scans can run concurrently with isolated caches/logs.
+
+### PSX Tooling
+- `convert psx` now understands `--to chd|bin|iso`, automatically picks `createcd` vs `createdvd`, converts CHD back to BIN/CUE or ISO, and respects `--delete-source` across every direction without relying on rename metadata.
+- New `merge psx` command: detects multi-track BIN layouts via CUE sheets, merges them into a single BIN, rewrites a clean CUE referencing title-only filenames, and optionally prunes the original files after an explicit confirmation prompt
+- Dedicated planner/service pipeline (`PsxBinMergePlanner`/`PsxBinMergeService`) plus unit coverage to guarantee deterministic BIN concatenation and cue timings
+
+### Archive Utilities
+- New `extract archives` verb handles ZIP/7Z/RAR imports through SharpCompress, supports recursive discovery, custom destinations, and optional archive deletion for large batches
+- Added automated tests to ensure ZIP extraction works end-to-end and prevent regressions
+- Archive extractor now wipes/recreates destination directories before unpacking so re-running the command overwrites stale files reliably and ESC/Ctrl+C cancels only the in-flight archive with automatic rollback using a faster streaming path.
+
+### ROM Cache
+- Scan and verify now populate a per-instance SQLite ROM cache capturing size, hashes, titles, and regions to cross-reference future scrapers and speed up downstream tooling.
+
 ## v0.1.0-preview.8 (2025-11-14)
 
 ### PSX Toolchain Enhancements - Verification and Documentation

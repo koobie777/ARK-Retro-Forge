@@ -22,7 +22,10 @@ Portable .NET 8 C# ROM manager for PS/Nintendo/Xbox/SEGA: scan/clean/verify/comp
 - **Scan**: Fast directory scanning with ROM discovery
 - **Verify**: Streaming hash verification (CRC32, MD5, SHA1)
 - **Rename**: Deterministic renaming to "Title (Region) [ID]" format
-- **Convert**: CHD/CSO/RVZ compression via external tools
+- **Convert**: CHD/CSO/RVZ compression via external tools (now bi-directional CHD↔BIN/CUE/ISO with automatic CD/DVD detection)
+- **Merge**: Consolidate PSX multi-track BIN sets into a single BIN + rewritten CUE
+- **Extract**: Built-in ZIP/7Z/RAR extraction workflow with optional source cleanup
+- **Cache**: Local ROM catalog that records scan/verify results for cross-referencing with scraped metadata
 - **Doctor**: Environment validation and tool checking
 - **Portable**: Single-file EXE, no registry, no admin required
 
@@ -30,15 +33,34 @@ Portable .NET 8 C# ROM manager for PS/Nintendo/Xbox/SEGA: scan/clean/verify/comp
 
 1. Download the latest release
 2. Place external tools (e.g., chdman.exe) in `.\tools\` directory
-3. Run `ark-retro-forge doctor` to verify setup
-4. Run `ark-retro-forge scan --root C:\ROMs` to discover files
-5. Run `ark-retro-forge verify --root C:\ROMs` to check integrity
+3. Run `ark-retro-forge` with no arguments to launch the interactive operations menu
+4. Run `ark-retro-forge doctor` (or pick option 1 in the menu) to verify setup
+5. Run `ark-retro-forge scan --root C:\ROMs` (or set a ROM root from the menu) to build the local ROM cache
+6. Run `ark-retro-forge verify --root C:\ROMs` to update hashes and integrity info in the cache
+
+### Local Development Shortcut
+
+When working from source, use the provided `ark-retro-forge.cmd` shim in the repo root:
+
+```powershell
+# From repo root
+ark-retro-forge doctor
+ark-retro-forge scan --root C:\ROMs --workers 4
+```
+
+Set `ARKRF_CONFIGURATION=Release` before running the script if you want it to invoke the Release build instead of the default Debug configuration.
 
 ## CLI Usage
 
 ```bash
 # Check environment and tools
 ark-retro-forge doctor
+
+# Launch interactive menu (doctor/scan/verify/rename/convert/merge/extract)
+ark-retro-forge
+# Toggle the persistent DRY-RUN/APPLY mode from the interactive menu (resets to DRY-RUN on next launch)
+# Run a second CLI session with its own database and logs
+ark-retro-forge --instance psx-dev
 
 # Scan for ROMs
 ark-retro-forge scan --root C:\ROMs --workers 4
@@ -51,6 +73,17 @@ ark-retro-forge rename --root C:\ROMs
 
 # Apply rename operations
 ark-retro-forge rename --root C:\ROMs --apply --force
+
+# Convert PSX media in either direction (CUE -> CHD, CHD -> BIN/CUE or ISO)
+ark-retro-forge convert psx --root C:\ROMs --to chd --apply
+ark-retro-forge convert psx --root C:\ROMs --to bin --apply --delete-source
+ark-retro-forge convert psx --root C:\ROMs --to iso --apply
+
+# Merge PSX multi-track BINs into a single BIN/CUE (prompts before deleting the sources)
+ark-retro-forge merge psx --root C:\ROMs --recursive --apply
+
+# Extract archives (zip/7z/rar) from a directory tree, optionally deleting the source archives
+ark-retro-forge extract archives --root C:\Downloads --output C:\ROMs\Imports --recursive --apply --delete-source
 ```
 
 ## Global Options

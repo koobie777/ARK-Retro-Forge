@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
@@ -9,6 +10,7 @@ namespace ARK.Cli.Commands.PSX;
 /// </summary>
 public static class ConvertPsxCommand
 {
+    private static readonly Regex CueFileRegex = new(@"FILE ""([^""]+)""", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     public static async Task<int> RunAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
@@ -28,6 +30,7 @@ public static class ConvertPsxCommand
         var apply = args.Contains("--apply");
         var deleteSource = args.Contains("--delete-source");
         var rebuild = args.Contains("--rebuild");
+        var targetArg = GetArgValue(args, "--to") ?? "chd";
 
         if (deleteSource && !apply)
         {
@@ -35,14 +38,18 @@ public static class ConvertPsxCommand
             return (int)ExitCode.InvalidArgs;
         }
 
-        AnsiConsole.MarkupLine("[cyan]🛰️ [[PSX CONVERT]][/] Root: {0}", root.EscapeMarkup());
-        if (recursive)
+        if (!TryParseTarget(targetArg, out var target))
         {
-            AnsiConsole.MarkupLine("[dim]  Mode: Recursive[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ Invalid --to value '{targetArg}'. Use chd, bin, or iso.[/]");
+            return (int)ExitCode.InvalidArgs;
         }
+
+        AnsiConsole.MarkupLine("[cyan]🛰️ [[PSX CONVERT]][/] Root: {0}", root.EscapeMarkup());
+        AnsiConsole.MarkupLine($"[dim]  Mode: {(recursive ? "Recursive" : "Top-level only")}[/]");
+        AnsiConsole.MarkupLine($"[dim]  Target: {target.ToString().ToUpperInvariant()}[/]");
         if (rebuild)
         {
-            AnsiConsole.MarkupLine("[yellow]  Rebuild: Force reconversion of existing CHDs[/]");
+            AnsiConsole.MarkupLine("[yellow]  Rebuild: Force reconversion even if destination exists[/]");
         }
         if (!apply)
         {
@@ -55,222 +62,210 @@ public static class ConvertPsxCommand
         AnsiConsole.WriteLine();
 
         var planner = new PsxConvertPlanner();
-        var operations = planner.PlanConversions(root, recursive, rebuild);
-        
-        // Plan playlist operations for CHD format
-        var playlistMode = GetArgValue(args, "--playlist-mode") ?? "chd";
-        var updatePlaylists = !args.Contains("--no-playlist-update") && 
-                             !playlistMode.Equals("off", StringComparison.OrdinalIgnoreCase);
-        
-        var playlistPlanner = new PsxPlaylistPlanner();
-        var playlistOperations = updatePlaylists && operations.Any(o => !o.AlreadyConverted)
-            ? playlistPlanner.PlanPlaylists(root, recursive, 
-                preferredExtension: ".chd", 
-                createNew: true,
-                updateExisting: true)
-            : new List<PsxPlaylistOperation>();
+        var operations = planner.PlanConversions(root, recursive, rebuild, target);
 
-        // Statistics
-        var alreadyConverted = operations.Count(o => o.AlreadyConverted);
-        var toConvert = operations.Count(o => !o.AlreadyConverted);
-
-        // Display table for files to convert
-        if (operations.Any())
+        if (operations.Count == 0)
         {
-            var table = new Table();
-            table.Border(TableBorder.Rounded);
-            table.AddColumn("[cyan]Title[/]");
-            table.AddColumn("[yellow]Disc[/]");
-            table.AddColumn("[green]Status[/]");
-            table.AddColumn("[red]Warning[/]");
-
-            foreach (var op in operations)
-            {
-                var title = op.DiscInfo.Title ?? "Unknown";
-                
-                // Display disc number properly (never show "-")
-                var disc = op.DiscInfo.DiscNumber.HasValue
-                    ? $"Disc {op.DiscInfo.DiscNumber}"
-                    : "Unknown";
-
-                var status = op.AlreadyConverted
-                    ? "[green]Already converted[/]"
-                    : "[yellow]CONVERT[/]";
-
-                var warning = op.Warning != null ? $"⚠️  {op.Warning}" : "";
-
-                table.AddRow(
-                    title.EscapeMarkup(),
-                    disc,
-                    status,
-                    warning.EscapeMarkup()
-                );
-            }
-
-            AnsiConsole.Write(table);
-            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[yellow]No files found for conversion with the requested options.[/]");
+            return (int)ExitCode.OK;
         }
 
-        // Display summary
-        AnsiConsole.MarkupLine("[bold cyan]═══════════════════════════════════════════════════════════[/]");
-        AnsiConsole.MarkupLine($"[cyan]Summary:[/]");
-        AnsiConsole.MarkupLine($"  Total CUE files: [cyan]{operations.Count}[/]");
-        AnsiConsole.MarkupLine($"  Already converted: [green]{alreadyConverted}[/]");
-        AnsiConsole.MarkupLine($"  To convert: [yellow]{toConvert}[/]");
-        AnsiConsole.MarkupLine("[bold cyan]═══════════════════════════════════════════════════════════[/]");
+        RenderPlanTable(operations, target);
 
-        // Display playlist operations
-        if (playlistOperations.Any())
+        if (!apply)
         {
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[bold cyan]🎵 [[PSX PLAYLIST PLAN]][/]");
-            
-            var playlistTable = new Table();
-            playlistTable.Border(TableBorder.Rounded);
-            playlistTable.AddColumn("[cyan]Title[/]");
-            playlistTable.AddColumn("[yellow]Region[/]");
-            playlistTable.AddColumn("[green]Operation[/]");
-            playlistTable.AddColumn("[magenta]Discs[/]");
-            
-            foreach (var plOp in playlistOperations)
-            {
-                var operation = plOp.OperationType == PlaylistOperationType.Create ? "CREATE" : "UPDATE";
-                var discCount = plOp.DiscFilenames.Count;
-                
-                playlistTable.AddRow(
-                    plOp.Title.EscapeMarkup(),
-                    plOp.Region.EscapeMarkup(),
-                    operation,
-                    discCount.ToString()
-                );
-            }
-            
-            AnsiConsole.Write(playlistTable);
-            AnsiConsole.WriteLine();
-        }
-
-        // Check for chdman tool
-        if (apply && toConvert > 0)
-        {
-            var chdmanPath = FindChdman();
-            if (chdmanPath == null)
-            {
-                AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: convert psx | Context: chdman.exe not found | Fix: Place chdman.exe in .\\tools\\ directory[/]");
-                AnsiConsole.MarkupLine("[yellow]💡 Run 'ark-retro-forge doctor' to check tool status[/]");
-                return (int)ExitCode.ToolMissing;
-            }
-
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLine("[yellow]🔥 [BURN] Converting CUE files to CHD...[/]");
-
-            var converted = 0;
-            foreach (var op in operations.Where(o => !o.AlreadyConverted))
-            {
-                try
-                {
-                    AnsiConsole.MarkupLine($"[dim]  Converting: {Path.GetFileName(op.SourcePath).EscapeMarkup()}[/]");
-
-                    // Determine media type and command
-                    var extension = Path.GetExtension(op.SourcePath);
-                    var mediaType = ChdMediaTypeHelper.DetermineFromExtensionOrContext(extension, "PSX");
-                    var chdmanCommand = ChdMediaTypeHelper.GetChdmanCommand(mediaType);
-
-                    // Run chdman with appropriate command (createcd for PSX)
-                    var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = chdmanPath,
-                        Arguments = $"{chdmanCommand} -i \"{op.SourcePath}\" -o \"{op.DestinationPath}\"",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    });
-
-                    if (process != null)
-                    {
-                        await process.WaitForExitAsync();
-
-                        if (process.ExitCode == 0)
-                        {
-                            converted++;
-
-                            // Delete source files if requested
-                            if (deleteSource)
-                            {
-                                File.Delete(op.SourcePath);
-
-                                // Also delete associated BIN files
-                                var cueDir = Path.GetDirectoryName(op.SourcePath);
-                                var cueContent = File.ReadAllText(op.SourcePath);
-                                var binFiles = System.Text.RegularExpressions.Regex.Matches(cueContent, @"FILE ""([^""]+)"" BINARY");
-                                foreach (System.Text.RegularExpressions.Match match in binFiles)
-                                {
-                                    var binFile = Path.Combine(cueDir ?? "", match.Groups[1].Value);
-                                    if (File.Exists(binFile))
-                                    {
-                                        File.Delete(binFile);
-                                    }
-                                }
-                            }
-                        }
-                        else
-                        {
-                            AnsiConsole.MarkupLine($"[red]  Error: chdman exited with code {process.ExitCode}[/]");
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    AnsiConsole.MarkupLine($"[red]  Error converting {Path.GetFileName(op.SourcePath)}: {ex.Message}[/]");
-                }
-            }
-
-            AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Converted {converted} files[/]");
-            
-            // Apply playlist operations
-            if (playlistOperations.Any())
-            {
-                AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine("[yellow]🔥 [BURN] Applying playlist operations...[/]");
-                
-                var playlistsApplied = 0;
-                foreach (var plOp in playlistOperations)
-                {
-                    try
-                    {
-                        playlistPlanner.ApplyOperation(plOp, createBackup: true);
-                        playlistsApplied++;
-                    }
-                    catch (Exception ex)
-                    {
-                        AnsiConsole.MarkupLine($"[red]  Error with playlist {Path.GetFileName(plOp.PlaylistPath)}: {ex.Message}[/]");
-                    }
-                }
-                
-                AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Applied {playlistsApplied} playlists[/]");
-            }
-        }
-        else if (!apply && (toConvert > 0 || playlistOperations.Any()))
-        {
-            AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine("[yellow]💡 Next step: Add --apply to execute conversions[/]");
+            return (int)ExitCode.OK;
         }
 
-        await Task.CompletedTask;
+        var chdmanPath = FindChdman();
+        if (chdmanPath == null)
+        {
+            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: convert psx | Context: chdman.exe not found | Fix: Place chdman.exe in .\\tools\\ directory[/]");
+            AnsiConsole.MarkupLine("[yellow]💡 Run 'ark-retro-forge doctor' to check tool status[/]");
+            return (int)ExitCode.ToolMissing;
+        }
+
+        var converted = await ExecuteConversionsAsync(operations, chdmanPath, target, deleteSource);
+        AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Converted {converted} file(s)[/]");
         return (int)ExitCode.OK;
+    }
+
+    private static void RenderPlanTable(IEnumerable<PsxConvertOperation> operations, PsxConversionTarget target)
+    {
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("[cyan]Source[/]");
+        table.AddColumn("[green]Destination[/]");
+        table.AddColumn("[yellow]Media[/]");
+        table.AddColumn("[magenta]Status[/]");
+        table.AddColumn("[red]Warning[/]");
+
+        foreach (var op in operations)
+        {
+        var destinationDisplay = target switch
+            {
+                PsxConversionTarget.Chd => op.DestinationPath ?? "-",
+                PsxConversionTarget.BinCue => op.DestinationCuePath ?? "-",
+                PsxConversionTarget.Iso => op.DestinationPath ?? "-",
+                _ => "-"
+            };
+
+            table.AddRow(
+                Path.GetFileName(op.SourcePath).EscapeMarkup(),
+                Path.GetFileName(destinationDisplay ?? "-")?.EscapeMarkup() ?? "-",
+                op.MediaType.ToString(),
+                op.AlreadyConverted ? "[green]Ready[/]" : "[yellow]Pending[/]",
+                (op.Warning ?? string.Empty).EscapeMarkup());
+        }
+
+        AnsiConsole.Write(table);
+        AnsiConsole.WriteLine();
+    }
+
+    private static async Task<int> ExecuteConversionsAsync(IEnumerable<PsxConvertOperation> operations, string chdmanPath, PsxConversionTarget target, bool deleteSource)
+    {
+        var converted = 0;
+        foreach (var op in operations.Where(o => !o.AlreadyConverted))
+        {
+            try
+            {
+                var arguments = BuildChdmanArguments(op, target);
+                if (string.IsNullOrWhiteSpace(arguments))
+                {
+                    AnsiConsole.MarkupLine($"[red]  Skipping {Path.GetFileName(op.SourcePath)}: unsupported media type/target[/]");
+                    continue;
+                }
+
+                AnsiConsole.MarkupLine($"[dim]  Converting: {Path.GetFileName(op.SourcePath).EscapeMarkup()}[/]");
+                var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = chdmanPath,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                });
+
+                if (process == null)
+                {
+                    AnsiConsole.MarkupLine($"[red]  Failed to start chdman for {Path.GetFileName(op.SourcePath)}[/]");
+                    continue;
+                }
+
+                await process.WaitForExitAsync();
+                if (process.ExitCode == 0)
+                {
+                    converted++;
+                    if (deleteSource)
+                    {
+                        DeleteOriginals(op, target);
+                    }
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[red]  chdman exited with code {process.ExitCode}[/]");
+                }
+            }
+            catch (Exception ex)
+            {
+                AnsiConsole.MarkupLine($"[red]  Error converting {Path.GetFileName(op.SourcePath)}: {ex.Message}[/]");
+            }
+        }
+
+        return converted;
+    }
+
+    private static string BuildChdmanArguments(PsxConvertOperation op, PsxConversionTarget target)
+    {
+        return target switch
+        {
+            PsxConversionTarget.Chd when !string.IsNullOrWhiteSpace(op.DestinationPath) =>
+                $"{ChdMediaTypeHelper.GetChdmanCommand(op.MediaType)} -i \"{op.SourcePath}\" -o \"{op.DestinationPath}\"",
+            PsxConversionTarget.BinCue when !string.IsNullOrWhiteSpace(op.DestinationCuePath) && !string.IsNullOrWhiteSpace(op.DestinationBinPath) =>
+                $"{ChdMediaTypeHelper.GetExtractCommand(op.MediaType)} -i \"{op.SourcePath}\" -o \"{op.DestinationCuePath}\" -ob \"{op.DestinationBinPath}\"",
+            PsxConversionTarget.Iso when !string.IsNullOrWhiteSpace(op.DestinationPath) =>
+                $"{ChdMediaTypeHelper.GetExtractCommand(op.MediaType)} -i \"{op.SourcePath}\" -o \"{op.DestinationPath}\"",
+            _ => string.Empty
+        };
+    }
+
+    private static void DeleteOriginals(PsxConvertOperation op, PsxConversionTarget target)
+    {
+        try
+        {
+            switch (target)
+            {
+                case PsxConversionTarget.Chd:
+                    DeleteCueAndBins(op.SourcePath);
+                    break;
+                case PsxConversionTarget.BinCue:
+                case PsxConversionTarget.Iso:
+                    if (File.Exists(op.SourcePath))
+                    {
+                        File.Delete(op.SourcePath);
+                    }
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]  Failed to delete source: {ex.Message}[/]");
+        }
+    }
+
+    private static void DeleteCueAndBins(string cuePath)
+    {
+        if (!File.Exists(cuePath))
+        {
+            return;
+        }
+
+        var content = File.ReadAllText(cuePath);
+        File.Delete(cuePath);
+
+        var matches = CueFileRegex.Matches(content);
+        var cueDir = Path.GetDirectoryName(cuePath) ?? string.Empty;
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            var binPath = Path.Combine(cueDir, match.Groups[1].Value);
+            if (File.Exists(binPath))
+            {
+                File.Delete(binPath);
+            }
+        }
+    }
+
+    private static bool TryParseTarget(string value, out PsxConversionTarget target)
+    {
+        switch (value.ToLowerInvariant())
+        {
+            case "chd":
+                target = PsxConversionTarget.Chd;
+                return true;
+            case "bin":
+            case "cue":
+            case "bin-cue":
+                target = PsxConversionTarget.BinCue;
+                return true;
+            case "iso":
+                target = PsxConversionTarget.Iso;
+                return true;
+            default:
+                target = PsxConversionTarget.Chd;
+                return false;
+        }
     }
 
     private static string? FindChdman()
     {
-        var toolsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tools");
+        var toolsDir = Path.Combine(AppContext.BaseDirectory, "tools");
         var chdmanPath = Path.Combine(toolsDir, "chdman.exe");
-
         if (File.Exists(chdmanPath))
         {
             return chdmanPath;
         }
 
-        // Also check in PATH
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (pathEnv != null)
         {

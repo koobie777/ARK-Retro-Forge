@@ -73,6 +73,54 @@ public static class ChdMediaTypeHelper
             _ => ChdMediaType.Unknown
         };
     }
+
+    /// <summary>
+    /// Determine CHD media type by inspecting the file on disk.
+    /// </summary>
+    public static ChdMediaType DetermineFromFilePath(string filePath, string? systemContext = null)
+    {
+        var type = DetermineFromExtensionOrContext(Path.GetExtension(filePath), systemContext);
+        if (type != ChdMediaType.Unknown)
+        {
+            if (Path.GetExtension(filePath).Equals(".iso", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var length = new FileInfo(filePath).Length;
+                    if (length > 1_200_000_000)
+                    {
+                        return ChdMediaType.DVD;
+                    }
+                }
+                catch
+                {
+                    // Ignore IO issues and fall back to existing type
+                }
+            }
+
+            return type;
+        }
+
+        try
+        {
+            var size = new FileInfo(filePath).Length;
+            if (size > 1_200_000_000)
+            {
+                return ChdMediaType.DVD;
+            }
+
+            if (size > 0)
+            {
+                return ChdMediaType.CD;
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return ChdMediaType.Unknown;
+    }
     
     /// <summary>
     /// Get the chdman command for the media type
@@ -85,6 +133,19 @@ public static class ChdMediaTypeHelper
         {
             ChdMediaType.CD => "createcd",
             ChdMediaType.DVD => "createdvd",
+            _ => throw new ArgumentException($"Unsupported media type: {mediaType}", nameof(mediaType))
+        };
+    }
+
+    /// <summary>
+    /// Get the extraction command for chdman.
+    /// </summary>
+    public static string GetExtractCommand(ChdMediaType mediaType)
+    {
+        return mediaType switch
+        {
+            ChdMediaType.CD => "extractcd",
+            ChdMediaType.DVD => "extractdvd",
             _ => throw new ArgumentException($"Unsupported media type: {mediaType}", nameof(mediaType))
         };
     }
