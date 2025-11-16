@@ -9,6 +9,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Allow switching between Debug/Release by setting `ARKRF_CONFIGURATION` before running the shim and documented the workflow in README
 - Added an interactive CLI menu (run `ark-retro-forge` with no args) that surfaces doctor/scan/verify/rename/convert/merge/extract flows without memorizing verbs
 - Menu now renders with Spectre.Console panels/prompts, exposes a persistent DRY-RUN/APPLY toggle, remembers the ROM root, and now supports named instance profiles (via menu or `--instance`) so multiple conversions/scans can run concurrently with isolated caches/logs.
+- Release automation now includes a dedicated `Release Candidate` workflow invoked by pushing tags like `vX.Y.Z-rc.1`, creating prereleases alongside the stable release workflow.
 
 ### PSX Tooling
 - `convert psx` now understands `--to chd|bin|iso`, automatically picks `createcd` vs `createdvd`, converts CHD back to BIN/CUE or ISO, and respects `--delete-source` across every direction without relying on rename metadata.

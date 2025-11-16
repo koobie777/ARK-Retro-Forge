@@ -104,6 +104,7 @@ ark-retro-forge extract archives --root C:\Downloads --output C:\ROMs\Imports --
 - `--verbose`: Verbose output
 - `--report <dir>`: Directory for reports
 - `--theme dark|light`: Color theme
+- `--instance <name>`: Isolate logs, databases, and releases per profile (useful for running multiple RC/production sessions simultaneously)
 
 ## Requirements
 
@@ -169,3 +170,5 @@ Contributions welcome! Please read our contributing guidelines and code of condu
 
 This tool is for managing legally obtained ROM files only. Users are responsible for complying with all applicable laws and regulations regarding ROM files, BIOS files, and copyrighted content in their jurisdiction.
 
+- **Release Candidates**: Tagged `v*-rc*` builds (published as prereleases) so early adopters can validate new features without waiting for stable tags. Use `git tag v0.2.0-rc.1 && git push origin v0.2.0-rc.1` or trigger the `Release Candidate` workflow manually.
+- **Stable Releases**: Tagged `v*` builds via the `Release` workflow. Run `git tag v0.2.0 && git push origin v0.2.0` once RC feedback looks good.
