@@ -7,6 +7,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 ### CLI
 - Menu header now shows the running RC version, uses ASCII prompts, and refuses to open when there is no interactive console to avoid Spectre exceptions.
 - Archive extraction reuses the saved ROM root, clears the planning log before applying, and shows a progress bar with per-archive status plus ESC/Ctrl+C cancellation.
+- Extraction monitor now renders a Spectre panel with root/output metadata, a colorized progress bar, and live throughput/success/failure counts so long-running batches are easier to trust at a glance.
 
 ### Packaging
 - Windows build outputs `ark-retro-forge.exe` (and workflows/checksums were updated) so RC artifacts match the CLI shim name.
