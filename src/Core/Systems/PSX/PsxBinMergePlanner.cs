@@ -35,7 +35,7 @@ public record PsxBinTrackSource
 /// <summary>
 /// Plans merge operations for PSX multi-BIN layouts.
 /// </summary>
-    public class PsxBinMergePlanner
+public class PsxBinMergePlanner
 {
     private readonly PsxNameParser _parser;
     private readonly DatMetadataIndex _metadata;
