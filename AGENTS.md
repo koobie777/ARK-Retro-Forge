@@ -55,7 +55,10 @@ Provide **in this order**:
 
 Default to dry-run for destructive ops; keep outputs deterministic and reversible.
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
 See also `.github/instructions.md` for Copilot-specific reminders (branch rules, Medical Bay, DAT intel).
 
 ### Project-Specific Knowledge
