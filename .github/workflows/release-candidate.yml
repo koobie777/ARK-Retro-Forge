@@ -28,13 +28,16 @@ jobs:
     steps:
     - name: Resolve checkout ref
       shell: pwsh
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        TARGET_REF: ${{ github.event.inputs.target_ref }}
       run: |
-        $refToUse = "${{ github.ref }}"
-        if ("${{ github.event_name }}" -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.target_ref }}")) {
-          $refToUse = "${{ github.event.inputs.target_ref }}"
+        $refToUse = $env:GITHUB_REF
+        if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace($env:TARGET_REF)) {
+          $refToUse = $env:TARGET_REF
         }
         Add-Content -Path $env:GITHUB_ENV -Value "CHECKOUT_REF=$refToUse"
-
     - name: Checkout
       uses: actions/checkout@v4
       with:
