@@ -11,7 +11,7 @@ internal static class CliLogger
 
     public static void Initialize()
     {
-        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        var logsDirectory = Path.Join(AppContext.BaseDirectory, "logs");
         Directory.CreateDirectory(logsDirectory);
 
         _logFile = Path.Combine(logsDirectory, $"ark-cli-{DateTime.UtcNow:yyyyMMdd}.log");
