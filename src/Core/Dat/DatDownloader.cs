@@ -98,8 +98,19 @@ public sealed class DatDownloader
         }
 
         var extractedPath = Path.Combine(destinationDirectory, sanitizedName);
-        entry.ExtractToFile(extractedPath, overwrite: true);
-        File.Delete(zipPath);
+        try
+        {
+            entry.ExtractToFile(extractedPath, overwrite: true);
+            File.Delete(zipPath);
+        }
+        catch
+        {
+            if (File.Exists(extractedPath))
+            {
+                File.Delete(extractedPath);
+            }
+            throw;
+        }
         return extractedPath;
     }
 }
