@@ -1,6 +1,7 @@
 using ARK.Cli.Infrastructure;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
+using HeaderMetadata = ARK.Cli.Infrastructure.ConsoleDecorations.HeaderMetadata;
 
 namespace ARK.Cli.Commands.PSX;
 
@@ -11,13 +12,13 @@ public static class MergePsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]�~,�,? [IMPACT] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -27,24 +28,17 @@ public static class MergePsxCommand
 
         if (deleteFlag && !apply)
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
+            AnsiConsole.MarkupLine("[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
-        AnsiConsole.MarkupLine("[cyan]dY>��,? [[PSX BIN MERGE]][/] Root: {0}", root.EscapeMarkup());
-        if (recursive)
-        {
-            AnsiConsole.MarkupLine("[dim]  Mode: Recursive[/]");
-        }
-        if (apply)
-        {
-            AnsiConsole.MarkupLine("[yellow]  Apply mode enabled[/]");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[yellow]  DRY RUN (use --apply to execute)[/]");
-        }
-        AnsiConsole.WriteLine();
+        ConsoleDecorations.RenderOperationHeader(
+            "PSX Merge",
+            new HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
+            new HeaderMetadata("Root", root),
+            new HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
+            new HeaderMetadata("Delete source", deleteFlag ? "[red]Yes[/]" : "No", IsMarkup: deleteFlag));
+        DatUsageHelper.WarnIfCatalogMissing("psx", "PSX merge");
 
         var planner = new PsxBinMergePlanner();
         var operations = planner.PlanMerges(root, recursive);
@@ -109,27 +103,68 @@ public static class MergePsxCommand
             return (int)ExitCode.OK;
         }
 
-        var deleteSources = deleteFlag || AnsiConsole.Confirm("[bold]Delete original BIN/CUE files after merge?[/]", false);
+        OperationContextScope.ThrowIfCancellationRequested();
+        var deleteSources = deleteFlag || PromptDeleteSources();
         var service = new PsxBinMergeService();
         var merged = 0;
+        var failures = new List<string>();
+        var token = OperationContextScope.CurrentToken;
 
-        foreach (var op in eligibleOperations)
+        var progressColumns = new ProgressColumn[]
         {
-            try
-            {
-                await service.MergeAsync(op, deleteSources);
-                merged++;
-            }
-            catch (Exception ex)
-            {
-                AnsiConsole.MarkupLine($"[red]  Error merging {Path.GetFileName(op.CuePath)}: {ex.Message}[/]");
-            }
-        }
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
 
-        AnsiConsole.MarkupLine($"[green]�o\" [DOCKED] Merged {merged} multi-track sets[/]");
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("Merging multi-track sets", maxValue: eligibleOperations.Count);
+                foreach (var op in eligibleOperations)
+                {
+                    token.ThrowIfCancellationRequested();
+                    task.Description = $"Merging {TruncateLabel(op.Title ?? Path.GetFileNameWithoutExtension(op.CuePath))}";
+                    try
+                    {
+                        await service.MergeAsync(op, deleteSources, token);
+                        merged++;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add($"{op.Title ?? Path.GetFileName(op.CuePath)}: {ex.Message}");
+                        AnsiConsole.MarkupLine($"[red]  Error merging {Path.GetFileName(op.CuePath).EscapeMarkup()}: {ex.Message.EscapeMarkup()}[/]");
+                    }
+
+                    task.Increment(1);
+                }
+            });
+
+        AnsiConsole.MarkupLine($"[green]�o\" [[DOCKED]] Merged {merged} multi-track set(s)[/]");
         if (deleteSources)
         {
             AnsiConsole.MarkupLine("[dim]  Source BIN/CUE files deleted after merge[/]");
+        }
+
+        if (failures.Count > 0)
+        {
+            var content = string.Join(Environment.NewLine, failures.Select(f => $"- {f.EscapeMarkup()}"));
+            var panel = new Panel(new Markup(content))
+            {
+                Header = new PanelHeader($"[red]Failed ({failures.Count})[/]"),
+                Border = BoxBorder.Rounded,
+                Padding = new Padding(1, 0, 1, 0)
+            };
+            AnsiConsole.WriteLine();
+            AnsiConsole.Write(panel);
         }
 
         return (int)ExitCode.OK;
@@ -146,5 +181,30 @@ public static class MergePsxCommand
         }
 
         return null;
+    }
+    private static bool PromptDeleteSources()
+    {
+        var prompt = new SelectionPrompt<string>()
+            .Title("[white]Delete original BIN/CUE files after merge?[/]")
+            .AddChoices("No", "Yes");
+
+        var choice = AnsiConsole.Prompt(prompt);
+        return choice.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string TruncateLabel(string? value, int maxLength = 48)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "PSX";
+        }
+
+        if (value.Length <= maxLength)
+        {
+            return value.EscapeMarkup();
+        }
+
+        var head = Math.Max(maxLength - 3, 1);
+        return $"{value[..head].EscapeMarkup()}...";
     }
 }

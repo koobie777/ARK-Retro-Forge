@@ -45,7 +45,7 @@ public class PsxNameFormatterTests
         var result = PsxNameFormatter.Format(discInfo);
         
         // Assert
-        Assert.Equal("Alone in the Dark - The New Nightmare (USA) [SLUS-01201] (Disc 1).bin", result);
+        Assert.Equal("Alone in the Dark - The New Nightmare (USA) (Disc 1) [SLUS-01201].bin", result);
     }
     
     [Fact]
@@ -67,7 +67,7 @@ public class PsxNameFormatterTests
         var result = PsxNameFormatter.Format(discInfo);
         
         // Assert
-        Assert.Equal("Alone in the Dark - The New Nightmare (USA) [SLUS-01377] (Disc 2).chd", result);
+        Assert.Equal("Alone in the Dark - The New Nightmare (USA) (Disc 2) [SLUS-01377].chd", result);
     }
     
     [Fact]
@@ -156,5 +156,62 @@ public class PsxNameFormatterTests
         // Assert
         Assert.Equal("Secret of Googol (USA) [LSP-06015].bin", result);
         Assert.DoesNotContain("  ", result); // No double spaces
+    }
+
+    [Fact]
+    public void Format_AudioTrack_AddsTrackSuffix()
+    {
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "track02.bin",
+            Title = "Game Title",
+            Region = "USA",
+            Serial = "SLUS-00000",
+            Extension = ".bin",
+            TrackNumber = 2,
+            TrackCount = 10,
+            IsAudioTrack = true
+        };
+
+        var result = PsxNameFormatter.Format(discInfo);
+
+        Assert.Equal("Game Title (USA) (Track 02) [SLUS-00000].bin", result);
+    }
+
+    [Fact]
+    public void Format_DataTrackOne_PreservesTrackSuffix()
+    {
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "track01.bin",
+            Title = "Game Title",
+            Region = "USA",
+            Serial = "SLUS-00001",
+            Extension = ".bin",
+            TrackNumber = 1,
+            TrackCount = 10,
+            IsAudioTrack = false
+        };
+
+        var result = PsxNameFormatter.Format(discInfo);
+
+        Assert.Equal("Game Title (USA) (Track 01) [SLUS-00001].bin", result);
+    }
+
+    [Fact]
+    public void Format_RestoreArticles_MovesArticleToFront()
+    {
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "Legend of Dragoon, The",
+            Region = "USA",
+            Serial = "SCUS-94491",
+            Extension = ".bin"
+        };
+
+        var result = PsxNameFormatter.Format(discInfo, restoreArticles: true);
+
+        Assert.Equal("The Legend of Dragoon (USA) [SCUS-94491].bin", result);
     }
 }

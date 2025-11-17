@@ -1,8 +1,11 @@
+using System.Text;
+using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Database;
 using ARK.Core.Dat;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
+using HeaderMetadata = ARK.Cli.Infrastructure.ConsoleDecorations.HeaderMetadata;
 
 namespace ARK.Cli.Commands.PSX;
 
@@ -12,19 +15,20 @@ namespace ARK.Cli.Commands.PSX;
 public static class CleanPsxCommand
 {
     private static readonly string[] PsxExtensions = { ".bin", ".cue", ".iso", ".pbp", ".chd" };
+    private static readonly Regex TrackNumberPattern = new(@"\(Track\s*(?<track>\d+)\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     public static async Task<int> RunAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][IMPACT] | Component: clean psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: clean psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: clean psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[IMPACT]] | Component: clean psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -37,25 +41,104 @@ public static class CleanPsxCommand
             ingestRoot = null;
         }
 
-        var multiTrackDirName = GetArgValue(args, "--multitrack-dir") ?? "PSX MultiTrack";
+        var multiTrackDirName = GetArgValue(args, "--multitrack-dir") ?? string.Empty;
         var importDirName = GetArgValue(args, "--import-dir") ?? "PSX Imports";
         var moveMultiTrack = args.Contains("--move-multitrack");
+        var moveMultiDisc = args.Contains("--move-multidisc");
         var generateCues = args.Contains("--generate-cues");
         var moveIngest = args.Contains("--ingest-move");
         var flattenSingles = args.Contains("--flatten");
         var autoYes = args.Contains("--yes");
         var interactive = AnsiConsole.Profile.Capabilities.Interactive;
+        var datSummary = DatStatusReporter.Inspect("psx").FirstOrDefault();
+        var datStatus = datSummary switch
+        {
+            null => "[yellow]Catalog offline[/]",
+            _ when !datSummary.HasCatalog => "[red]Missing[/]",
+            _ when datSummary.IsStale => "[yellow]Stale[/]",
+            _ => "[green]Ready[/]"
+        };
 
-        var multiTrackPlans = PlanMultiTrackMoves(root, recursive, multiTrackDirName);
-        var cuePlans = PlanMissingCueCreations(root, recursive);
-        var ingestPlans = await PlanIngestMovesAsync(root, ingestRoot, importDirName);
-        var flattenPlans = PlanFlattenMoves(root, recursive);
+        ConsoleDecorations.RenderOperationHeader(
+            "PSX Clean",
+            new HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
+            new HeaderMetadata("Root", root),
+            new HeaderMetadata("Recursive", recursive ? "Yes" : "No"),
+            new HeaderMetadata("DAT", datStatus, IsMarkup: true),
+            new HeaderMetadata("Ingest", string.IsNullOrWhiteSpace(ingestRoot) ? "n/a" : ingestRoot!));
 
-        RenderSummary(multiTrackPlans, cuePlans, ingestPlans, flattenPlans);
+        DatUsageHelper.WarnIfCatalogMissing("psx", "PSX clean");
+
+        List<MultiTrackMovePlan> multiTrackPlans = new();
+        List<MultiDiscMovePlan> multiDiscPlans = new();
+        List<CueCreationPlan> cuePlans = new();
+        List<IngestMovePlan> ingestPlans = new();
+        List<FlattenMovePlan> flattenPlans = new();
+
+        var planningSteps = new List<(string Label, Func<Task> Work)>
+        {
+            ("Planning multi-track moves", () =>
+            {
+                multiTrackPlans = PlanMultiTrackMoves(root, recursive, multiTrackDirName);
+                return Task.CompletedTask;
+            }),
+            ("Planning multi-disc sets", () =>
+            {
+                multiDiscPlans = PlanMultiDiscMoves(root, recursive);
+                return Task.CompletedTask;
+            }),
+            ("Scanning for missing CUE files", () =>
+            {
+                cuePlans = PlanMissingCueCreations(root, recursive);
+                return Task.CompletedTask;
+            }),
+            ("Evaluating ingest directory", async () =>
+            {
+                ingestPlans = await PlanIngestMovesAsync(root, ingestRoot, importDirName);
+            }),
+            ("Checking folders safe to flatten", () =>
+            {
+                flattenPlans = PlanFlattenMoves(root, recursive);
+                return Task.CompletedTask;
+            })
+        };
+
+        var progressColumns = new ProgressColumn[]
+        {
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
+
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .StartAsync(async ctx =>
+            {
+                var task = ctx.AddTask("Analyzing PSX library", maxValue: planningSteps.Count);
+                foreach (var (label, work) in planningSteps)
+                {
+                    ThrowIfCancelled();
+                    task.Description = label;
+                    await work();
+                    task.Increment(1);
+                }
+            });
+
+        RenderSummary(multiTrackPlans, multiDiscPlans, cuePlans, ingestPlans, flattenPlans);
+
+        OperationContextScope.ThrowIfCancellationRequested();
 
         if (!moveMultiTrack && multiTrackPlans.Count > 0 && apply && interactive)
         {
             moveMultiTrack = autoYes || AnsiConsole.Confirm($"Move {multiTrackPlans.Count} multi-track set(s) into [steelblue]{multiTrackDirName}[/]?");
+        }
+
+        if (!moveMultiDisc && multiDiscPlans.Count > 0 && apply && interactive)
+        {
+            moveMultiDisc = autoYes || AnsiConsole.Confirm($"Move {multiDiscPlans.Count} multi-disc set(s) into Title (Region) folders?");
         }
 
         if (!generateCues && cuePlans.Count > 0 && apply && interactive)
@@ -80,12 +163,14 @@ public static class CleanPsxCommand
         }
 
         var movedMultiTrack = moveMultiTrack ? ExecuteMultiTrackMoves(multiTrackPlans) : 0;
+        var movedMultiDiscs = moveMultiDisc ? ExecuteMultiDiscMoves(multiDiscPlans) : 0;
         var createdCues = generateCues ? ExecuteCueCreations(cuePlans) : 0;
         var movedImports = moveIngest ? ExecuteIngestMoves(ingestPlans) : 0;
         var flattened = flattenSingles ? ExecuteFlattenMoves(flattenPlans, root) : 0;
 
         AnsiConsole.MarkupLine("[green]Clean-up complete.[/]");
         AnsiConsole.MarkupLine($"  Multi-track sets moved: {movedMultiTrack}");
+        AnsiConsole.MarkupLine($"  Multi-disc sets organized: {movedMultiDiscs}");
         AnsiConsole.MarkupLine($"  CUE files generated: {createdCues}");
         AnsiConsole.MarkupLine($"  Imported ROMs moved: {movedImports}");
         AnsiConsole.MarkupLine($"  Single-disc folders flattened: {flattened}");
@@ -103,9 +188,17 @@ public static class CleanPsxCommand
         var planner = new PsxBinMergePlanner();
         var operations = planner.PlanMerges(root, recursive);
         var plans = new List<MultiTrackMovePlan>();
+        var baseRoot = string.IsNullOrWhiteSpace(multiTrackDirName)
+            ? root
+            : Path.Combine(root, SanitizePathSegment(multiTrackDirName));
+
         foreach (var op in operations.Where(op => op.TrackSources.Count > 1))
         {
-            var destDir = Path.Combine(root, multiTrackDirName, SanitizePathSegment(op.Title));
+            ThrowIfCancelled();
+            var baseFolder = BuildTitleRegionFolder(op.DiscInfo.Title, op.DiscInfo.Region);
+            var discFolder = BuildDiscFolderName(baseFolder, op.DiscInfo.DiscNumber, op.DiscInfo.DiscCount);
+            var destDir = Path.Combine(baseRoot, baseFolder, discFolder);
+
             var files = op.TrackSources.Select(t => t.AbsolutePath).Where(File.Exists).ToList();
             if (File.Exists(op.CuePath))
             {
@@ -123,29 +216,98 @@ public static class CleanPsxCommand
         return plans;
     }
 
+    private static List<MultiDiscMovePlan> PlanMultiDiscMoves(string root, bool recursive)
+    {
+        var parser = new PsxNameParser();
+        var plans = new List<MultiDiscMovePlan>();
+
+        var directories = Directory.GetDirectories(
+                root,
+                "*",
+                recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+            .Where(dir => !dir.Equals(root, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var directory in directories)
+        {
+            ThrowIfCancelled();
+            var files = Directory.EnumerateFiles(directory, "*.*", SearchOption.TopDirectoryOnly)
+                .Where(file => PsxExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+                .ToList();
+
+            if (files.Count == 0)
+            {
+                continue;
+            }
+
+            var entries = files.Select(file => new DiscEntry(file, parser.Parse(file))).ToList();
+
+            if (entries.Any(e => e.Info.IsMultiTrack))
+            {
+                continue;
+            }
+
+            var groups = entries
+                .Where(e => e.Info.DiscNumber.HasValue)
+                .GroupBy(e => (
+                        Title: GetTitleOrFallback(e.Info, Path.GetFileName(directory)),
+                        Region: GetRegionOrFallback(e.Info)),
+                    new TitleRegionComparer())
+                .Where(g => g.Select(entry => entry.Info.DiscNumber ?? 0).Distinct().Count() > 1);
+
+            foreach (var group in groups)
+            {
+                var baseFolder = BuildTitleRegionFolder(group.Key.Title, group.Key.Region);
+                var discPlans = group
+                    .GroupBy(entry => entry.Info.DiscNumber ?? 1)
+                    .OrderBy(g => g.Key)
+                    .Select(g =>
+                    {
+                        var discNumber = g.Key;
+                        var discCount = g.First().Info.DiscCount ?? group.Count();
+                        var destination = Path.Combine(root, baseFolder, BuildDiscFolderName(baseFolder, discNumber, discCount));
+                        var fileList = g.Select(entry => entry.FilePath).ToList();
+                        return new MultiDiscDiscPlan(discNumber, destination, fileList);
+                    })
+                    .ToList();
+
+                if (discPlans.Count > 1)
+                {
+                    plans.Add(new MultiDiscMovePlan(baseFolder, discPlans));
+                }
+            }
+        }
+
+        return plans;
+    }
+
     private static List<CueCreationPlan> PlanMissingCueCreations(string root, bool recursive)
     {
         var bins = Directory.EnumerateFiles(
-            root,
-            "*.bin",
-            recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+                root,
+                "*.bin",
+                recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+            .ToList();
+
+        var groups = bins
+            .Select(bin => new { Bin = bin, Cue = GetCandidateCuePath(bin) })
+            .GroupBy(entry => entry.Cue, StringComparer.OrdinalIgnoreCase);
 
         var plans = new List<CueCreationPlan>();
-        var plannedCueTargets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var bin in bins)
+        foreach (var group in groups)
         {
-            var candidate = GetCandidateCuePath(bin);
-            if (File.Exists(candidate))
+            ThrowIfCancelled();
+            if (File.Exists(group.Key))
             {
                 continue;
             }
 
-            if (!plannedCueTargets.Add(candidate))
+            var trackPlans = BuildCueTrackPlans(group.Select(entry => entry.Bin));
+            if (trackPlans.Count == 0)
             {
                 continue;
             }
 
-            plans.Add(new CueCreationPlan(bin, candidate));
+            plans.Add(new CueCreationPlan(group.Key, trackPlans));
         }
 
         return plans;
@@ -165,6 +327,7 @@ public static class CleanPsxCommand
 
         foreach (var directory in directories)
         {
+            ThrowIfCancelled();
             var files = Directory.EnumerateFiles(directory, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(file => PsxExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
                 .ToList();
@@ -237,6 +400,7 @@ public static class CleanPsxCommand
         var parser = new PsxNameParser();
         foreach (var file in search)
         {
+            ThrowIfCancelled();
             var discInfo = parser.Parse(file);
             var key = $"{discInfo.Serial ?? string.Empty}|{discInfo.Title ?? string.Empty}|{discInfo.Region ?? string.Empty}";
             if (keySet.Contains(key))
@@ -259,6 +423,7 @@ public static class CleanPsxCommand
 
     private static void RenderSummary(
         IReadOnlyCollection<MultiTrackMovePlan> multiTrackPlans,
+        IReadOnlyCollection<MultiDiscMovePlan> multiDiscPlans,
         IReadOnlyCollection<CueCreationPlan> cuePlans,
         IReadOnlyCollection<IngestMovePlan> ingestPlans,
         IReadOnlyCollection<FlattenMovePlan> flattenPlans)
@@ -268,6 +433,7 @@ public static class CleanPsxCommand
         infoTable.AddColumn("[green]Count[/]");
 
         infoTable.AddRow("Multi-track sets", multiTrackPlans.Count.ToString("N0"));
+        infoTable.AddRow("Multi-disc sets", multiDiscPlans.Count.ToString("N0"));
         infoTable.AddRow("Missing CUE files", cuePlans.Count.ToString("N0"));
         infoTable.AddRow("Import candidates", ingestPlans.Count.ToString("N0"));
         infoTable.AddRow("Flatten candidates", flattenPlans.Count.ToString("N0"));
@@ -290,17 +456,40 @@ public static class CleanPsxCommand
             AnsiConsole.Write(table);
         }
 
+        if (multiDiscPlans.Count > 0)
+        {
+            var table = new Table { Title = new TableTitle("[magenta]Multi-Disc Sets[/]") };
+            table.AddColumn("Title");
+            table.AddColumn("Discs");
+            foreach (var plan in multiDiscPlans.Take(5))
+            {
+                table.AddRow(plan.BaseFolder, plan.Discs.Count.ToString("N0"));
+            }
+            if (multiDiscPlans.Count > 5)
+            {
+                table.AddRow("[grey]...[/]", "[grey]...[/]");
+            }
+            AnsiConsole.Write(table);
+        }
+
         if (cuePlans.Count > 0)
         {
             var table = new Table { Title = new TableTitle("[yellow]Missing CUEs[/]") };
-            table.AddColumn("BIN");
+            table.AddColumn("CUE");
+            table.AddColumn("Source(s)");
             foreach (var plan in cuePlans.Take(5))
             {
-                table.AddRow(Truncate(plan.BinPath));
+                var preview = Path.GetFileName(plan.Tracks[0].BinPath).EscapeMarkup();
+                if (plan.Tracks.Count > 1)
+                {
+                    preview = $"{preview} +{plan.Tracks.Count - 1}";
+                }
+
+                table.AddRow(Truncate(plan.CuePath), preview);
             }
             if (cuePlans.Count > 5)
             {
-                table.AddRow("[grey]…[/]");
+                table.AddRow("[grey]…[/]", "[grey]…[/]");
             }
             AnsiConsole.Write(table);
         }
@@ -345,6 +534,7 @@ public static class CleanPsxCommand
         var moved = 0;
         foreach (var plan in plans)
         {
+            ThrowIfCancelled();
             var targetDirectory = EnsureUniqueDirectory(plan.DestinationDirectory);
             foreach (var file in plan.Files)
             {
@@ -358,11 +548,33 @@ public static class CleanPsxCommand
         return moved;
     }
 
+    private static int ExecuteMultiDiscMoves(List<MultiDiscMovePlan> plans)
+    {
+        var moved = 0;
+        foreach (var plan in plans)
+        {
+            ThrowIfCancelled();
+            foreach (var disc in plan.Discs)
+            {
+                var targetDirectory = EnsureUniqueDirectory(disc.DestinationDirectory);
+                foreach (var file in disc.Files)
+                {
+                    var destination = EnsureUniquePath(Path.Combine(targetDirectory, Path.GetFileName(file)));
+                    File.Move(file, destination, overwrite: false);
+                    moved++;
+                }
+            }
+        }
+
+        return moved;
+    }
+
     private static int ExecuteCueCreations(List<CueCreationPlan> plans)
     {
         var created = 0;
         foreach (var plan in plans)
         {
+            ThrowIfCancelled();
             var directory = Path.GetDirectoryName(plan.CuePath);
             if (string.IsNullOrWhiteSpace(directory))
             {
@@ -370,7 +582,7 @@ public static class CleanPsxCommand
             }
 
             Directory.CreateDirectory(directory);
-            File.WriteAllText(plan.CuePath, BuildCueContents(plan.BinPath));
+            File.WriteAllText(plan.CuePath, BuildCueContents(plan));
             created++;
         }
 
@@ -382,6 +594,7 @@ public static class CleanPsxCommand
         var moved = 0;
         foreach (var plan in plans)
         {
+            ThrowIfCancelled();
             var directory = Path.GetDirectoryName(plan.DestinationPath);
             if (string.IsNullOrWhiteSpace(directory))
             {
@@ -402,6 +615,7 @@ public static class CleanPsxCommand
         var flattened = 0;
         foreach (var plan in plans)
         {
+            ThrowIfCancelled();
             foreach (var source in plan.Files)
             {
                 var destination = EnsureUniquePath(Path.Combine(root, Path.GetFileName(source)));
@@ -421,14 +635,59 @@ public static class CleanPsxCommand
         return flattened;
     }
 
-    private static string BuildCueContents(string binPath)
+    private static List<CueTrackPlan> BuildCueTrackPlans(IEnumerable<string> binPaths)
     {
-        var fileName = Path.GetFileName(binPath);
-        return $"""
-FILE "{fileName}" BINARY
-  TRACK 01 MODE2/2352
-    INDEX 01 00:00:00
-""";
+        var ordered = binPaths
+            .Select(path => new
+            {
+                Path = path,
+                Track = ParseTrackNumber(path)
+            })
+            .OrderBy(entry => entry.Track ?? int.MaxValue)
+            .ThenBy(entry => entry.Path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var plans = new List<CueTrackPlan>(ordered.Count);
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var trackNumber = ordered[i].Track ?? (i + 1);
+            if (trackNumber < 1)
+            {
+                trackNumber = i + 1;
+            }
+
+            plans.Add(new CueTrackPlan(ordered[i].Path, trackNumber));
+        }
+
+        return plans;
+    }
+
+    private static int? ParseTrackNumber(string path)
+    {
+        var fileName = Path.GetFileNameWithoutExtension(path);
+        var match = TrackNumberPattern.Match(fileName);
+        if (match.Success && int.TryParse(match.Groups["track"].Value, out var track))
+        {
+            return track;
+        }
+
+        return null;
+    }
+
+    private static string BuildCueContents(CueCreationPlan plan)
+    {
+        var builder = new StringBuilder();
+        foreach (var track in plan.Tracks)
+        {
+            var fileName = Path.GetFileName(track.BinPath);
+            builder.AppendLine($"FILE \"{fileName}\" BINARY");
+
+            var trackType = track.TrackNumber == 1 ? "MODE2/2352" : "AUDIO";
+            builder.AppendLine($"  TRACK {track.TrackNumber:D2} {trackType}");
+            builder.AppendLine("    INDEX 01 00:00:00");
+        }
+
+        return builder.ToString();
     }
 
     private static string Truncate(string path, int length = 60)
@@ -456,6 +715,30 @@ FILE "{fileName}" BINARY
 
         return segment.Trim();
     }
+
+    private static string BuildTitleRegionFolder(string? title, string? region)
+    {
+        var safeTitle = string.IsNullOrWhiteSpace(title) ? "Unknown Title" : title.Trim();
+        var safeRegion = string.IsNullOrWhiteSpace(region) ? "Unknown" : region.Trim();
+        return SanitizePathSegment($"{safeTitle} ({safeRegion})");
+    }
+
+    private static string BuildDiscFolderName(string baseFolder, int? discNumber, int? discCount)
+    {
+        if (discCount.GetValueOrDefault() > 1 || discNumber.HasValue)
+        {
+            var number = discNumber ?? 1;
+            return SanitizePathSegment($"{baseFolder} (Disc {number})");
+        }
+
+        return baseFolder;
+    }
+
+    private static string GetTitleOrFallback(PsxDiscInfo info, string fallback)
+        => string.IsNullOrWhiteSpace(info.Title) ? fallback : info.Title.Trim();
+
+    private static string GetRegionOrFallback(PsxDiscInfo info)
+        => string.IsNullOrWhiteSpace(info.Region) ? "Unknown" : info.Region.Trim();
 
     private static string GetCandidateCuePath(string binPath)
     {
@@ -586,12 +869,16 @@ FILE "{fileName}" BINARY
     }
 
     private sealed record MultiTrackMovePlan(string Title, string DestinationDirectory, IReadOnlyList<string> Files);
-
-    private sealed record CueCreationPlan(string BinPath, string CuePath);
-
+    private sealed record MultiDiscMovePlan(string BaseFolder, IReadOnlyList<MultiDiscDiscPlan> Discs);
+    private sealed record MultiDiscDiscPlan(int DiscNumber, string DestinationDirectory, IReadOnlyList<string> Files);
+    private sealed record CueCreationPlan(string CuePath, IReadOnlyList<CueTrackPlan> Tracks);
+    private sealed record CueTrackPlan(string BinPath, int TrackNumber);
     private sealed record IngestMovePlan(string SourcePath, string DestinationPath, string? Title, string? Region);
-
     private sealed record FlattenMovePlan(string Directory, IReadOnlyList<string> Files);
+    private sealed record DiscEntry(string FilePath, PsxDiscInfo Info);
+
+    private static void ThrowIfCancelled()
+        => OperationContextScope.ThrowIfCancellationRequested();
 
     private sealed class TitleRegionComparer : IEqualityComparer<(string Title, string Region)>
     {
@@ -605,3 +892,4 @@ FILE "{fileName}" BINARY
                 StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Region));
     }
 }
+

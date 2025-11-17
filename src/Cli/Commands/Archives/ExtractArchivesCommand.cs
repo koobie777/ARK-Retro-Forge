@@ -14,13 +14,13 @@ public static class ExtractArchivesCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][IMPACT] | Component: extract archives | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: extract archives | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: extract archives | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[IMPACT]] | Component: extract archives | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -31,7 +31,7 @@ public static class ExtractArchivesCommand
 
         if (deleteSource && !apply)
         {
-            AnsiConsole.MarkupLine("[red][IMPACT] | Component: extract archives | Context: --delete-source requires --apply | Fix: Add --apply[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: extract archives | Context: --delete-source requires --apply | Fix: Add --apply[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -42,10 +42,16 @@ public static class ExtractArchivesCommand
         AnsiConsole.WriteLine();
 
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-        var archivePaths = Directory.GetFiles(root, "*.*", searchOption)
-            .Where(path => SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
-            .OrderBy(path => path)
-            .ToList();
+        List<string> archivePaths = new();
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .Start("Scanning for archives...", _ =>
+            {
+                archivePaths = Directory.GetFiles(root, "*.*", searchOption)
+                    .Where(path => SupportedExtensions.Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(path => path)
+                    .ToList();
+            });
 
         if (archivePaths.Count == 0)
         {
@@ -54,6 +60,7 @@ public static class ExtractArchivesCommand
         }
 
         var plans = archivePaths.Select(path => CreatePlan(path, output)).ToList();
+        var totalBytes = RenderArchiveQueueSummary(plans, deleteSource);
 
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("[cyan]Archive[/]");
@@ -69,7 +76,7 @@ public static class ExtractArchivesCommand
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[cyan]Ready to process:[/] {archivePaths.Count} archive(s)");
-        AnsiConsole.MarkupLine("[dim]Press ESC or Ctrl+C to cancel the active archive (completed items remain).[/]");
+        AnsiConsole.MarkupLine("[dim]Press ESC, B, or Ctrl+C to cancel the active archive (completed items remain).[/]");
         AnsiConsole.WriteLine();
 
         if (!apply)
@@ -79,8 +86,8 @@ public static class ExtractArchivesCommand
         }
 
         AnsiConsole.Clear();
-        AnsiConsole.Write(CreateExtractionHeader(root, output, recursive, deleteSource, plans.Count));
-        AnsiConsole.MarkupLine("[dim]Press ESC or Ctrl+C to cancel the active archive (completed items remain).[/]");
+        AnsiConsole.Write(CreateExtractionHeader(root, output, recursive, deleteSource, plans.Count, totalBytes));
+        AnsiConsole.MarkupLine("[dim]Press ESC, B, or Ctrl+C to cancel the active archive (completed items remain).[/]");
         AnsiConsole.WriteLine();
 
         var extracted = 0;
@@ -88,12 +95,9 @@ public static class ExtractArchivesCommand
         string? cancelledArchive = null;
         var failures = new List<string>();
 
-        using var extractionCts = new CancellationTokenSource();
-        Task? cancelMonitor = null;
-        if (!Console.IsInputRedirected)
-        {
-            cancelMonitor = MonitorCancellationKeyAsync(extractionCts);
-        }
+        using var extractionCts = CancellationTokenSource.CreateLinkedTokenSource(OperationContextScope.CurrentToken);
+        var extractionToken = extractionCts.Token;
+        var keyMonitor = MonitorCancellationKeyAsync(extractionCts);
 
         var progressColumns = new ProgressColumn[]
         {
@@ -121,7 +125,7 @@ public static class ExtractArchivesCommand
 
                 for (var index = 0; index < plans.Count; index++)
                 {
-                    if (extractionCts.IsCancellationRequested)
+                    if (extractionToken.IsCancellationRequested)
                     {
                         cancelled = true;
                         break;
@@ -163,7 +167,7 @@ public static class ExtractArchivesCommand
 
                     try
                     {
-                        var result = ArchiveExtractor.Extract(plan.ArchivePath, destination, extractionCts.Token);
+                        var result = ArchiveExtractor.Extract(plan.ArchivePath, destination, extractionToken);
                         if (result.Success)
                         {
                             extracted++;
@@ -171,6 +175,7 @@ public static class ExtractArchivesCommand
                             SyncProgressState(progressTask, progressState);
                             if (deleteSource)
                             {
+                                extractionToken.ThrowIfCancellationRequested();
                                 File.Delete(plan.ArchivePath);
                             }
                         }
@@ -198,10 +203,7 @@ public static class ExtractArchivesCommand
             });
 
         extractionCts.Cancel();
-        if (cancelMonitor != null)
-        {
-            await cancelMonitor;
-        }
+        await keyMonitor;
 
         if (cancelled)
         {
@@ -222,6 +224,7 @@ public static class ExtractArchivesCommand
             RenderFailureSummary(failures);
         }
 
+        await Task.CompletedTask;
         return (int)ExitCode.OK;
     }
 
@@ -244,7 +247,17 @@ public static class ExtractArchivesCommand
         var destination = requiresSubdirectory
             ? Path.Combine(outputRoot, SanitizeName(Path.GetFileNameWithoutExtension(archivePath)))
             : outputRoot;
-        return new ArchivePlan(archivePath, destination, requiresSubdirectory);
+        var size = 0L;
+        try
+        {
+            var info = new FileInfo(archivePath);
+            size = info.Length;
+        }
+        catch
+        {
+            // Ignore IO exceptions when sizing preview data.
+        }
+        return new ArchivePlan(archivePath, destination, requiresSubdirectory, size);
     }
 
     private static string SanitizeName(string? name)
@@ -265,6 +278,51 @@ public static class ExtractArchivesCommand
         return new string(builder).Trim();
     }
 
+    private static long RenderArchiveQueueSummary(IReadOnlyCollection<ArchivePlan> plans, bool deleteSource)
+    {
+        var totalBytes = plans.Sum(plan => plan.ArchiveSize);
+
+        var summary = new Table().Border(TableBorder.Rounded);
+        summary.AddColumn("[cyan]Metric[/]");
+        summary.AddColumn("[green]Value[/]");
+        summary.AddRow("Archives", plans.Count.ToString("N0"));
+        summary.AddRow("Total size", FormatSize(totalBytes));
+        summary.AddRow("Delete source", deleteSource ? "Yes" : "No");
+        AnsiConsole.Write(summary);
+        AnsiConsole.WriteLine();
+
+        var extensionSummary = plans
+            .GroupBy(plan => Path.GetExtension(plan.ArchivePath).ToLowerInvariant())
+            .Select(group => new
+            {
+                Extension = string.IsNullOrWhiteSpace(group.Key) ? "(none)" : group.Key,
+                Count = group.Count(),
+                Bytes = group.Sum(p => p.ArchiveSize)
+            })
+            .OrderByDescending(x => x.Count)
+            .ThenByDescending(x => x.Bytes)
+            .Take(6)
+            .ToList();
+
+        if (extensionSummary.Count > 0)
+        {
+            var extTable = new Table { Title = new TableTitle("[cyan]By extension[/]") };
+            extTable.Border(TableBorder.Rounded);
+            extTable.AddColumn("Ext");
+            extTable.AddColumn("Count");
+            extTable.AddColumn("Size");
+            foreach (var stat in extensionSummary)
+            {
+                extTable.AddRow(stat.Extension, stat.Count.ToString("N0"), FormatSize(stat.Bytes));
+            }
+
+            AnsiConsole.Write(extTable);
+            AnsiConsole.WriteLine();
+        }
+
+        return totalBytes;
+    }
+
     private static async Task MonitorCancellationKeyAsync(CancellationTokenSource cts)
     {
         try
@@ -275,10 +333,12 @@ public static class ExtractArchivesCommand
                 {
                     var key = Console.ReadKey(intercept: true);
                     var cancelRequested = key.Key == ConsoleKey.Escape ||
+                        key.Key == ConsoleKey.B ||
                         (key.Modifiers.HasFlag(ConsoleModifiers.Control) && key.Key == ConsoleKey.C);
                     if (cancelRequested)
                     {
-                        AnsiConsole.MarkupLine("\n[yellow]Cancellation requested. Rolling back current archive...[/]");
+                        var reason = key.Key == ConsoleKey.B ? "B" : "ESC/Ctrl+C";
+                        AnsiConsole.MarkupLine($"\n[yellow]Cancellation requested ({reason}). Rolling back current archive...[/]");
                         cts.Cancel();
                         return;
                     }
@@ -294,6 +354,20 @@ public static class ExtractArchivesCommand
         {
             // Input redirected (CI). Ignore hotkeys.
         }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var order = (int)Math.Floor(Math.Log(bytes, 1024));
+        order = Math.Clamp(order, 0, units.Length - 1);
+        var value = bytes / Math.Pow(1024, order);
+        return $"{value:F2} {units[order]}";
     }
 
     private static void SafeDeleteDirectory(string? path)
@@ -336,7 +410,7 @@ public static class ExtractArchivesCommand
         return $"{name[..head].EscapeMarkup()}...";
     }
 
-    private static Panel CreateExtractionHeader(string root, string output, bool recursive, bool deleteSource, int total)
+    private static Panel CreateExtractionHeader(string root, string output, bool recursive, bool deleteSource, int total, long totalBytes)
     {
         var grid = new Grid();
         grid.AddColumn();
@@ -349,7 +423,10 @@ public static class ExtractArchivesCommand
             new Markup($"[grey50]Delete source[/]\n{(deleteSource ? "Yes" : "No")}"));
         grid.AddRow(
             new Markup($"[grey50]Queue[/]\n{total} archive(s)"),
-            new Markup($"[grey50]Started[/]\n{DateTime.Now:yyyy-MM-dd HH:mm:ss}"));
+            new Markup($"[grey50]Total size[/]\n{FormatSize(totalBytes)}"));
+        grid.AddRow(
+            new Markup($"[grey50]Started[/]\n{DateTime.Now:yyyy-MM-dd HH:mm:ss}"),
+            new Markup($"[grey50]Cancel[/]\nESC/B/Ctrl+C"));
 
         return new Panel(grid)
         {
@@ -381,5 +458,5 @@ public static class ExtractArchivesCommand
         progressTask.State.Update<ArchiveProgressState>(ArchiveProgressState.StateKey, _ => state);
     }
 
-    private sealed record ArchivePlan(string ArchivePath, string DestinationPath, bool RequiresSubdirectory);
+    private sealed record ArchivePlan(string ArchivePath, string DestinationPath, bool RequiresSubdirectory, long ArchiveSize);
 }

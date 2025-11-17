@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 
 namespace ARK.Core.Systems.PSX;
@@ -27,6 +28,14 @@ public record DuplicateFileInfo
 /// <summary>
 /// Detects duplicate PSX disc images using hash-based detection
 /// </summary>
+public readonly record struct DuplicateScanProgress(
+    int ProcessedFiles,
+    int TotalFiles,
+    long ProcessedBytes,
+    long TotalBytes,
+    string? CurrentFile,
+    TimeSpan Elapsed);
+
 public class PsxDuplicateDetector
 {
     private readonly PsxNameParser _parser;
@@ -42,45 +51,65 @@ public class PsxDuplicateDetector
     /// <param name="rootPath">Root directory to scan</param>
     /// <param name="recursive">Whether to scan recursively</param>
     /// <param name="hashAlgorithm">Hash algorithm to use (SHA1, MD5, CRC32)</param>
+    /// <param name="progress">Optional progress reporter invoked for each hashed file</param>
     public List<DuplicateGroup> ScanForDuplicates(
         string rootPath, 
         bool recursive = false,
-        string hashAlgorithm = "SHA1")
+        string hashAlgorithm = "SHA1",
+        IProgress<DuplicateScanProgress>? progress = null)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var psxExtensions = new[] { ".bin", ".cue", ".chd", ".pbp", ".iso" };
-        
+
+        var allFiles = Directory.EnumerateFiles(rootPath, "*.*", searchOption)
+            .Where(file => psxExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        var totalFiles = allFiles.Count;
+        long totalBytes = 0;
+        var fileSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in allFiles)
+        {
+            var length = new FileInfo(file).Length;
+            fileSizes[file] = length;
+            totalBytes += length;
+        }
+
         // Hash files and group by hash
         var filesByHash = new Dictionary<string, List<(string filePath, long fileSize, PsxDiscInfo discInfo)>>();
-        
-        foreach (var ext in psxExtensions)
+        var stopwatch = Stopwatch.StartNew();
+        int processedFiles = 0;
+        long processedBytes = 0;
+
+        foreach (var file in allFiles)
         {
-            var files = Directory.GetFiles(rootPath, $"*{ext}", searchOption);
-            
-            foreach (var file in files)
+            var discInfo = _parser.Parse(file);
+            var fileSize = fileSizes[file];
+
+            // Skip audio track BIN files - they're not primary disc images
+            if (discInfo.IsAudioTrack)
             {
-                var discInfo = _parser.Parse(file);
-                
-                // Skip audio track BIN files - they're not primary disc images
-                if (discInfo.IsAudioTrack)
-                {
-                    continue;
-                }
-                
-                // For CUE files, we might want to hash the referenced BIN instead
-                // For now, just hash the file itself
-                var hash = ComputeHash(file, hashAlgorithm);
-                var fileSize = new FileInfo(file).Length;
-                
-                if (!filesByHash.ContainsKey(hash))
-                {
-                    filesByHash[hash] = new List<(string, long, PsxDiscInfo)>();
-                }
-                
-                filesByHash[hash].Add((file, fileSize, discInfo));
+                processedFiles++;
+                processedBytes += fileSize;
+                progress?.Report(new DuplicateScanProgress(processedFiles, totalFiles, processedBytes, totalBytes, file, stopwatch.Elapsed));
+                continue;
             }
+
+            // For CUE files, we might want to hash the referenced BIN instead
+            // For now, just hash the file itself
+            var hash = ComputeHash(file, hashAlgorithm);
+
+            if (!filesByHash.ContainsKey(hash))
+            {
+                filesByHash[hash] = new List<(string, long, PsxDiscInfo)>();
+            }
+
+            filesByHash[hash].Add((file, fileSize, discInfo));
+
+            processedFiles++;
+            processedBytes += fileSize;
+            progress?.Report(new DuplicateScanProgress(processedFiles, totalFiles, processedBytes, totalBytes, file, stopwatch.Elapsed));
         }
-        
+
         // Filter to only groups with duplicates
         var duplicateGroups = new List<DuplicateGroup>();
         

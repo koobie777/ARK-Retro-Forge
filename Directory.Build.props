@@ -32,8 +32,8 @@
     
     <!-- Versioning with MinVer -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
-    <MinVerMinimumMajorMinor>0.1</MinVerMinimumMajorMinor>
-    <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
+    <MinVerMinimumMajorMinor>1.0</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>rc</MinVerDefaultPreReleaseIdentifiers>
     
     <!-- Code Analysis -->
     <NoWarn>$(NoWarn);CA1014</NoWarn> <!-- Mark assemblies with CLSCompliant -->

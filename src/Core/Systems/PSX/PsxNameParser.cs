@@ -53,6 +53,7 @@ public partial class PsxNameParser
         int? discNumber = null;
         int? discCount = null;
         string? warning = null;
+        var serialCandidates = new List<PsxSerialCandidate>();
         
         // Try to match full standard format with optional disc info
         var match = FullNamePattern().Match(nameWithoutExt);
@@ -99,6 +100,19 @@ public partial class PsxNameParser
         if (string.IsNullOrWhiteSpace(serial))
         {
             _serialResolver.TryFromFilename(filename, out serial);
+        }
+
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            var probed = _serialResolver.TryFromDiscProbe(filePath, out serial);
+            if (!probed && extension.Equals(".cue", StringComparison.OrdinalIgnoreCase))
+            {
+                var dataTrack = TryResolveDataTrackFromCue(filePath);
+                if (!string.IsNullOrWhiteSpace(dataTrack))
+                {
+                    _serialResolver.TryFromDiscProbe(dataTrack, out serial);
+                }
+            }
         }
         
         // If still no title, use the filename as title
@@ -154,12 +168,34 @@ public partial class PsxNameParser
         // Enrich with DAT metadata when available
         title = title?.Trim();
         region = region?.Trim();
-        if (!string.IsNullOrWhiteSpace(title) && _datMetadata.TryGet(title, region, out var metadata))
+        if (!string.IsNullOrWhiteSpace(title))
         {
-            serial ??= metadata.Serials.FirstOrDefault();
-            if (!discCount.HasValue && metadata.DiscCount.HasValue)
+            DatTitleMetadata? metadata = null;
+            if (_datMetadata.TryGet(title, region, out metadata) || _datMetadata.TryGet(title, null, out metadata))
             {
-                discCount = metadata.DiscCount;
+                if (metadata != null)
+                {
+                    serial ??= metadata.Serials.FirstOrDefault();
+                    if (!discCount.HasValue && metadata.DiscCount.HasValue)
+                    {
+                        discCount = metadata.DiscCount;
+                    }
+
+                    foreach (var candidateSerial in metadata.Serials)
+                    {
+                        serialCandidates.Add(new PsxSerialCandidate(metadata.Title, metadata.Region, candidateSerial, metadata.DiscCount));
+                    }
+                }
+            }
+
+            if (serialCandidates.Count == 0)
+            {
+                var similar = _datMetadata.FindSimilar(title, maxResults: 3);
+                foreach (var entry in similar)
+                {
+                    var candidateSerial = entry.Serials.FirstOrDefault();
+                    serialCandidates.Add(new PsxSerialCandidate(entry.Title, entry.Region, candidateSerial, entry.DiscCount));
+                }
             }
         }
 
@@ -203,7 +239,45 @@ public partial class PsxNameParser
             TrackNumber = trackNumber,
             TrackCount = trackCount,
             IsAudioTrack = isAudioTrack,
-            CueFilePath = cueFilePath
+            CueFilePath = cueFilePath,
+            SerialCandidates = serialCandidates
         };
+    }
+
+    private static string? TryResolveDataTrackFromCue(string cuePath)
+    {
+        try
+        {
+            var sheet = CueSheetParser.Parse(cuePath);
+            var directory = Path.GetDirectoryName(cuePath) ?? string.Empty;
+
+            foreach (var file in sheet.Files)
+            {
+                var firstTrack = file.Tracks.FirstOrDefault();
+                if (firstTrack == null)
+                {
+                    continue;
+                }
+
+                var isDataTrack = firstTrack.Type.Contains("MODE", StringComparison.OrdinalIgnoreCase) ||
+                                  firstTrack.Type.Contains("DATA", StringComparison.OrdinalIgnoreCase);
+                if (!isDataTrack)
+                {
+                    continue;
+                }
+
+                var candidate = Path.Combine(directory, file.FileName);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore malformed CUE sheets
+        }
+
+        return null;
     }
 }

@@ -1,42 +1,691 @@
-[
-  {
-    "name": "Redump - Sony PlayStation (PSX)",
-    "system": "psx",
-    "author": "Redump.org",
-    "format": "clrmamepro",
-    "url": "https://archive.org/download/redumpSonyPlayStationDatfile/Sony%20-%20PlayStation%20-%20Redump.dat",
-    "description": "Latest public Redump DAT snapshot for Sony PlayStation (BIN/CUE)"
-  },
-  {
-    "name": "Redump - Sony PlayStation 2",
-    "system": "ps2",
-    "author": "Redump.org",
-    "format": "clrmamepro",
-    "url": "https://archive.org/download/redumpSonyPlayStation2Datfile/Sony%20-%20PlayStation%202%20-%20Redump.dat",
-    "description": "Redump DAT snapshot covering PS2 optical releases"
-  },
-  {
-    "name": "No-Intro - Nintendo 64",
-    "system": "n64",
-    "author": "No-Intro",
-    "format": "clrmamepro",
-    "url": "https://archive.org/download/no-intro-nintendo-64-20240201/Nintendo%20-%2064%20(Nintendo%2064)%20(2024-02-01).dat",
-    "description": "No-Intro DAT for Nintendo 64 ROM sets"
-  },
-  {
-    "name": "No-Intro - Game Boy Advance",
-    "system": "gba",
-    "author": "No-Intro",
-    "format": "clrmamepro",
-    "url": "https://archive.org/download/no-intro-nintendo-game-boy-advance-20240201/Nintendo%20-%20Game%20Boy%20Advance%20(2024-02-01).dat",
-    "description": "No-Intro DAT for GBA cartridges"
-  },
-  {
-    "name": "Redump - Sega Dreamcast",
-    "system": "dc",
-    "author": "Redump.org",
-    "format": "clrmamepro",
-    "url": "https://archive.org/download/redumpSegaDreamcastDatfile/Sega%20-%20Dreamcast%20-%20Redump.dat",
-    "description": "Optical media DAT for Sega Dreamcast by Redump"
-  }
+﻿[
+    {
+        "name":  "Redump - Panasonic 3DO",
+        "system":  "3do",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/3do/",
+        "description":  "Official Redump DAT catalog for Panasonic 3DO.",
+        "cueUrl":  "http://redump.org/cues/3do/"
+    },
+    {
+        "name":  "Redump - ACD",
+        "system":  "acd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/acd/",
+        "description":  "Official Redump DAT catalog for ACD.",
+        "cueUrl":  "http://redump.org/cues/acd/"
+    },
+    {
+        "name":  "Redump - Ajcd",
+        "system":  "ajcd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ajcd/",
+        "description":  "Official Redump DAT catalog for Ajcd.",
+        "cueUrl":  "http://redump.org/cues/ajcd/"
+    },
+    {
+        "name":  "Redump - Arch",
+        "system":  "arch",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/arch/",
+        "description":  "Official Redump DAT catalog for Arch.",
+        "cueUrl":  "http://redump.org/cues/arch/"
+    },
+    {
+        "name":  "Redump - Audio CD",
+        "system":  "audio-cd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/audio-cd/",
+        "description":  "Official Redump DAT catalog for Audio CD.",
+        "cueUrl":  "http://redump.org/cues/audio-cd/"
+    },
+    {
+        "name":  "Redump - Blu-ray Video",
+        "system":  "bd-video",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/bd-video/",
+        "description":  "Official Redump DAT catalog for Blu-ray Video."
+    },
+    {
+        "name":  "Redump - Cd32",
+        "system":  "cd32",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/cd32/",
+        "description":  "Official Redump DAT catalog for Cd32.",
+        "cueUrl":  "http://redump.org/cues/cd32/"
+    },
+    {
+        "name":  "Redump - CDI",
+        "system":  "cdi",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/cdi/",
+        "description":  "Official Redump DAT catalog for CDI.",
+        "cueUrl":  "http://redump.org/cues/cdi/"
+    },
+    {
+        "name":  "Redump - Cdtv",
+        "system":  "cdtv",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/cdtv/",
+        "description":  "Official Redump DAT catalog for Cdtv.",
+        "cueUrl":  "http://redump.org/cues/cdtv/"
+    },
+    {
+        "name":  "Redump - Chihiro",
+        "system":  "chihiro",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/chihiro/",
+        "description":  "Official Redump DAT catalog for Chihiro.",
+        "cueUrl":  "http://redump.org/cues/chihiro/"
+    },
+    {
+        "name":  "Redump - Sega Dreamcast",
+        "system":  "dc",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/dc/",
+        "description":  "Official Redump DAT catalog for Sega Dreamcast.",
+        "cueUrl":  "http://redump.org/cues/dc/"
+    },
+    {
+        "name":  "Redump - DVD Video",
+        "system":  "dvd-video",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/dvd-video/",
+        "description":  "Official Redump DAT catalog for DVD Video."
+    },
+    {
+        "name":  "Redump - FMT",
+        "system":  "fmt",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/fmt/",
+        "description":  "Official Redump DAT catalog for FMT.",
+        "cueUrl":  "http://redump.org/cues/fmt/"
+    },
+    {
+        "name":  "Redump - FPP",
+        "system":  "fpp",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/fpp/",
+        "description":  "Official Redump DAT catalog for FPP.",
+        "cueUrl":  "http://redump.org/cues/fpp/"
+    },
+    {
+        "name":  "Redump - Radica Game Wave",
+        "system":  "gamewave",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/gamewave/",
+        "description":  "Official Redump DAT catalog for Radica Game Wave."
+    },
+    {
+        "name":  "Redump - Nintendo GameCube BIOS",
+        "system":  "gc-bios",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/gc-bios/",
+        "description":  "Official Redump DAT catalog for Nintendo GameCube BIOS."
+    },
+    {
+        "name":  "Redump - Nintendo GameCube",
+        "system":  "gc",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/gc/",
+        "description":  "Official Redump DAT catalog for Nintendo GameCube."
+    },
+    {
+        "name":  "Redump - HD DVD Video",
+        "system":  "hddvd-video",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hddvd-video/",
+        "description":  "Official Redump DAT catalog for HD DVD Video."
+    },
+    {
+        "name":  "Redump - Hudson Soft",
+        "system":  "hs",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hs/",
+        "description":  "Official Redump DAT catalog for Hudson Soft.",
+        "cueUrl":  "http://redump.org/cues/hs/"
+    },
+    {
+        "name":  "Redump - Hyper Neo Geo 64",
+        "system":  "hvn",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hvn/",
+        "description":  "Official Redump DAT catalog for Hyper Neo Geo 64.",
+        "cueUrl":  "http://redump.org/cues/hvn/"
+    },
+    {
+        "name":  "Redump - Hyper Neo Geo 64 (Cartridge)",
+        "system":  "hvnc",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hvnc/",
+        "description":  "Official Redump DAT catalog for Hyper Neo Geo 64 (Cartridge).",
+        "cueUrl":  "http://redump.org/cues/hvnc/"
+    },
+    {
+        "name":  "Redump - Hyper Neo Geo 64 JR",
+        "system":  "hvnjr",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hvnjr/",
+        "description":  "Official Redump DAT catalog for Hyper Neo Geo 64 JR.",
+        "cueUrl":  "http://redump.org/cues/hvnjr/"
+    },
+    {
+        "name":  "Redump - Hyper Neo Geo 64 XP",
+        "system":  "hvnxp",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/hvnxp/",
+        "description":  "Official Redump DAT catalog for Hyper Neo Geo 64 XP.",
+        "cueUrl":  "http://redump.org/cues/hvnxp/"
+    },
+    {
+        "name":  "Redump - ITE",
+        "system":  "ite",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ite/",
+        "description":  "Official Redump DAT catalog for ITE.",
+        "cueUrl":  "http://redump.org/cues/ite/"
+    },
+    {
+        "name":  "Redump - IXL",
+        "system":  "ixl",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ixl/",
+        "description":  "Official Redump DAT catalog for IXL.",
+        "cueUrl":  "http://redump.org/cues/ixl/"
+    },
+    {
+        "name":  "Redump - KEA",
+        "system":  "kea",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/kea/",
+        "description":  "Official Redump DAT catalog for KEA.",
+        "cueUrl":  "http://redump.org/cues/kea/"
+    },
+    {
+        "name":  "Redump - KFB",
+        "system":  "kfb",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/kfb/",
+        "description":  "Official Redump DAT catalog for KFB.",
+        "cueUrl":  "http://redump.org/cues/kfb/"
+    },
+    {
+        "name":  "Redump - KM2",
+        "system":  "km2",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/km2/",
+        "description":  "Official Redump DAT catalog for KM2.",
+        "cueUrl":  "http://redump.org/cues/km2/"
+    },
+    {
+        "name":  "Redump - Ks573",
+        "system":  "ks573",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ks573/",
+        "description":  "Official Redump DAT catalog for Ks573.",
+        "cueUrl":  "http://redump.org/cues/ks573/"
+    },
+    {
+        "name":  "Redump - Ksgv",
+        "system":  "ksgv",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ksgv/",
+        "description":  "Official Redump DAT catalog for Ksgv.",
+        "cueUrl":  "http://redump.org/cues/ksgv/"
+    },
+    {
+        "name":  "Redump - Ksite",
+        "system":  "ksite",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ksite/",
+        "description":  "Official Redump DAT catalog for Ksite.",
+        "cueUrl":  "http://redump.org/cues/ksite/"
+    },
+    {
+        "name":  "Redump - Sega Lindbergh",
+        "system":  "lindbergh",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/lindbergh/",
+        "description":  "Official Redump DAT catalog for Sega Lindbergh."
+    },
+    {
+        "name":  "Redump - Panasonic M2",
+        "system":  "m2",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/m2/",
+        "description":  "Official Redump DAT catalog for Panasonic M2.",
+        "cueUrl":  "http://redump.org/cues/m2/"
+    },
+    {
+        "name":  "Redump - Apple Macintosh",
+        "system":  "mac",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/mac/",
+        "description":  "Official Redump DAT catalog for Apple Macintosh.",
+        "cueUrl":  "http://redump.org/cues/mac/"
+    },
+    {
+        "name":  "Redump - Sega CD / Mega-CD",
+        "system":  "mcd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/mcd/",
+        "description":  "Official Redump DAT catalog for Sega CD / Mega-CD.",
+        "cueUrl":  "http://redump.org/cues/mcd/"
+    },
+    {
+        "name":  "Redump - Sega NAOMI",
+        "system":  "naomi",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/naomi/",
+        "description":  "Official Redump DAT catalog for Sega NAOMI.",
+        "cueUrl":  "http://redump.org/cues/naomi/"
+    },
+    {
+        "name":  "Redump - Sega NAOMI 2",
+        "system":  "naomi2",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/naomi2/",
+        "description":  "Official Redump DAT catalog for Sega NAOMI 2.",
+        "cueUrl":  "http://redump.org/cues/naomi2/"
+    },
+    {
+        "name":  "Redump - Namco Navi 21",
+        "system":  "navi21",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/navi21/",
+        "description":  "Official Redump DAT catalog for Namco Navi 21.",
+        "cueUrl":  "http://redump.org/cues/navi21/"
+    },
+    {
+        "name":  "Redump - Neo Geo CD",
+        "system":  "ngcd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ngcd/",
+        "description":  "Official Redump DAT catalog for Neo Geo CD.",
+        "cueUrl":  "http://redump.org/cues/ngcd/"
+    },
+    {
+        "name":  "Redump - Namco System 246",
+        "system":  "ns246",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ns246/",
+        "description":  "Official Redump DAT catalog for Namco System 246.",
+        "cueUrl":  "http://redump.org/cues/ns246/"
+    },
+    {
+        "name":  "Redump - Nuon",
+        "system":  "nuon",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/nuon/",
+        "description":  "Official Redump DAT catalog for Nuon."
+    },
+    {
+        "name":  "Redump - Palm OS",
+        "system":  "palm",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/palm/",
+        "description":  "Official Redump DAT catalog for Palm OS.",
+        "cueUrl":  "http://redump.org/cues/palm/"
+    },
+    {
+        "name":  "Redump - NEC PC-88",
+        "system":  "pc-88",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pc-88/",
+        "description":  "Official Redump DAT catalog for NEC PC-88.",
+        "cueUrl":  "http://redump.org/cues/pc-88/"
+    },
+    {
+        "name":  "Redump - NEC PC-98",
+        "system":  "pc-98",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pc-98/",
+        "description":  "Official Redump DAT catalog for NEC PC-98.",
+        "cueUrl":  "http://redump.org/cues/pc-98/"
+    },
+    {
+        "name":  "Redump - NEC PC-FX",
+        "system":  "pc-fx",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pc-fx/",
+        "description":  "Official Redump DAT catalog for NEC PC-FX.",
+        "cueUrl":  "http://redump.org/cues/pc-fx/"
+    },
+    {
+        "name":  "Redump - IBM PC / Windows",
+        "system":  "pc",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pc/",
+        "description":  "Official Redump DAT catalog for IBM PC / Windows.",
+        "cueUrl":  "http://redump.org/cues/pc/"
+    },
+    {
+        "name":  "Redump - PC Engine / TurboGrafx-16",
+        "system":  "pce",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pce/",
+        "description":  "Official Redump DAT catalog for PC Engine / TurboGrafx-16.",
+        "cueUrl":  "http://redump.org/cues/pce/"
+    },
+    {
+        "name":  "Redump - Photo CD",
+        "system":  "photo-cd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/photo-cd/",
+        "description":  "Official Redump DAT catalog for Photo CD.",
+        "cueUrl":  "http://redump.org/cues/photo-cd/"
+    },
+    {
+        "name":  "Redump - Pippin",
+        "system":  "pippin",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/pippin/",
+        "description":  "Official Redump DAT catalog for Pippin.",
+        "cueUrl":  "http://redump.org/cues/pippin/"
+    },
+    {
+        "name":  "Redump - PPC",
+        "system":  "ppc",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ppc/",
+        "description":  "Official Redump DAT catalog for PPC.",
+        "cueUrl":  "http://redump.org/cues/ppc/"
+    },
+    {
+        "name":  "Redump - Sony PlayStation 2 BIOS",
+        "system":  "ps2-bios",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ps2-bios/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation 2 BIOS."
+    },
+    {
+        "name":  "Redump - Sony PlayStation 2",
+        "system":  "ps2",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ps2/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation 2.",
+        "cueUrl":  "http://redump.org/cues/ps2/"
+    },
+    {
+        "name":  "Redump - Sony PlayStation 3",
+        "system":  "ps3",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ps3/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation 3.",
+        "cueUrl":  "http://redump.org/cues/ps3/"
+    },
+    {
+        "name":  "Redump - Sony PlayStation 4",
+        "system":  "ps4",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ps4/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation 4."
+    },
+    {
+        "name":  "Redump - Sony PlayStation 5",
+        "system":  "ps5",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ps5/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation 5."
+    },
+    {
+        "name":  "Redump - Sony PlayStation Portable",
+        "system":  "psp",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/psp/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation Portable."
+    },
+    {
+        "name":  "Redump - Sony PlayStation BIOS",
+        "system":  "psx-bios",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/psx-bios/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation BIOS."
+    },
+    {
+        "name":  "Redump - Sony PlayStation (PSX)",
+        "system":  "psx",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/psx/",
+        "description":  "Official Redump DAT catalog for Sony PlayStation (PSX).",
+        "cueUrl":  "http://redump.org/cues/psx/"
+    },
+    {
+        "name":  "Redump - PlayStation GameShark",
+        "system":  "psxgs",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/psxgs/",
+        "description":  "Official Redump DAT catalog for PlayStation GameShark.",
+        "cueUrl":  "http://redump.org/cues/psxgs/"
+    },
+    {
+        "name":  "Redump - QIS",
+        "system":  "qis",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/qis/",
+        "description":  "Official Redump DAT catalog for QIS.",
+        "cueUrl":  "http://redump.org/cues/qis/"
+    },
+    {
+        "name":  "Redump - Quizard",
+        "system":  "quizard",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/quizard/",
+        "description":  "Official Redump DAT catalog for Quizard.",
+        "cueUrl":  "http://redump.org/cues/quizard/"
+    },
+    {
+        "name":  "Redump - System P-21",
+        "system":  "sp21",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/sp21/",
+        "description":  "Official Redump DAT catalog for System P-21.",
+        "cueUrl":  "http://redump.org/cues/sp21/"
+    },
+    {
+        "name":  "Redump - SRE",
+        "system":  "sre",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/sre/",
+        "description":  "Official Redump DAT catalog for SRE."
+    },
+    {
+        "name":  "Redump - Sre2",
+        "system":  "sre2",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/sre2/",
+        "description":  "Official Redump DAT catalog for Sre2."
+    },
+    {
+        "name":  "Redump - Sega Saturn",
+        "system":  "ss",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/ss/",
+        "description":  "Official Redump DAT catalog for Sega Saturn.",
+        "cueUrl":  "http://redump.org/cues/ss/"
+    },
+    {
+        "name":  "Redump - Taito Type X",
+        "system":  "trf",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/trf/",
+        "description":  "Official Redump DAT catalog for Taito Type X.",
+        "cueUrl":  "http://redump.org/cues/trf/"
+    },
+    {
+        "name":  "Redump - VCD",
+        "system":  "vcd",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/vcd/",
+        "description":  "Official Redump DAT catalog for VCD.",
+        "cueUrl":  "http://redump.org/cues/vcd/"
+    },
+    {
+        "name":  "Redump - V.Flash",
+        "system":  "vflash",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/vflash/",
+        "description":  "Official Redump DAT catalog for V.Flash.",
+        "cueUrl":  "http://redump.org/cues/vflash/"
+    },
+    {
+        "name":  "Redump - View-Master Interactive Vision",
+        "system":  "vis",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/vis/",
+        "description":  "Official Redump DAT catalog for View-Master Interactive Vision.",
+        "cueUrl":  "http://redump.org/cues/vis/"
+    },
+    {
+        "name":  "Redump - Nintendo Wii",
+        "system":  "wii",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/wii/",
+        "description":  "Official Redump DAT catalog for Nintendo Wii."
+    },
+    {
+        "name":  "Redump - Nintendo Wii U",
+        "system":  "wiiu",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/wiiu/",
+        "description":  "Official Redump DAT catalog for Nintendo Wii U."
+    },
+    {
+        "name":  "Redump - Sharp X68000",
+        "system":  "x68k",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/x68k/",
+        "description":  "Official Redump DAT catalog for Sharp X68000.",
+        "cueUrl":  "http://redump.org/cues/x68k/"
+    },
+    {
+        "name":  "Redump - Microsoft Xbox BIOS",
+        "system":  "xbox-bios",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/xbox-bios/",
+        "description":  "Official Redump DAT catalog for Microsoft Xbox BIOS."
+    },
+    {
+        "name":  "Redump - Microsoft Xbox",
+        "system":  "xbox",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/xbox/",
+        "description":  "Official Redump DAT catalog for Microsoft Xbox.",
+        "cueUrl":  "http://redump.org/cues/xbox/"
+    },
+    {
+        "name":  "Redump - Xbox 360",
+        "system":  "xbox360",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/xbox360/",
+        "description":  "Official Redump DAT catalog for Xbox 360.",
+        "cueUrl":  "http://redump.org/cues/xbox360/"
+    },
+    {
+        "name":  "Redump - Xbox One",
+        "system":  "xboxone",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/xboxone/",
+        "description":  "Official Redump DAT catalog for Xbox One."
+    },
+    {
+        "name":  "Redump - Xbox Series X|S",
+        "system":  "xboxsx",
+        "author":  "Redump.org",
+        "format":  "clrmamepro",
+        "url":  "http://redump.org/datfile/xboxsx/",
+        "description":  "Official Redump DAT catalog for Xbox Series X|S."
+    },
+    {
+        "name":  "No-Intro - Nintendo 64",
+        "system":  "n64",
+        "author":  "No-Intro",
+        "format":  "clrmamepro",
+        "url":  "https://archive.org/download/no-intro-nintendo-64-20240201/Nintendo%20-%2064%20(Nintendo%2064)%20(2024-02-01).dat",
+        "description":  "No-Intro DAT for Nintendo 64 ROM sets."
+    },
+    {
+        "name":  "No-Intro - Game Boy Advance",
+        "system":  "gba",
+        "author":  "No-Intro",
+        "format":  "clrmamepro",
+        "url":  "https://archive.org/download/no-intro-nintendo-game-boy-advance-20240201/Nintendo%20-%20Game%20Boy%20Advance%20(2024-02-01).dat",
+        "description":  "No-Intro DAT for GBA cartridges."
+    }
 ]

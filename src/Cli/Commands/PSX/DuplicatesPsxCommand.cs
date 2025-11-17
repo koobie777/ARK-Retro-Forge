@@ -17,13 +17,13 @@ public static class DuplicatesPsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrEmpty(root))
         {
-            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: duplicates psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]☄️ [[IMPACT]] | Component: duplicates psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]☄️ [IMPACT] | Component: duplicates psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ [[IMPACT]] | Component: duplicates psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -40,20 +40,43 @@ public static class DuplicatesPsxCommand
         AnsiConsole.WriteLine();
 
         var detector = new PsxDuplicateDetector();
-        
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .Start("[yellow]Scanning and hashing files...[/]", ctx =>
+        var lastProgress = new DuplicateScanProgress(0, 0, 0, 0, null, TimeSpan.Zero);
+        List<DuplicateGroup> duplicateGroups = new();
+
+        await AnsiConsole.Progress()
+            .Columns(
+                new TaskDescriptionColumn(),
+                new ProgressBarColumn(),
+                new PercentageColumn(),
+                new RemainingTimeColumn(),
+                new SpinnerColumn())
+            .StartAsync(async ctx =>
             {
-                // This will run synchronously within the status context
+                var task = ctx.AddTask("[yellow]Hashing files[/]", autoStart: true);
+                var reporter = new Progress<DuplicateScanProgress>(progress =>
+                {
+                    lastProgress = progress;
+                    var totalBytes = progress.TotalBytes <= 0 ? 1 : progress.TotalBytes;
+                    task.MaxValue = totalBytes;
+                    task.Value = Math.Min(progress.ProcessedBytes, totalBytes);
+                    if (!string.IsNullOrWhiteSpace(progress.CurrentFile))
+                    {
+                        var fileName = Path.GetFileName(progress.CurrentFile);
+                        task.Description = $"[yellow]Hashing[/] {fileName.EscapeMarkup()}";
+                    }
+                });
+
+                duplicateGroups = detector.ScanForDuplicates(root, recursive, hashAlgorithm, reporter);
+                task.Value = task.MaxValue;
+                await Task.CompletedTask;
             });
 
-        var duplicateGroups = detector.ScanForDuplicates(root, recursive, hashAlgorithm);
+        AnsiConsole.MarkupLine($"[dim]  Processed {lastProgress.ProcessedFiles:N0} files ({FormatSize(lastProgress.ProcessedBytes)}) in {lastProgress.Elapsed.TotalSeconds:F1}s[/]");
+        AnsiConsole.WriteLine();
 
         if (duplicateGroups.Count == 0)
         {
-            AnsiConsole.MarkupLine("[green]✨ [DOCKED] No duplicates found[/]");
-            await Task.CompletedTask;
+            AnsiConsole.MarkupLine("[green]✨ [[DOCKED]] No duplicates found[/]");
             return (int)ExitCode.OK;
         }
 
@@ -72,7 +95,7 @@ public static class DuplicatesPsxCommand
             var jsonPath = Path.Combine(logsDir, $"psx-duplicates-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json");
             File.WriteAllText(jsonPath, jsonOutput);
             
-            AnsiConsole.MarkupLine($"[green]✨ [DOCKED] Duplicate report written to: {jsonPath.EscapeMarkup()}[/]");
+            AnsiConsole.MarkupLine($"[green]✨ [[DOCKED]] Duplicate report written to: {jsonPath.EscapeMarkup()}[/]");
         }
         else
         {
@@ -166,5 +189,18 @@ public static class DuplicatesPsxCommand
             }
         }
         return null;
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 B";
+        }
+
+        string[] units = { "B", "KB", "MB", "GB", "TB" };
+        var order = (int)Math.Min(units.Length - 1, Math.Log(bytes, 1024));
+        var value = bytes / Math.Pow(1024, order);
+        return $"{value:F2} {units[order]}";
     }
 }

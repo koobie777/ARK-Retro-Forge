@@ -1,5 +1,4 @@
 using System.Text;
-using ARK.Core.Dat;
 
 namespace ARK.Core.Systems.PSX;
 
@@ -38,12 +37,10 @@ public record PsxBinTrackSource
     public class PsxBinMergePlanner
 {
     private readonly PsxNameParser _parser;
-    private readonly DatMetadataIndex _metadata;
 
-    public PsxBinMergePlanner(PsxNameParser? parser = null, DatMetadataIndex? metadata = null)
+    public PsxBinMergePlanner(PsxNameParser? parser = null)
     {
         _parser = parser ?? new PsxNameParser();
-        _metadata = metadata ?? DatMetadataCache.ForSystem("psx");
     }
 
     /// <summary>
@@ -105,16 +102,6 @@ public record PsxBinTrackSource
             if (discInfo.DiscCount.HasValue && discInfo.DiscCount.Value > 1)
             {
                 notes.Add($"Multi-disc set (Disc {discInfo.DiscNumber ?? 1}/{discInfo.DiscCount})");
-            }
-
-            if (!discInfo.HasSerial && _metadata.TryGet(discInfo.Title, discInfo.Region, out var metadata) && metadata.Serials.Count > 0)
-            {
-                discInfo = discInfo with { Serial = metadata.Serials.First() };
-            }
-
-            if (!discInfo.HasSerial)
-            {
-                notes.Add("Serial not resolved (will still merge)");
             }
 
             if (alreadyMerged)

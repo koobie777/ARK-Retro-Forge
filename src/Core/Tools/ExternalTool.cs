@@ -10,4 +10,6 @@ public record ExternalTool
     public string? MinimumVersion { get; init; }
     public string? Description { get; init; }
     public bool IsOptional { get; init; }
+    public string[]? VersionArguments { get; init; }
+    public string? VersionPattern { get; init; }
 }

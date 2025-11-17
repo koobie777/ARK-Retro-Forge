@@ -16,7 +16,20 @@ public class PsxBinMergeService
             return;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(operation.DestinationBinPath)!);
+        var destinationDirectory = Path.GetDirectoryName(operation.DestinationBinPath)
+            ?? Path.GetDirectoryName(operation.CuePath)
+            ?? string.Empty;
+        IReadOnlyDictionary<string, long>? trackLengths = null;
+
+        if (deleteSources)
+        {
+            trackLengths = operation.TrackSources.ToDictionary(
+                t => t.AbsolutePath,
+                t => new FileInfo(t.AbsolutePath).Length,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        Directory.CreateDirectory(destinationDirectory);
 
         var tempOutput = operation.DestinationBinPath + ".tmp";
         if (File.Exists(tempOutput))
@@ -29,40 +42,32 @@ public class PsxBinMergeService
             foreach (var trackSource in operation.TrackSources.OrderBy(t => t.Sequence))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                await using var input = File.OpenRead(trackSource.AbsolutePath);
-                await input.CopyToAsync(output, cancellationToken);
-            }
-        }
-
-        if (File.Exists(operation.DestinationBinPath))
-        {
-            File.Delete(operation.DestinationBinPath);
-        }
-
-        File.Move(tempOutput, operation.DestinationBinPath);
-
-        var cueContents = BuildCueContents(operation);
-        await File.WriteAllTextAsync(operation.DestinationCuePath, cueContents, Encoding.UTF8, cancellationToken);
-
-        if (deleteSources)
-        {
-            foreach (var trackSource in operation.TrackSources)
-            {
-                if (File.Exists(trackSource.AbsolutePath))
+                await using (var input = File.OpenRead(trackSource.AbsolutePath))
                 {
-                    File.Delete(trackSource.AbsolutePath);
+                    await input.CopyToAsync(output, cancellationToken);
+                }
+
+                if (deleteSources && DeleteFileIfExists(trackSource.AbsolutePath))
+                {
+                    PruneEmptyParentDirectories(trackSource.AbsolutePath, destinationDirectory);
                 }
             }
+        }
 
-            if (!string.Equals(operation.CuePath, operation.DestinationCuePath, StringComparison.OrdinalIgnoreCase) &&
-                File.Exists(operation.CuePath))
-            {
-                File.Delete(operation.CuePath);
-            }
+        File.Move(tempOutput, operation.DestinationBinPath, overwrite: true);
+
+        var cueContents = BuildCueContents(operation, trackLengths);
+        await File.WriteAllTextAsync(operation.DestinationCuePath, cueContents, Encoding.UTF8, cancellationToken);
+
+        if (deleteSources &&
+            !string.Equals(operation.CuePath, operation.DestinationCuePath, StringComparison.OrdinalIgnoreCase) &&
+            DeleteFileIfExists(operation.CuePath))
+        {
+            PruneEmptyParentDirectories(operation.CuePath, destinationDirectory);
         }
     }
 
-    private static string BuildCueContents(PsxBinMergeOperation operation)
+    private static string BuildCueContents(PsxBinMergeOperation operation, IReadOnlyDictionary<string, long>? trackLengths)
     {
         var builder = new StringBuilder();
         var binFileName = Path.GetFileName(operation.DestinationBinPath);
@@ -72,9 +77,11 @@ public class PsxBinMergeService
 
         foreach (var trackSource in operation.TrackSources.OrderBy(t => t.Sequence))
         {
-            var fileInfo = new FileInfo(trackSource.AbsolutePath);
+            var bytes = trackLengths != null && trackLengths.TryGetValue(trackSource.AbsolutePath, out var length)
+                ? length
+                : new FileInfo(trackSource.AbsolutePath).Length;
             var bytesPerFrame = GetBytesPerFrame(trackSource.TrackType);
-            var frames = fileInfo.Length / bytesPerFrame;
+            var frames = bytes / bytesPerFrame;
 
             builder.AppendLine($"  TRACK {trackSource.TrackNumber:D2} {trackSource.TrackType}");
             builder.AppendLine($"    INDEX 01 {FormatFrames(cumulativeFrames)}");
@@ -107,5 +114,60 @@ public class PsxBinMergeService
         var seconds = remainder / 75;
         var frame = remainder % 75;
         return $"{minutes:D2}:{seconds:D2}:{frame:D2}";
+    }
+
+    private static bool DeleteFileIfExists(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return false;
+        }
+
+        File.Delete(path);
+        return true;
+    }
+
+    private static void PruneEmptyParentDirectories(string deletedPath, string rootDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(deletedPath) || string.IsNullOrWhiteSpace(rootDirectory))
+        {
+            return;
+        }
+
+        var rootFullPath = Path.GetFullPath(rootDirectory);
+        var current = Path.GetDirectoryName(deletedPath);
+
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            var currentFullPath = Path.GetFullPath(current);
+            var relative = Path.GetRelativePath(rootFullPath, currentFullPath);
+
+            if (relative is "." || relative.StartsWith("..", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            if (!Directory.Exists(currentFullPath))
+            {
+                current = Path.GetDirectoryName(currentFullPath);
+                continue;
+            }
+
+            if (Directory.EnumerateFileSystemEntries(currentFullPath).Any())
+            {
+                break;
+            }
+
+            try
+            {
+                Directory.Delete(currentFullPath);
+            }
+            catch
+            {
+                break;
+            }
+
+            current = Path.GetDirectoryName(currentFullPath);
+        }
     }
 }

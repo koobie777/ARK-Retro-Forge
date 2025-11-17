@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace ARK.Core.Systems.PSX;
 
 /// <summary>
@@ -27,7 +29,15 @@ public class PsxRenamePlanner
     /// <summary>
     /// Plan rename operations for PSX files in a directory
     /// </summary>
-    public List<PsxRenameOperation> PlanRenames(string rootPath, bool recursive = false)
+    private static readonly Regex TrailingParenthetical = new(@"\s*\((?<inner>[^()]+)\)\s*$", RegexOptions.Compiled);
+    private static readonly HashSet<string> LanguageTokens = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "EN","ES","JA","DE","FR","IT","PT","PTBR","BR","NL","NO","SV","SE","FI","DA",
+        "ZH","KO","RU","PL","CS","HU","AR","TR","EL","HE","ID","KO","MS","TH","VI",
+        "ESLA","LA","ESMX","BG","HR","SL","SK","RO"
+    };
+
+    public List<PsxRenameOperation> PlanRenames(string rootPath, bool recursive = false, bool restoreArticles = false, bool stripLanguageTags = true)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var psxExtensions = new[] { ".bin", ".cue", ".chd", ".pbp", ".iso" };
@@ -53,44 +63,73 @@ public class PsxRenamePlanner
             }
         }
         
-        // Group by title+region to detect multi-disc sets
-        var multiDiscSets = allDiscs
-            .Where(d => !string.IsNullOrWhiteSpace(d.Title) && !string.IsNullOrWhiteSpace(d.Region))
-            .GroupBy(d => (d.Title, d.Region, d.Extension))
+        // Group by normalized title/region/extension to detect multi-disc sets even if region is missing
+        var multiDiscGroups = allDiscs
+            .Where(d => !string.IsNullOrWhiteSpace(d.Title))
+            .GroupBy(d => BuildGroupKey(d))
             .Where(g => g.Count() > 1 || g.Any(d => d.DiscNumber.HasValue))
-            .ToDictionary(g => g.Key, g => g.Count());
+            .Select(g => g.OrderBy(d => d.FilePath, StringComparer.OrdinalIgnoreCase).ToList())
+            .ToList();
+
+        var discAssignments = new Dictionary<string, (int DiscNumber, int DiscCount)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var group in multiDiscGroups)
+        {
+            var count = group.Count;
+            for (var i = 0; i < count; i++)
+            {
+                var discNumber = group[i].DiscNumber ?? (i + 1);
+                discAssignments[group[i].FilePath] = (discNumber, count);
+            }
+        }
         
         // Second pass: create operations with corrected disc count
         var operations = new List<PsxRenameOperation>();
         
         foreach (var discInfo in allDiscs)
         {
-            var key = (discInfo.Title, discInfo.Region, discInfo.Extension);
-            
             // If this title/region/extension combo has multiple entries, set DiscCount
             var correctedDiscInfo = discInfo;
-            if (multiDiscSets.TryGetValue(key, out var count) && count > 1)
+            if (discAssignments.TryGetValue(discInfo.FilePath, out var assignment))
             {
-                correctedDiscInfo = discInfo with { DiscCount = count };
+                correctedDiscInfo = correctedDiscInfo with
+                {
+                    DiscNumber = correctedDiscInfo.DiscNumber ?? assignment.DiscNumber,
+                    DiscCount = correctedDiscInfo.DiscCount ?? assignment.DiscCount
+                };
             }
             
-            var operation = PlanRename(correctedDiscInfo);
+            var operation = PlanRename(correctedDiscInfo, restoreArticles, stripLanguageTags);
             operations.Add(operation);
         }
         
         return operations;
     }
+
+    private static string BuildGroupKey(PsxDiscInfo disc)
+    {
+        var title = disc.Title?.Trim() ?? string.Empty;
+        var region = disc.Region?.Trim() ?? string.Empty;
+        var extension = disc.Extension?.Trim() ?? string.Empty;
+        return string.Join('|',
+            title.ToUpperInvariant(),
+            region.ToUpperInvariant(),
+            extension.ToUpperInvariant());
+    }
     
     /// <summary>
     /// Plan a rename operation for a single file (or PsxDiscInfo with pre-computed DiscCount)
     /// </summary>
-    private PsxRenameOperation PlanRename(PsxDiscInfo discInfo)
+    private PsxRenameOperation PlanRename(PsxDiscInfo discInfo, bool restoreArticles, bool stripLanguageTags)
     {
         var currentFileName = Path.GetFileName(discInfo.FilePath);
         var directory = Path.GetDirectoryName(discInfo.FilePath) ?? string.Empty;
+
+        var effectiveDiscInfo = stripLanguageTags
+            ? discInfo with { Title = StripLanguageTags(discInfo.Title) }
+            : discInfo;
         
         // Generate canonical name
-        var canonicalName = PsxNameFormatter.Format(discInfo);
+        var canonicalName = PsxNameFormatter.Format(effectiveDiscInfo, restoreArticles);
         
         // Destination path
         var destinationPath = Path.Combine(directory, canonicalName);
@@ -109,9 +148,57 @@ public class PsxRenamePlanner
         {
             SourcePath = discInfo.FilePath,
             DestinationPath = destinationPath,
-            DiscInfo = discInfo,
+            DiscInfo = effectiveDiscInfo,
             IsAlreadyNamed = isAlreadyNamed,
             Warning = warning
         };
+    }
+
+    private static string? StripLanguageTags(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            return title;
+        }
+
+        var sanitized = title.TrimEnd();
+        while (true)
+        {
+            var match = TrailingParenthetical.Match(sanitized);
+            if (!match.Success)
+            {
+                break;
+            }
+
+            var inner = match.Groups["inner"].Value;
+            if (!LooksLikeLanguageList(inner))
+            {
+                break;
+            }
+
+            sanitized = sanitized[..match.Index].TrimEnd();
+        }
+
+        return sanitized;
+    }
+
+    private static bool LooksLikeLanguageList(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var tokens = value.Split(new[] { ',', '/', '|', '&' }, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0)
+        {
+            return false;
+        }
+
+        return tokens.All(token =>
+        {
+            var normalized = token.Trim().Replace("-", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
+            return LanguageTokens.Contains(normalized);
+        });
     }
 }

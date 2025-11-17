@@ -1,6 +1,104 @@
+﻿# Update Notes
+
+This file contains release notes for ARK-Retro-Forge releases.
+
 # Update Notes
 
 This file contains release notes for ARK-Retro-Forge releases.
+
+## v1.0.0 (2025-11-17)
+
+### Infrastructure / Release
+- Raised the MinVer baseline to `1.0` and switched the default pre-release identifier to `rc` so `v1.x` tags (and future RCs) pick up the correct semantic version automatically.
+- `ark-retro-forge --version` now reports `v1.0.0`, keeping the banner/`--version` output in lockstep with the stable tag.
+
+### Documentation
+- README's quick-start flow now calls out the v1.0.0 stable build so new deployments grab the official release instead of older RCs.
+- `AGENTS.md` release instructions now reference the `v1.0.0-rc.1` tagging pattern, aligning contributor guidance with the 1.0 launch.
+
+## v0.2.0-rc.12 (2025-11-20)
+
+### CLI / UX
+- `rename psx` now renders the same Spectre header/summary experience as the other planners, adds a detailed metrics table (pending, missing serials, playlist ops, etc.), shows DAT-based serial suggestions, and the playlist-mode prompt no longer crashes due to `[create]` markup. A new `--restore-articles` flag (also available from the menu) lets you move â€œ, The/A/Anâ€ back to the front of titles when desired.
+- The PSX merge menu action no longer references the rename-only --restore-articles flag, restoring clean CLI builds after the latest menu overhaul.
+
+### PSX Tooling
+- Cleaned up the PSX rename planner's multi-disc loop so it compiles under warnings-as-errors and continues assigning disc counts deterministically.
+- `rename psx` strips language tag suffixes like `(En,Ja,Fr)` by default, and a new `--keep-language-tags` switch (menu + CLI) lets you preserve them when needed. The Spectre header now calls out whether tags are being stripped or kept.
+
+### Infrastructure / Release
+- `release-candidate.yml` now initializes metadata via a PowerShell script so the `checkout_ref`, `release_tag`, and `package_root` outputs exist and downstream steps can run without the prior missing `run` error.
+- `ark-retro-forge --version`/banner now reports `v0.2.0-rc.12` so the CLI matches the release candidate numbering and avoids the prior `0.1.0-dev` fallback.
+
+## v0.2.0-rc.11 (2025-11-19)
+
+### CLI / UX
+- Long-running operations now treat either ESC or the `B` key as a cancel/back shortcut, so quitting during scan/merge flows matches the prompts shown in the interactive menu.
+- The ESC/`B` hotkey monitor now only runs for PSX rename/convert/merge/clean and archive extraction when APPLY/`--apply` is enabled, so preview/dry-run flows stay snappy.
+- Archive Extract gained a queue summary (counts, total size, extension breakdown), a live spinner while scanning, and expanded APPLY headers so you can see progress + cancel tips without digging through logs.
+- `convert psx` now renders a proper operation header + queue summary and drives the conversion loop through a Spectre progress bar so you can see which disc is being compressed, how many remain, and when it's safe to cancel.
+
+- `merge psx` deletes original BIN/CUE segments (and any empty staging folders) immediately after each merge when Apply + delete-source is enabled, keeping disk usage low throughout a batch run instead of waiting until the end.
+- `merge psx` now overwrites any previously merged BIN/CUE outputs when rerun, ensuring refreshed conversions always win without manual cleanup.
+- `merge psx` no longer attempts DAT metadata serial lookups, so merges run with zero catalog dependencies beyond the cue sheets themselves.
+- Added regression coverage for the new cleanup behavior to ensure future service changes keep wiping the extra assets right after each merge completes.
+- `convert psx` reports conversion progress, captures `chdman` stderr for failed discs, exits non-zero on failures, and the Medical Bay menu now lets you pick CHD/BIN-CUE/ISO targets without memorizing flags.
+- Cleaned up the PSX rename planner's multi-disc loop so it compiles under warnings-as-errors and continues assigning disc counts deterministically.
+
+## v0.2.0-rc.10 (2025-11-18)
+
+### Medical Bay / Menu
+- Medical Bay now renders a DAT status table (Ready/Stale/Missing) for every configured system so PSX tooling never silently runs without intel.
+- The interactive menu header shows the remembered ROM root, system, instance, DRY-RUN/APPLY state, and DAT health indicator, reducing the chance of running destructive ops while still in DRY-RUN.
+- A dedicated **DAT Console** (from Medical Bay or the main menu) now hosts the full catalog experience: filter/search the entire table, multi-select sync targets, force-refresh ready catalogs, sync the active system with one click, and jump straight to the instance `dat/` folder.
+- DAT output is layered: Medical Bay prints a compact snapshot (ready/stale/missing counts + top offenders) while the DAT Console provides the full-screen catalog browser so you can inspect everything without drowning the main screen.
+
+### PSX Tooling
+- `PsxSerialResolver` probes the BIN/ISO payload (SYSTEM.CNF `BOOT=cdrom:\...`) to recover serials before falling back to DAT metadata so rename/convert/merge/clean flows keep working even on fresh installs.
+- `clean psx` now highlights mode/root/DAT status in a Spectre header, summarizes missing CUE work with grouped source files, and generates smarter multi-track CUE sheets (Track 01 data + Track 02+ audio) instead of single-file stubs.
+
+### CLI / UX
+- `scan`, `verify`, `dat sync`, and `clean psx` share a unified Spectre header that calls out scope, instance, and DRY-RUN/APPLY mode at the top of every run.
+- Medical Bay, Medical Bay menu entry, and docs all remind you to sync DAT catalogs first so downstream planners stop failing due to stale or missing metadata, and every menu/prompt now calls out that ESC cancels the operation.
+- DAT downloads now stream to a temporary file and replace the `.dat` atomically, eliminating the â€œfile in useâ€ errors that antivirus or file indexers caused mid-sync.
+- ESC cancellation is now universal: every Selection/Text prompt routes through a common handler that offers Retry/Return options, and the menu action runner replays commands when you choose â€œRetryâ€ so accidental ESC presses never eject you from the CLI.
+- Long-running operations (convert, rename, clean, extract) now honor cancellations without corrupting output: CHDMAN processes get killed + temp outputs cleaned, renames/playlist writes stop between files, and archive extractions link to the global cancellation token instead of a bespoke keyboard hook.
+
+## v0.2.0-rc.9 (2025-11-17)
+
+### CLI / UX
+- `duplicates psx` now renders a Spectre progress bar with percent, ETA, and throughput so hashing large libraries is transparent. The command also reports how many files/bytes were processed when it finishes.
+- Interactive menu prompts gained a separate multi-disc confirmation, optional import-directory naming, and they clear the screen when backing out of submenus to avoid stale output.
+- README received an ARK-themed rewrite that documents the mission flow, quick-start checklist, and key operations in one place.
+
+### PSX Tooling
+- `clean psx` corrals multi-track discs into `<Title (Region)>/<Title (Region)>` folders (still configurable) and now recognizes Disc 1/Disc 2/Disc 3 libraries, relocating them into `<Title (Region)>/<Title (Region) (Disc N)>` so flattening never collapses true multi-disc structures.
+- Multi-disc move plans share a new summary table and are protected by their own prompt during DRY-RUN/APPLY phases.
+
+## v0.2.0-rc.8 (2025-11-17)
+
+### DAT Intelligence
+- Rebuilt `config/dat/dat-sources.json` with the official Redump endpoints (plus cue sheet mirrors) so DAT sync can pull every supported catalog without relying on dead archive.org mirrors.
+- DAT downloader now detects zipped payloads from Redump and auto-extracts the real `.dat`, so sync results drop straight into `instances/<profile>/dat/<system>/` ready for planners.
+
+### CLI / UX
+- Fixed Spectre markup strings to escape `[IMPACT]`, preventing the interactive menu from crashing when scan/verify/clean emit error banners (root cause of the log you captured).
+- All yes/no prompts in the interactive menu now render as Spectre selection lists so you can use arrow keys + Enter instead of typing `y` or `n`.
+- Medical Bay now keeps the remembered system when you answer "Yes" and only asks you to pick a new profile (clearing the saved ROM root) when you explicitly choose "No."
+- Medical Bay now shells out to each detected tool with the appropriate `--version`/`-version` switch so the status table reports real version strings instead of `n/a`.
+- Sub-menus clear the terminal before re-rendering, so you never have to scroll past the previous operation log when backing out of Scan/Clean/etc.
+- `duplicates psx` now shows a live hashing progress bar with file counts/bytes and total runtime so massive libraries no longer look frozen.
+
+### PSX Tooling
+- PSX cleaner corrals multi-track discs into `<Title (Region)>/<Title (Region)>` and prevents flattening whenever a directory contains true multi-disc layouts (Disc 1/Disc 2). Disc re-homing became even smarter in rc.9.
+## v0.2.0-rc.7 (2025-11-17)
+
+### Infrastructure / Release
+- Completely rebuilt the Release Candidate workflow with metadata-driven ref selection, NuGet caching, artifact uploads, and rc-upgrade ancestry validation so tags/manual dispatches always package RC bits from the correct branch.
+- Manual workflow_dispatch runs now keep artifacts without attempting to publish GitHub releases, while tag-triggered runs auto-publish RC zips/checksums with Medical Bay reminders baked into the notes.
+
+### Documentation
+- `AGENTS.md` spells out that contributors must create and push RC/stable tags from the correct branch (e.g., `rc-upgrade` for `v0.2.0-rc.7`), preventing future releases from accidentally targeting `main`.
 
 ## v0.2.0-rc.6 (2025-11-16)
 
@@ -16,7 +114,6 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Cleaner multi-track corralling now names folders after DAT descriptions, automatically generates playlist-friendly structures, and flattens single-disc folders only when safe.
 
 ### Infrastructure / Logging
-- RC workflow now defaults manual dispatches to `rc-upgrade` and refuses RC tags that are not based on that branch, preventing GitHub from publishing RC artifacts from `main`.
 - Introduced `ArkEnvironment` + `SessionStateManager` to centralize instance path resolution, settings persistence, and Serilog CLI logging.
 - Release Candidate workflow now avoids using `VERSION` as an environment variable name, preventing MSBuild from misparsing RC tags (e.g., `v0.2.0-rc.6`).
 - RC packaging now copies `config/dat/*` so the bundled DAT sync command works out-of-the-box in portable builds.
@@ -117,7 +214,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 
 #### .m3u Playlist Management
 - **Automatic playlist creation**: Multi-disc titles now get `.m3u` playlists (e.g., `Final Fantasy VIII (USA).m3u`)
-- **Playlist updates**: Playlists are updated when filenames change or format switches (BIN/CUE → CHD)
+- **Playlist updates**: Playlists are updated when filenames change or format switches (BIN/CUE â†’ CHD)
 - **Smart file selection**: Prefers CHD > CUE > BIN for playlist entries
 - **Backup on update**: Creates `.bak` backup when updating existing playlists
 - **Configurable behavior**: Use `--playlists create|update|off` on rename, `--playlist-mode chd|bin|off` on convert
@@ -194,3 +291,4 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Deterministic builds
 - SBOM included
 - MIT License
+
