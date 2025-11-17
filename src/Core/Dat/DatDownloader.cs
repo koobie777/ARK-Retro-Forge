@@ -1,5 +1,4 @@
 using System.IO.Compression;
-using System.Linq;
 
 namespace ARK.Core.Dat;
 
@@ -84,12 +83,17 @@ public sealed class DatDownloader
     private static string ExtractZipArchive(string zipPath, string destinationDirectory)
     {
         using var archive = ZipFile.OpenRead(zipPath);
+<<<<<<< Updated upstream
         var entry = archive.Entries
             .Where(e => !string.IsNullOrWhiteSpace(e.Name))
             .OrderByDescending(e => e.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))
             .ThenBy(e => e.Name)
             .FirstOrDefault()
             ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
+=======
+        var entry = System.Linq.Enumerable.FirstOrDefault(archive.Entries, e => !string.IsNullOrWhiteSpace(e.Name))
+                    ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
+>>>>>>> Stashed changes
 
         var sanitizedName = Sanitize(entry.Name);
         if (string.IsNullOrWhiteSpace(Path.GetExtension(sanitizedName)))
