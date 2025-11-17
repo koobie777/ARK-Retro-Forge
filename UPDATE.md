@@ -16,6 +16,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Cleaner multi-track corralling now names folders after DAT descriptions, automatically generates playlist-friendly structures, and flattens single-disc folders only when safe.
 
 ### Infrastructure / Logging
+- RC workflow now defaults manual dispatches to `rc-upgrade` and refuses RC tags that are not based on that branch, preventing GitHub from publishing RC artifacts from `main`.
 - Introduced `ArkEnvironment` + `SessionStateManager` to centralize instance path resolution, settings persistence, and Serilog CLI logging.
 - Release Candidate workflow now avoids using `VERSION` as an environment variable name, preventing MSBuild from misparsing RC tags (e.g., `v0.2.0-rc.6`).
 - RC packaging now copies `config/dat/*` so the bundled DAT sync command works out-of-the-box in portable builds.

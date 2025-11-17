@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*-rc*'
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Branch or tag to build (defaults to rc-upgrade for manual runs)'
+        required: false
+        default: 'rc-upgrade'
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -19,13 +24,25 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ github.ref_name }}
+      CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_ref != '' ? github.event.inputs.target_ref : github.ref }}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        ref: ${{ github.ref }}
+        ref: ${{ env.CHECKOUT_REF }}
+
+    - name: Validate RC source reference
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      shell: pwsh
+      run: |
+        git fetch origin rc-upgrade
+        git merge-base --is-ancestor HEAD origin/rc-upgrade
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "RC tags must be created from the rc-upgrade branch."
+          exit 1
+        }
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
