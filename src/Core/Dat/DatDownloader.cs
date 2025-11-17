@@ -71,7 +71,7 @@ public sealed class DatDownloader
     {
         Span<byte> header = stackalloc byte[4];
         using var stream = File.OpenRead(path);
-        if (stream.Read(header) != 4)
+        if (stream.Read(header) < 4)
         {
             return false;
         }
@@ -83,17 +83,7 @@ public sealed class DatDownloader
     private static string ExtractZipArchive(string zipPath, string destinationDirectory)
     {
         using var archive = ZipFile.OpenRead(zipPath);
-<<<<<<< Updated upstream
-        var entry = archive.Entries
-            .Where(e => !string.IsNullOrWhiteSpace(e.Name))
-            .OrderByDescending(e => e.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))
-            .ThenBy(e => e.Name)
-            .FirstOrDefault()
-            ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
-=======
-        var entry = System.Linq.Enumerable.FirstOrDefault(archive.Entries, e => !string.IsNullOrWhiteSpace(e.Name))
-                    ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
->>>>>>> Stashed changes
+        var entry = SelectZipEntry(archive) ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
 
         var sanitizedName = Sanitize(entry.Name);
         if (string.IsNullOrWhiteSpace(Path.GetExtension(sanitizedName)))
@@ -113,9 +103,46 @@ public sealed class DatDownloader
             {
                 File.Delete(extractedPath);
             }
+
             throw;
         }
+
         return extractedPath;
+    }
+
+    private static ZipArchiveEntry? SelectZipEntry(ZipArchive archive)
+    {
+        ZipArchiveEntry? candidate = null;
+        foreach (var entry in archive.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Name))
+            {
+                continue;
+            }
+
+            if (candidate is null)
+            {
+                candidate = entry;
+                continue;
+            }
+
+            var isDat = entry.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase);
+            var candidateIsDat = candidate.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase);
+
+            if (isDat && !candidateIsDat)
+            {
+                candidate = entry;
+                continue;
+            }
+
+            if (isDat == candidateIsDat &&
+                string.Compare(entry.Name, candidate.Name, StringComparison.Ordinal) < 0)
+            {
+                candidate = entry;
+            }
+        }
+
+        return candidate;
     }
 }
 
