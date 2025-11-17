@@ -84,8 +84,12 @@ public sealed class DatDownloader
     private static string ExtractZipArchive(string zipPath, string destinationDirectory)
     {
         using var archive = ZipFile.OpenRead(zipPath);
-        var entry = archive.Entries.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Name))
-                    ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
+        var entry = archive.Entries
+            .Where(e => !string.IsNullOrWhiteSpace(e.Name))
+            .OrderByDescending(e => e.Name.EndsWith(".dat", StringComparison.OrdinalIgnoreCase))
+            .ThenBy(e => e.Name)
+            .FirstOrDefault()
+            ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
 
         var sanitizedName = Sanitize(entry.Name);
         if (string.IsNullOrWhiteSpace(Path.GetExtension(sanitizedName)))
