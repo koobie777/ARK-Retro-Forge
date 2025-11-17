@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using ARK.Core.Dat;
 
 namespace ARK.Core.Systems.PSX;
 
@@ -9,6 +10,7 @@ public partial class PsxNameParser
 {
     private readonly IPsxSerialResolver _serialResolver;
     private readonly IPsxContentClassifier _contentClassifier;
+    private readonly DatMetadataIndex _datMetadata;
     
     // Matches: "Title (Region) [Serial] (Disc N of M).ext" or "(Disc N).ext"
     [GeneratedRegex(@"^(.+?)\s*\(([^)]+)\)\s*\[([^\]]+)\]\s*(?:\(Disc (\d+)(?: of (\d+))?\))?", RegexOptions.IgnoreCase)]
@@ -26,10 +28,14 @@ public partial class PsxNameParser
     [GeneratedRegex(@"\(Track (\d+)\)", RegexOptions.IgnoreCase)]
     private static partial Regex TrackPattern();
     
-    public PsxNameParser(IPsxSerialResolver? serialResolver = null, IPsxContentClassifier? contentClassifier = null)
+    public PsxNameParser(
+        IPsxSerialResolver? serialResolver = null,
+        IPsxContentClassifier? contentClassifier = null,
+        DatMetadataIndex? datMetadata = null)
     {
         _serialResolver = serialResolver ?? new PsxSerialResolver();
         _contentClassifier = contentClassifier ?? new PsxContentClassifier();
+        _datMetadata = datMetadata ?? DatMetadataCache.ForSystem("psx");
     }
     
     /// <summary>
@@ -145,6 +151,18 @@ public partial class PsxNameParser
             }
         }
         
+        // Enrich with DAT metadata when available
+        title = title?.Trim();
+        region = region?.Trim();
+        if (!string.IsNullOrWhiteSpace(title) && _datMetadata.TryGet(title, region, out var metadata))
+        {
+            serial ??= metadata.Serials.FirstOrDefault();
+            if (!discCount.HasValue && metadata.DiscCount.HasValue)
+            {
+                discCount = metadata.DiscCount;
+            }
+        }
+
         // Classify content type
         var contentType = _contentClassifier.Classify(filename, serial);
         

@@ -12,8 +12,11 @@ public record PsxBinMergeOperation
     public required string DestinationBinPath { get; init; }
     public required string DestinationCuePath { get; init; }
     public required string Title { get; init; }
+    public required PsxDiscInfo DiscInfo { get; init; }
     public bool AlreadyMerged { get; init; }
-    public string? Warning { get; init; }
+    public bool IsBlocked { get; init; }
+    public string? BlockReason { get; init; }
+    public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -31,13 +34,15 @@ public record PsxBinTrackSource
 /// <summary>
 /// Plans merge operations for PSX multi-BIN layouts.
 /// </summary>
-public class PsxBinMergePlanner
+    public class PsxBinMergePlanner
 {
     private readonly PsxNameParser _parser;
+    private readonly DatMetadataIndex _metadata;
 
-    public PsxBinMergePlanner(PsxNameParser? parser = null)
+    public PsxBinMergePlanner(PsxNameParser? parser = null, DatMetadataIndex? metadata = null)
     {
         _parser = parser ?? new PsxNameParser();
+        _metadata = metadata ?? DatMetadataCache.ForSystem("psx");
     }
 
     /// <summary>
@@ -84,22 +89,42 @@ public class PsxBinMergePlanner
             }).ToList();
 
             var missingTracks = trackSources.Where(t => !File.Exists(t.AbsolutePath)).ToList();
+            var notes = new List<string>();
+            var blocked = false;
+            string? blockReason = null;
+
             if (missingTracks.Count > 0)
             {
-                operations.Add(new PsxBinMergeOperation
-                {
-                    CuePath = cueFile,
-                    TrackSources = trackSources,
-                    DestinationBinPath = destinationBinPath,
-                    DestinationCuePath = destinationCuePath,
-                    Title = Path.GetFileNameWithoutExtension(cueFile),
-                    AlreadyMerged = false,
-                    Warning = $"Missing track BIN(s): {string.Join(", ", missingTracks.Select(t => Path.GetFileName(t.AbsolutePath)))}"
-                });
-                continue;
+                blocked = true;
+                blockReason = $"Missing track BIN(s): {string.Join(", ", missingTracks.Select(t => Path.GetFileName(t.AbsolutePath)))}";
             }
 
             var alreadyMerged = File.Exists(destinationBinPath) && trackSources.Count == 1;
+
+            if (discInfo.DiscCount.HasValue && discInfo.DiscCount.Value > 1)
+            {
+                notes.Add($"Multi-disc set (Disc {discInfo.DiscNumber ?? 1}/{discInfo.DiscCount})");
+            }
+
+            if (!discInfo.HasSerial && _metadata.TryGet(discInfo.Title, discInfo.Region, out var metadata) && metadata.Serials.Count > 0)
+            {
+                discInfo = discInfo with { Serial = metadata.Serials.First() };
+            }
+
+            if (!discInfo.HasSerial)
+            {
+                notes.Add("Serial not resolved (will still merge)");
+            }
+
+            if (alreadyMerged)
+            {
+                notes.Add("Merged BIN already present");
+            }
+
+            if (!string.IsNullOrWhiteSpace(discInfo.Warning))
+            {
+                notes.Add(discInfo.Warning);
+            }
 
             operations.Add(new PsxBinMergeOperation
             {
@@ -109,7 +134,10 @@ public class PsxBinMergePlanner
                 DestinationCuePath = destinationCuePath,
                 Title = discInfo.Title ?? Path.GetFileNameWithoutExtension(cueFile),
                 AlreadyMerged = alreadyMerged,
-                Warning = discInfo.Warning
+                DiscInfo = discInfo,
+                IsBlocked = blocked,
+                BlockReason = blockReason,
+                Notes = notes
             });
         }
 
