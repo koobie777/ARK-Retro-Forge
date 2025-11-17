@@ -54,3 +54,15 @@ Provide **in this order**:
 5. Brief reasoning + rollback.
 
 Default to dry-run for destructive ops; keep outputs deterministic and reversible.
+<<<<<<< Updated upstream
+=======
+See also `.github/instructions.md` for Copilot-specific reminders (branch rules, Medical Bay, DAT intel).
+
+### Project-Specific Knowledge
+
+* **Medical Bay** replaces the old doctor verb; always mention it first in docs and Quick Start steps.
+* The CLI menu remembers ROM root/system/dry-run via `session.json`; respect this when touching Program.cs.
+* DAT intelligence lives under `config/dat` + `DatMetadataIndex`; PSX flows (rename/merge/clean) rely on it, so never regress multi-disc detection or serial recovery without tests.
+* Archive Extract, Scan, Verify, and PSX operations share a unified quit handler (ESC/Ctrl+C) – keep behavior consistent.
+* RC builds are produced from tags; releases rely on `.github/workflows/release-candidate.yml` (beware reserved env variables like `VERSION`).
+>>>>>>> Stashed changes
