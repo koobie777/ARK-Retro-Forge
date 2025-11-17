@@ -10,6 +10,8 @@ public sealed class DatDescriptionIndex
     {
     }
 
+    public IEnumerable<string> Descriptions => _entries.Keys;
+
     public bool Contains(string? title)
     {
         if (string.IsNullOrWhiteSpace(title))

@@ -15,6 +15,8 @@ public class Program
 {
     private static bool _menuDryRun = true;
     private static string? _rememberedRomRoot;
+    private static SystemProfile _currentSystem = SystemProfiles.Default;
+    private static bool _sessionPrimed;
     private static readonly HashSet<string> ScanExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",
@@ -32,8 +34,15 @@ public class Program
     };
     public static async Task<int> Main(string[] args)
     {
+        CliLogger.Initialize();
         ParseGlobalArgs(ref args);
         PrintBanner();
+
+        var session = SessionStateManager.State;
+        _menuDryRun = session.MenuDryRun;
+        _rememberedRomRoot = session.RomRoot;
+        _currentSystem = SystemProfiles.Resolve(session.SystemCode);
+        CliLogger.LogInfo($"Session restored | Root: {_rememberedRomRoot ?? "<unset>"} | System: {_currentSystem.Code} | Mode: {(_menuDryRun ? "DRY" : "APPLY")}");
 
         if (args.Length == 0)
         {
@@ -52,7 +61,7 @@ public class Program
         {
             return command switch
             {
-                "doctor" => await RunDoctorAsync(args),
+                "doctor" or "medical" or "medical-bay" => await RunMedicalBayAsync(args),
                 "scan" => await RunScanAsync(args),
                 "verify" => await RunVerifyAsync(args),
                 "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RenamePsxCommand.RunAsync(args),
@@ -80,8 +89,8 @@ public class Program
         }
     }
 
-    [RequiresUnreferencedCode("Doctor command serializes tool results to JSON when requested.")]
-    private static async Task<int> RunDoctorAsync(string[] args)
+    [RequiresUnreferencedCode("Medical Bay serializes tool results to JSON when requested.")]
+    private static async Task<int> RunMedicalBayAsync(string[] args)
     {
         var json = args.Contains("--json");
         
@@ -367,7 +376,7 @@ public class Program
                     .PageSize(10)
                     .HighlightStyle(Style.Parse("cyan bold"))
                     .AddChoices(
-                        "Doctor - Tool Check",
+                        "Medical Bay - Tool Diagnostics",
                         "Scan - Directory Scan",
                         "Verify - Hash Integrity",
                         "Rename - PSX",
@@ -385,8 +394,8 @@ public class Program
 
             switch (choice)
             {
-                case "Doctor - Tool Check":
-                    await RunDoctorAsync(new[] { "doctor" });
+                case "Medical Bay - Tool Diagnostics":
+                    await RunMedicalBayAsync(new[] { "medical-bay" });
                     Pause();
                     break;
                 case "Scan - Directory Scan":
