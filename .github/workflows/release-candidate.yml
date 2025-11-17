@@ -35,6 +35,10 @@ jobs:
     - name: Initialize metadata
       id: metadata
       shell: pwsh
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        TARGET_REF: ${{ github.event.inputs.target_ref }}
       run: |
         $sourceRef = "${{ github.ref }}"
         if ("${{ github.event_name }}" -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.source_ref }}")) {
