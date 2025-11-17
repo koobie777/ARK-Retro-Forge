@@ -11,6 +11,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 ### Infrastructure / Release
 - Raised the MinVer baseline to `1.0` and switched the default pre-release identifier to `rc` so `v1.x` tags (and future RCs) pick up the correct semantic version automatically.
 - `ark-retro-forge --version` now reports `v1.0.0`, keeping the banner/`--version` output in lockstep with the stable tag.
+- Added `stable-release.yml` workflow that triggers on `vX.Y.Z` tags from `main`, validates ancestry, builds/tests, packages the CLI with config/tools/plugins directories, generates checksums, and publishes a GitHub release with extracted UPDATE.md notes.
 
 ### Documentation
 - README's quick-start flow now calls out the v1.0.0 stable build so new deployments grab the official release instead of older RCs.

@@ -1,0 +1,193 @@
+name: Stable Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Branch or tag to build (must track main)"
+        required: false
+        default: "main"
+      release_label:
+        description: "Label used for manual dispatch runs (defaults to run-based stub)"
+        required: false
+        default: ""
+
+env:
+  DOTNET_VERSION: "8.0.x"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  CLI_PROJECT: "src/Cli/ARK.Cli.csproj"
+  CLI_RUNTIME: "win-x64"
+  PUBLISH_DIR: "publish/cli-win-x64"
+  RELEASE_DIR: "release"
+
+jobs:
+  stable-release:
+    name: Publish stable build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Initialize metadata
+      id: metadata
+      shell: pwsh
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        TARGET_REF: ${{ github.event.inputs.source_ref }}
+      run: |
+        $sourceRef = "${{ github.ref }}"
+        if ("${{ github.event_name }}" -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.source_ref }}")) {
+          $sourceRef = "${{ github.event.inputs.source_ref }}"
+        }
+
+        $releaseTag = "${{ github.ref_name }}"
+        if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+          if (-not [string]::IsNullOrWhiteSpace("${{ github.event.inputs.release_label }}")) {
+            $releaseTag = "${{ github.event.inputs.release_label }}"
+          } elseif (-not $releaseTag.StartsWith("v")) {
+            $releaseTag = "manual-stable-${{ github.run_number }}"
+          }
+        }
+
+        $packageRoot = "$($env:RELEASE_DIR)/ARK-Retro-Forge-$releaseTag"
+
+        "CHECKOUT_REF=$sourceRef" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "RELEASE_TAG=$releaseTag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "PACKAGE_ROOT=$packageRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+        "checkout_ref=$sourceRef" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "package_root=$packageRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+        Write-Host "Checkout ref: $sourceRef"
+        Write-Host "Release tag: $releaseTag"
+
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        ref: ${{ steps.metadata.outputs.checkout_ref }}
+
+    - name: Validate stable tag ancestry
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+      shell: pwsh
+      run: |
+        git fetch origin main --depth=1
+        git merge-base --is-ancestor HEAD origin/main
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Stable tags must be created from the main branch."
+          exit 1
+        }
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Test
+      run: dotnet test --no-build --configuration Release --verbosity normal
+
+    - name: Publish CLI (win-x64)
+      run: |
+        dotnet publish ${{ env.CLI_PROJECT }} `
+          --configuration Release `
+          --runtime ${{ env.CLI_RUNTIME }} `
+          --self-contained true `
+          --output ./${{ env.PUBLISH_DIR }} `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true `
+          -p:DebugType=embedded
+
+    - name: Prepare artifact layout
+      shell: pwsh
+      run: |
+        $root = "./$env:PACKAGE_ROOT"
+        New-Item -ItemType Directory -Force -Path $root | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/tools" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/plugins" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/config" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/config/emulators" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/config/dat" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/db" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/logs" | Out-Null
+
+        Copy-Item -Path ./${{ env.PUBLISH_DIR }}/ark-retro-forge.exe -Destination $root/
+        Copy-Item -Path ./README.md,./LICENSE,./SECURITY.md,./UPDATE.md -Destination $root/
+        Copy-Item -Path ./tools/README.md -Destination "$root/tools/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./plugins/README.md -Destination "$root/plugins/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./config/README.md -Destination "$root/config/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./config/emulators/README.md -Destination "$root/config/emulators/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./config/dat/* -Destination "$root/config/dat/" -Recurse -Force -ErrorAction SilentlyContinue
+
+    - name: Generate checksums
+      shell: pwsh
+      run: |
+        $exe = "./$env:PACKAGE_ROOT/ark-retro-forge.exe"
+        $sha256 = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
+        $size = (Get-Item $exe).Length / 1MB
+        $content = "# ARK-Retro-Forge Checksums`n`n## ark-retro-forge.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
+        $targetFolder = Split-Path $exe -Parent
+        $content | Out-File -FilePath "$targetFolder/CHECKSUMS.txt" -Encoding UTF8
+        "$sha256  ark-retro-forge.exe" | Out-File -FilePath "$targetFolder/SHA256SUMS" -Encoding ASCII
+
+    - name: Archive stable payload
+      shell: pwsh
+      run: |
+        $archive = "./ARK-Retro-Forge-$env:RELEASE_TAG-$env:CLI_RUNTIME.zip"
+        Compress-Archive -Path "./$env:PACKAGE_ROOT/*" -DestinationPath $archive -CompressionLevel Optimal
+        "Stable archive path: $archive" >> $env:GITHUB_STEP_SUMMARY
+
+    - name: Extract release notes
+      shell: pwsh
+      run: |
+        $content = Get-Content -Path UPDATE.md -Raw
+        if ($content -match '(?s)## v[^\n]+\s+(.*?)(?=\n##|\z)') {
+          $notes = $matches[1].Trim()
+        } else {
+          $notes = "See UPDATE.md for release notes."
+        }
+        $header = "**Official stable release.**`n`nRun Medical Bay before deploying to production. See the Quick Start Checklist in README.md.`n`n"
+        ($header + $notes) | Out-File -FilePath ./RELEASE_NOTES_STABLE.md -Encoding UTF8
+
+    - name: Upload workflow artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ark-retro-forge-${{ steps.metadata.outputs.release_tag }}
+        path: |
+          ./ARK-Retro-Forge-${{ steps.metadata.outputs.release_tag }}-${{ env.CLI_RUNTIME }}.zip
+          ./${{ steps.metadata.outputs.package_root }}/CHECKSUMS.txt
+          ./${{ steps.metadata.outputs.package_root }}/SHA256SUMS
+
+    - name: Publish stable release
+      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
+      uses: softprops/action-gh-release@v1
+      with:
+        prerelease: false
+        draft: false
+        body_path: ./RELEASE_NOTES_STABLE.md
+        files: |
+          ./ARK-Retro-Forge-${{ steps.metadata.outputs.release_tag }}-${{ env.CLI_RUNTIME }}.zip
+          ./${{ steps.metadata.outputs.package_root }}/CHECKSUMS.txt
+          ./${{ steps.metadata.outputs.package_root }}/SHA256SUMS
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
