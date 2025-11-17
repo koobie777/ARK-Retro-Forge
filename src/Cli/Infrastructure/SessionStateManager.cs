@@ -70,7 +70,7 @@ internal static class SessionStateManager
 
             var instanceRoot = InstancePathResolver.GetInstanceRoot();
             Directory.CreateDirectory(instanceRoot);
-            _statePath = Path.Combine(instanceRoot, "session.json");
+            _statePath = Path.Join(instanceRoot, "session.json");
 
             if (File.Exists(_statePath))
             {
