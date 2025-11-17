@@ -16,7 +16,6 @@ public class Program
     private static bool _menuDryRun = true;
     private static string? _rememberedRomRoot;
     private static SystemProfile _currentSystem = SystemProfiles.Default;
-    private static bool _sessionPrimed;
     private static readonly HashSet<string> ScanExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",

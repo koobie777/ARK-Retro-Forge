@@ -1,4 +1,5 @@
 using System.Text;
+using ARK.Core.Dat;
 
 namespace ARK.Core.Systems.PSX;
 

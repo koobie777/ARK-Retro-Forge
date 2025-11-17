@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
-using ARK.Core;
 
 namespace ARK.Core.Dat;
 
@@ -12,9 +12,9 @@ public sealed class DatMetadataIndex
 {
     private static readonly Regex DescriptionPattern = new(@"^\s*description\s+""(?<value>.+?)""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RomNamePattern = new(@"^\s*rom\s*\(\s*name\s+""(?<value>.+?)""", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    private static readonly Regex DiscPattern = new(@"\(Disc\s*(?<disc>\d+)(?:\s*of\s*(?<count>\d+))?\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    internal static readonly Regex DiscPattern = new(@"\(Disc\s*(?<disc>\d+)(?:\s*of\s*(?<count>\d+))?\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex TitleRegionPattern = new(@"^(?<title>.+?)\s*\((?<region>[^)]+)\)", RegexOptions.Compiled);
-    private static readonly Regex SerialPattern = new(@"(?<serial>[A-Z]{4}-\d{5})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    internal static readonly Regex SerialPattern = new(@"(?<serial>[A-Z]{4}-\d{5})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private readonly ConcurrentDictionary<string, DatTitleMetadata> _entries = new(StringComparer.OrdinalIgnoreCase);
 
@@ -33,12 +33,12 @@ public sealed class DatMetadataIndex
         return index;
     }
 
-    public bool TryGet(string? title, string? region, out DatTitleMetadata metadata)
+    public bool TryGet(string? title, string? region, [NotNullWhen(true)] out DatTitleMetadata? metadata)
     {
         var key = BuildKey(title, region);
         if (string.IsNullOrWhiteSpace(key))
         {
-            metadata = default!;
+            metadata = null;
             return false;
         }
 
@@ -203,12 +203,12 @@ public sealed class DatTitleMetadata
             return;
         }
 
-        foreach (Match match in SerialPattern.Matches(romName))
+        foreach (Match match in DatMetadataIndex.SerialPattern.Matches(romName))
         {
             RegisterSerial(match.Groups["serial"].Value);
         }
 
-        foreach (Match match in DiscPattern.Matches(romName))
+        foreach (Match match in DatMetadataIndex.DiscPattern.Matches(romName))
         {
             var disc = int.TryParse(match.Groups["disc"].Value, out var number) ? number : (int?)null;
             var count = int.TryParse(match.Groups["count"].Value, out var total) ? total : (int?)null;
