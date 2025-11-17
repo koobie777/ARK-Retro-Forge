@@ -7,13 +7,13 @@
 - **Command Deck:** `ark-retro-forge` (no args) launches a Spectre.Console menu with live status, DRY-RUN/APPLY toggle, ROM-root memory, and per-instance routing.
 - **Zero ROM Policy:** No ROMs, BIOS, keys, or third-party tools are bundled. You supply your own assets and utilities (chdman, maxcso, etc.).
 - **Instance Profiles:** `--instance <name>` isolates databases, logs, and DAT caches under `./instances/<profile>/` for parallel RC/dev/stable workflows.
-- **Dat Catalog Sync:** `dat sync` pulls curated Redump / No-Intro DAT files so operations like `clean psx` can cross-reference authoritative metadata.
+- **DAT Intelligence:** `dat sync` plus a built-in metadata index lets rename/merge/clean flows reason about serials, disc counts, and playlists even when filenames are noisy.
 
 ## Operations Manifest
 
 | Operation | Purpose | Highlights |
 |-----------|---------|------------|
-| `doctor` | Environment readiness | Detects missing external tools, prints fixes, JSON export. |
+| `medical-bay` | Environment readiness | Detects missing external tools, prints fixes, JSON export. |
 | `scan` | Inventory ROMs | Recursive Spectre progress, per-extension stats, ROM cache hydration. |
 | `verify` | Hash integrity | Streaming CRC32/MD5/SHA1 updates ROM cache; throughput metrics. |
 | `rename psx` | Deterministic naming | `Title (Region) [Serial]` output, playlist planner integration. |
@@ -26,7 +26,7 @@
 
 ## Mission Console (Interactive Menu)
 
-1. **Doctor** – run this first to confirm toolchain alignment.  
+1. **Medical Bay** – run this first to confirm toolchain alignment.  
 2. **Scan / Verify** – each prompt offers recursive toggle, ROM-root confirmation, and brings Spectre dashboards online.  
 3. **PSX Ops** – rename / convert / merge / clean / duplicates; menu prompts mirror CLI flags and respect global DRY-RUN state.  
 4. **Extract / DAT Sync** – manage archives and DAT catalogs from the same console.
@@ -34,6 +34,11 @@
 > Tip: DRY-RUN mode persists during the session. Switch to APPLY from the menu before executing destructive operations. Sessions reset back to DRY-RUN when restarted.
 
 ## Operation Details
+
+### Medical Bay (Environment Diagnostics)
+- Replaces the legacy `doctor` verb with richer Spectre output, a JSON export, and Serilog logging so hardware/tool mismatches are obvious.
+- Runs before every RC release to confirm `chdman`, `maxcso`, `wit`, `ffmpeg`, etc. exist in `.\tools\`.
+- Accessible via `ark-retro-forge medical-bay` or from the interactive menu.
 
 ### Scan
 - Discovers supported extensions (`.bin/.cue/.iso/.chd/.pbp` plus Nintendo/Sega formats).
@@ -70,7 +75,7 @@ ark-retro-forge convert psx --root F:\PSX --to chd --recursive --apply --delete-
 ```
 
 ### Merge (PSX)
-- Uses `PsxBinMergePlanner` to identify multi-track BIN/CUE layouts and rewrites a single BIN with updated CUE references.
+- Uses `PsxBinMergePlanner` plus the DAT metadata index to identify multi-track BIN/CUE layouts, prevent multi-disc SKUs from merging incorrectly, and rewrites a single BIN with updated CUE references.
 - Optional source deletion (post-merge) safeguarded by prompts/dry-run.
 
 ```ps1
@@ -104,7 +109,7 @@ ark-retro-forge dat sync --system psx --force
 
 1. **Download Release:** grab the latest `ark-retro-forge.exe` (RC/stable).
 2. **Provision Tools:** place `chdman.exe`, `maxcso.exe`, etc. inside `.\tools\`.
-3. **Run `doctor`:** ensure all dependencies are detected.
+3. **Run `medical-bay`:** ensure all dependencies are detected.
 4. **Set ROM Root:** via menu or CLI `--root`. Save it for future sessions.
 5. **Scan + Verify:** hydrate the ROM cache and record hashes.
 6. **Run Ops:** rename/convert/merge/clean/extract as needed (toggle APPLY to execute).
@@ -112,7 +117,7 @@ ark-retro-forge dat sync --system psx --force
 ## CLI Reference
 
 ```ps1
-ark-retro-forge doctor
+ark-retro-forge medical-bay
 ark-retro-forge scan --root D:\ROMs --recursive
 ark-retro-forge verify --root D:\ROMs --recursive
 ark-retro-forge rename psx --root D:\PSX --recursive --apply

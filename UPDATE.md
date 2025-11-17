@@ -2,6 +2,26 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.2.0-rc.6 (2025-11-16)
+
+### CLI / UX
+- Renamed the environment check to **Medical Bay** with richer Spectre output, JSON export, and Serilog logging so toolchain gaps (missing `chdman`, etc.) are easy to triage.
+- Interactive menu now boots by asking for the active ROM root and target system, persists those selections plus DRY-RUN/APPLY state to `instances/<profile>/session.json`, and reuses them across operations.
+- Every verb now respects the global quit handler that Archive Extract introduced, making ESC/Ctrl+C consistent across scan/verify/rename/convert/merge/clean flows.
+- Convert/Merge/Clean prompts include better explanations, target-mode labels, and improved warnings for multi-disc PSX sets.
+
+### PSX Tooling
+- Added a DAT metadata index that merges Redump descriptions + ROM cache results so rename/clean/merge can recover missing serials, detect disc counts, and avoid merging true multi-disc SKUs incorrectly.
+- `merge psx` shows a Spectre table with block reasons/notes, highlights already-merged sets, and operates even when filenames lack serials thanks to the DAT lookup.
+- Cleaner multi-track corralling now names folders after DAT descriptions, automatically generates playlist-friendly structures, and flattens single-disc folders only when safe.
+
+### Infrastructure / Logging
+- RC workflow now defaults manual dispatches to `rc-upgrade` and refuses RC tags that are not based on that branch, preventing GitHub from publishing RC artifacts from `main`.
+- Introduced `ArkEnvironment` + `SessionStateManager` to centralize instance path resolution, settings persistence, and Serilog CLI logging.
+- Release Candidate workflow now avoids using `VERSION` as an environment variable name, preventing MSBuild from misparsing RC tags (e.g., `v0.2.0-rc.6`).
+- RC packaging now copies `config/dat/*` so the bundled DAT sync command works out-of-the-box in portable builds.
+- README/AGENTS updated with Medical Bay terminology, DAT intelligence, and the RC branch workflow so doc parity matches the tooling.
+
 ## v0.2.0-rc.5 (2025-11-16)
 
 ### CLI

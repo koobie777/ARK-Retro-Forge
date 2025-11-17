@@ -3,19 +3,18 @@
 ## Project Structure & Module Organization
 
 * **Repository**: ARK-Retro-Forge
-* `src/RetroForge.Core` - scan/verify/rename/combine/convert/DAT/doctor/launch
-* `src/RetroForge.Cli` - Spectre.Console CLI verbs
-* `src/RetroForge.Gui` - WPF (.NET 8) MVVM GUI (themes: void/orbital/plain)
-* `plugins/` feature packs; `config/` profiles/templates/scraper catalog; `tools/` user CLIs (e.g., chdman, ffmpeg)
-* `tests/` (`RetroForge.*.Tests`); `logs/`; `reports/`; `.docs/`
+* **`src/Core`** – hashing, DAT metadata index, planners (scan/verify/rename/convert/merge/clean/extract).
+* **`src/Cli`** – Spectre.Console verbs + interactive menu (Medical Bay, scan/verify, PSX ops, DAT sync, archive extract).
+* **`plugins/`** experimental feature packs; **`config/`** profiles/templates/DAT catalog; **`tools/`** user-supplied binaries (chdman, maxcso, wit, ffmpeg, etc.).
+* **`instances/<profile>/`** – per-instance `db/`, `dat/`, `logs/`, `session.json` storing remembered ROM root/system and DRY-RUN state.
+* **`tests/`** (`ARK.Tests`) – xUnit coverage for planners/detectors.
 
 ## Build, Test, and Development Commands
 
 * Restore: `dotnet restore`
 * Build (Release): `dotnet build -c Release`
-* Run CLI: `dotnet run --project src/RetroForge.Cli -- scan --root F:\ROMs --json`
-* Run GUI: `dotnet run --project src/RetroForge.Gui`
-* Publish portable (CLI): `dotnet publish src/RetroForge.Cli -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true`
+* Run CLI: `dotnet run --project src/Cli/ARK.Cli.csproj -- scan --root F:\ROMs --json`
+* Publish portable CLI: `dotnet publish src/Cli/ARK.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`
 * Format/lint: `dotnet format`
 * Test + coverage: `dotnet test /p:CollectCoverage=true /p:CoverletOutput=TestResults/coverage.xml`
 
@@ -32,11 +31,13 @@
 * Test names: `Method_Scenario_Expected()` using AAA (Arrange-Act-Assert).
 * Fixtures under `tests/Fixtures/`. Aim >=70% line coverage for Core; justify exceptions in PR.
 
-## Commit & Pull Request Guidelines
+## Commit, Branch & Release Guidelines
 
 * **Conventional Commits** (e.g., `feat(core): add CHD planner (#123)`).
-* One logical change per PR. Include description, linked issue, CLI/GUI screenshots for UI changes, test plan, rollback notes.
-* CI must pass; update docs (README/UPDATE.md) on behavior changes.
+* Work lands on feature branches -> `rc-upgrade`. Open PRs targeting `main`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
+* Tag RCs `vX.Y.Z-rc.N` to trigger the release-candidate workflow; stable releases use `vX.Y.Z`.
+* One logical change per PR with description, linked issue, CLI screenshots for UX shifts, test plan, and rollback notes.
+* CI must pass; behavior changes demand README/UPDATE.md edits plus any necessary diagrams.
 
 ## Security & Configuration Tips
 
@@ -54,17 +55,7 @@ Provide **in this order**:
 5. Brief reasoning + rollback.
 
 Default to dry-run for destructive ops; keep outputs deterministic and reversible.
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
+Default to dry-run for destructive ops; keep outputs deterministic and reversible.
 See also `.github/instructions.md` for Copilot-specific reminders (branch rules, Medical Bay, DAT intel).
 
 ### Project-Specific Knowledge
@@ -72,6 +63,5 @@ See also `.github/instructions.md` for Copilot-specific reminders (branch rules,
 * **Medical Bay** replaces the old doctor verb; always mention it first in docs and Quick Start steps.
 * The CLI menu remembers ROM root/system/dry-run via `session.json`; respect this when touching Program.cs.
 * DAT intelligence lives under `config/dat` + `DatMetadataIndex`; PSX flows (rename/merge/clean) rely on it, so never regress multi-disc detection or serial recovery without tests.
-* Archive Extract, Scan, Verify, and PSX operations share a unified quit handler (ESC/Ctrl+C) – keep behavior consistent.
+* Archive Extract, Scan, Verify, and PSX operations share a unified quit handler (ESC/Ctrl+C) � keep behavior consistent.
 * RC builds are produced from tags; releases rely on `.github/workflows/release-candidate.yml` (beware reserved env variables like `VERSION`).
->>>>>>> Stashed changes

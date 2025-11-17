@@ -12,4 +12,5 @@ public record ToolCheckResult
     public string? MinimumVersion { get; init; }
     public bool MeetsMinimumVersion { get; init; }
     public string? ErrorMessage { get; init; }
+    public bool IsOptional { get; init; }
 }

@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*-rc*'
   workflow_dispatch:
+    inputs:
+      target_ref:
+        description: 'Branch or tag to build (defaults to rc-upgrade for manual runs)'
+        required: false
+        default: 'rc-upgrade'
 
 env:
   DOTNET_VERSION: '8.0.x'
@@ -18,14 +23,26 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: ${{ github.ref_name }}
+      RELEASE_TAG: ${{ github.ref_name }}
+      CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_ref != '' ? github.event.inputs.target_ref : github.ref }}
 
     steps:
     - name: Checkout
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        ref: ${{ github.ref }}
+        ref: ${{ env.CHECKOUT_REF }}
+
+    - name: Validate RC source reference
+      if: ${{ startsWith(github.ref, 'refs/tags/') }}
+      shell: pwsh
+      run: |
+        git fetch origin rc-upgrade
+        git merge-base --is-ancestor HEAD origin/rc-upgrade
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "RC tags must be created from the rc-upgrade branch."
+          exit 1
+        }
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -56,11 +73,12 @@ jobs:
     - name: Prepare artifact layout
       shell: pwsh
       run: |
-        $root = "./release/ARK-Retro-Forge-$env:VERSION"
+        $root = "./release/ARK-Retro-Forge-$env:RELEASE_TAG"
         New-Item -ItemType Directory -Force -Path $root | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/tools" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/plugins" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/config/emulators" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/config/dat" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/db" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/logs" | Out-Null
         Copy-Item -Path ./publish/cli-win-x64/ark-retro-forge.exe -Destination $root/
@@ -69,22 +87,23 @@ jobs:
         Copy-Item -Path ./plugins/README.md -Destination "$root/plugins/" -ErrorAction SilentlyContinue
         Copy-Item -Path ./config/README.md -Destination "$root/config/" -ErrorAction SilentlyContinue
         Copy-Item -Path ./config/emulators/README.md -Destination "$root/config/emulators/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./config/dat/* -Destination "$root/config/dat/" -Recurse -Force -ErrorAction SilentlyContinue
 
     - name: Generate checksums
       shell: pwsh
       run: |
-        $exe = "./release/ARK-Retro-Forge-$env:VERSION/ark-retro-forge.exe"
+        $exe = "./release/ARK-Retro-Forge-$env:RELEASE_TAG/ark-retro-forge.exe"
         $sha256 = (Get-FileHash -Path $exe -Algorithm SHA256).Hash
         $size = (Get-Item $exe).Length / 1MB
         $content = "# ARK-Retro-Forge RC Checksums`n`n## ark-retro-forge.exe`n- **SHA256**: ``$sha256`` `n- **Size**: $([math]::Round($size, 2)) MB`n`nGenerated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')"
-        $content | Out-File -FilePath ./release/ARK-Retro-Forge-$env:VERSION/CHECKSUMS.txt -Encoding UTF8
-        "$sha256  ark-retro-forge.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-$env:VERSION/SHA256SUMS -Encoding ASCII
+        $content | Out-File -FilePath ./release/ARK-Retro-Forge-$env:RELEASE_TAG/CHECKSUMS.txt -Encoding UTF8
+        "$sha256  ark-retro-forge.exe" | Out-File -FilePath ./release/ARK-Retro-Forge-$env:RELEASE_TAG/SHA256SUMS -Encoding ASCII
 
     - name: Archive RC
       shell: pwsh
       run: |
-        Compress-Archive -Path "./release/ARK-Retro-Forge-$env:VERSION/*" `
-          -DestinationPath "./ARK-Retro-Forge-$env:VERSION-win-x64.zip" `
+        Compress-Archive -Path "./release/ARK-Retro-Forge-$env:RELEASE_TAG/*" `
+          -DestinationPath "./ARK-Retro-Forge-$env:RELEASE_TAG-win-x64.zip" `
           -CompressionLevel Optimal
 
     - name: Extract release notes
@@ -106,8 +125,8 @@ jobs:
         draft: false
         body_path: ./RELEASE_NOTES_RC.md
         files: |
-          ./ARK-Retro-Forge-${{ env.VERSION }}-win-x64.zip
-          ./release/ARK-Retro-Forge-${{ env.VERSION }}/CHECKSUMS.txt
-          ./release/ARK-Retro-Forge-${{ env.VERSION }}/SHA256SUMS
+          ./ARK-Retro-Forge-${{ env.RELEASE_TAG }}-win-x64.zip
+          ./release/ARK-Retro-Forge-${{ env.RELEASE_TAG }}/CHECKSUMS.txt
+          ./release/ARK-Retro-Forge-${{ env.RELEASE_TAG }}/SHA256SUMS
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
