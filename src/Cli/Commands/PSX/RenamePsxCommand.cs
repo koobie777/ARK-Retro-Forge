@@ -14,13 +14,13 @@ public static class RenamePsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrEmpty(root))
         {
-            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: rename psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]☄️ [[]IMPACT[]] | Component: rename psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]☄️ [IMPACT] | Component: rename psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ [[]IMPACT[]] | Component: rename psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 

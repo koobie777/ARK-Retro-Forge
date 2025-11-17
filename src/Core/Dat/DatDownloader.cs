@@ -1,3 +1,6 @@
+using System.IO.Compression;
+using System.Linq;
+
 namespace ARK.Core.Dat;
 
 public sealed class DatDownloader
@@ -29,6 +32,11 @@ public sealed class DatDownloader
             await contentStream.CopyToAsync(destinationStream, cancellationToken);
         }
 
+        if (IsZipArchive(destinationPath))
+        {
+            destinationPath = ExtractZipArchive(destinationPath, destinationDirectory);
+        }
+
         return DatDownloadResult.Downloaded(destinationPath);
     }
 
@@ -58,6 +66,37 @@ public sealed class DatDownloader
         }
 
         return sanitized.Trim();
+    }
+
+    private static bool IsZipArchive(string path)
+    {
+        Span<byte> header = stackalloc byte[4];
+        using var stream = File.OpenRead(path);
+        if (stream.Read(header) < 4)
+        {
+            return false;
+        }
+
+        return header[0] == 0x50 && header[1] == 0x4B && (header[2] == 0x03 || header[2] == 0x05 || header[2] == 0x07)
+               && (header[3] == 0x04 || header[3] == 0x06 || header[3] == 0x08);
+    }
+
+    private static string ExtractZipArchive(string zipPath, string destinationDirectory)
+    {
+        using var archive = ZipFile.OpenRead(zipPath);
+        var entry = archive.Entries.FirstOrDefault(e => !string.IsNullOrWhiteSpace(e.Name))
+                    ?? throw new InvalidOperationException($"Zip archive '{zipPath}' does not contain any files.");
+
+        var sanitizedName = Sanitize(entry.Name);
+        if (string.IsNullOrWhiteSpace(Path.GetExtension(sanitizedName)))
+        {
+            sanitizedName += ".dat";
+        }
+
+        var extractedPath = Path.Combine(destinationDirectory, sanitizedName);
+        entry.ExtractToFile(extractedPath, overwrite: true);
+        File.Delete(zipPath);
+        return extractedPath;
     }
 }
 

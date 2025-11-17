@@ -16,13 +16,13 @@ public static class ConvertPsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrEmpty(root))
         {
-            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: convert psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]☄️ [[]IMPACT[]] | Component: convert psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]☄️ [IMPACT] | Component: convert psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ [[]IMPACT[]] | Component: convert psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -34,7 +34,7 @@ public static class ConvertPsxCommand
 
         if (deleteSource && !apply)
         {
-            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: convert psx | Context: --delete-source requires --apply | Fix: Add --apply flag[/]");
+            AnsiConsole.MarkupLine("[red]☄️ [[]IMPACT[]] | Component: convert psx | Context: --delete-source requires --apply | Fix: Add --apply flag[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -81,7 +81,7 @@ public static class ConvertPsxCommand
         var chdmanPath = FindChdman();
         if (chdmanPath == null)
         {
-            AnsiConsole.MarkupLine("[red]☄️ [IMPACT] | Component: convert psx | Context: chdman.exe not found | Fix: Place chdman.exe in .\\tools\\ directory[/]");
+            AnsiConsole.MarkupLine("[red]☄️ [[]IMPACT[]] | Component: convert psx | Context: chdman.exe not found | Fix: Place chdman.exe in .\\tools\\ directory[/]");
             AnsiConsole.MarkupLine("[yellow]💡 Run 'ark-retro-forge doctor' to check tool status[/]");
             return (int)ExitCode.ToolMissing;
         }

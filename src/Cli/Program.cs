@@ -87,7 +87,7 @@ public class Program
         catch (Exception ex)
         {
             CliLogger.LogError($"Unhandled exception while running '{command}'", ex);
-            AnsiConsole.MarkupLine($"\n[red][IMPACT] | Component: {command} | Context: {ex.Message.EscapeMarkup()}[/]");
+            AnsiConsole.MarkupLine($"\n[red][[]IMPACT[]] | Component: {command} | Context: {ex.Message.EscapeMarkup()}[/]");
             return (int)ExitCode.GeneralError;
         }
     }
@@ -160,13 +160,13 @@ public class Program
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][IMPACT] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[]IMPACT[]] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: scan | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[]IMPACT[]] | Component: scan | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -275,13 +275,13 @@ public class Program
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][IMPACT] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[]IMPACT[]] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][IMPACT] | Component: verify | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[]IMPACT[]] | Component: verify | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -606,7 +606,7 @@ public class Program
         catch (Exception ex)
         {
             CliLogger.LogError($"Menu action '{label}' failed", ex);
-            AnsiConsole.MarkupLine($"\n[red][IMPACT] | Component: {label.ToLowerInvariant()} | Context: {ex.Message.EscapeMarkup()}[/]");
+            AnsiConsole.MarkupLine($"\n[red][[]IMPACT[]] | Component: {label.ToLowerInvariant()} | Context: {ex.Message.EscapeMarkup()}[/]");
         }
 
         Pause();

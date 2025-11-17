@@ -11,13 +11,13 @@ public static class MergePsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red]�~,�,? [[]IMPACT[]] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]�~,�,? [IMPACT] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]�~,�,? [[]IMPACT[]] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -27,7 +27,7 @@ public static class MergePsxCommand
 
         if (deleteFlag && !apply)
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [IMPACT] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
+            AnsiConsole.MarkupLine("[red]�~,�,? [[]IMPACT[]] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
             return (int)ExitCode.InvalidArgs;
         }
 

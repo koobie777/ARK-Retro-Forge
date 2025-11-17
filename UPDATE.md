@@ -2,6 +2,15 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v0.2.0-rc.8 (2025-11-17)
+
+### DAT Intelligence
+- Rebuilt `config/dat/dat-sources.json` with the official Redump endpoints (plus cue sheet mirrors) so DAT sync can pull every supported catalog without relying on dead archive.org mirrors.
+- DAT downloader now detects zipped payloads from Redump and auto-extracts the real `.dat`, so sync results drop straight into `instances/<profile>/dat/<system>/` ready for planners.
+
+### CLI / UX
+- Fixed Spectre markup strings to escape `[IMPACT]`, preventing the interactive menu from crashing when scan/verify/clean emit error banners (root cause of the log you captured).
+
 ## v0.2.0-rc.7 (2025-11-17)
 
 ### Infrastructure / Release
