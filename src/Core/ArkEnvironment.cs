@@ -28,7 +28,7 @@ public static class ArkEnvironment
     /// </summary>
     public static string GetInstanceRoot()
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "instances", _currentInstance);
+        var path = Path.Join(AppContext.BaseDirectory, "instances", _currentInstance);
         Directory.CreateDirectory(path);
         return path;
     }
