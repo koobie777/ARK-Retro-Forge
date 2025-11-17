@@ -2054,8 +2054,8 @@ public class Program
 
     private static string GetVersion()
     {
-        // Keep in sync with the release candidate tags (e.g., v0.2.0-rc.12)
-        return "0.2.0-rc.12";
+        // Keep in sync with the stable tag (e.g., v1.0.0)
+        return "1.0.0";
     }
 
     private static bool HasInteractiveConsole()
