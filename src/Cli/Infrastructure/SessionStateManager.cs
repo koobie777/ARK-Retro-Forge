@@ -110,4 +110,13 @@ internal static class SessionStateManager
             // Non-fatal: session data is best-effort.
         }
     }
+
+    public static void Reload()
+    {
+        lock (SyncRoot)
+        {
+            _loaded = false;
+            EnsureLoaded();
+        }
+    }
 }

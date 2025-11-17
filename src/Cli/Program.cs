@@ -16,6 +16,7 @@ public class Program
     private static bool _menuDryRun = true;
     private static string? _rememberedRomRoot;
     private static SystemProfile _currentSystem = SystemProfiles.Default;
+    private static bool _sessionPrimed;
     private static readonly HashSet<string> ScanExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",
@@ -51,7 +52,9 @@ public class Program
                 return (int)ExitCode.InvalidArgs;
             }
 
-            return await ShowMenuAsync();
+            var menuExit = await ShowMenuAsync();
+            SessionStateManager.Save();
+            return menuExit;
         }
 
         var command = args[0].ToLowerInvariant();
@@ -83,75 +86,75 @@ public class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"\nÎ“Ã¿Ã¤âˆ©â••Ã… [IMPACT] | Component: {command} | Context: {ex.Message}");
+            CliLogger.LogError($"Unhandled exception while running '{command}'", ex);
+            AnsiConsole.MarkupLine($"\n[red][IMPACT] | Component: {command} | Context: {ex.Message.EscapeMarkup()}[/]");
             return (int)ExitCode.GeneralError;
         }
     }
 
     [RequiresUnreferencedCode("Medical Bay serializes tool results to JSON when requested.")]
-    private static async Task<int> RunMedicalBayAsync(string[] args)
+    private static Task<int> RunMedicalBayAsync(string[] args)
     {
         var json = args.Contains("--json");
-        
         var toolManager = new ToolManager();
         var results = toolManager.CheckAllTools().ToList();
 
         if (json)
         {
-            var jsonOutput = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true 
+            var jsonOutput = System.Text.Json.JsonSerializer.Serialize(results, new System.Text.Json.JsonSerializerOptions
+            {
+                WriteIndented = true
             });
             Console.WriteLine(jsonOutput);
+            return Task.FromResult((int)ExitCode.OK);
         }
-        else
+
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold cyan]Medical Bay[/]");
+        table.AddColumn("Tool");
+        table.AddColumn("Status");
+        table.AddColumn("Version");
+        table.AddColumn("Minimum");
+        table.AddColumn("Location / Notes");
+
+        foreach (var result in results)
         {
-            Console.WriteLine("External Tools Check");
-            Console.WriteLine("Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰");
-            Console.WriteLine($"{"Tool",-15} {"Found",-8} {"Version",-15} {"Min Ver",-10} {"Path",-40}");
-            Console.WriteLine("Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡Î“Ã¶Ã‡");
+            var status = result.IsFound
+                ? "[green]Ready[/]"
+                : result.IsOptional
+                    ? "[yellow]Optional missing[/]"
+                    : "[red]Missing[/]";
+            var notes = result.IsFound
+                ? (result.Path ?? "Detected")
+                : (result.ErrorMessage ?? "Place executable in .\\tools");
 
-            foreach (var result in results)
-            {
-                var found = result.IsFound ? "Î“Â£Ã´" : "Î“Â£Ã¹";
-                var version = result.Version ?? "N/A";
-                var minVersion = result.MinimumVersion ?? "-";
-                var path = result.Path ?? result.ErrorMessage ?? "Not found";
-                
-                if (path.Length > 40)
-                {
-                    path = "..." + path[^37..];
-                }
-
-                Console.WriteLine($"{result.Name,-15} {found,-8} {version,-15} {minVersion,-10} {path,-40}");
-            }
-
-            Console.WriteLine("Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰Î“Ã²Ã‰");
-            
-            var missingRequired = results.Where(r => !r.IsFound).ToList();
-            var foundCount = results.Count(r => r.IsFound);
-            
-            Console.WriteLine($"\nSummary: {foundCount}/{results.Count} tools found");
-            
-            if (missingRequired.Any())
-            {
-                Console.WriteLine("\nÎ“ÃœÃ¡âˆ©â••Ã…  Missing required tools:");
-                foreach (var missing in missingRequired)
-                {
-                    Console.WriteLine($"   - {missing.Name}: {missing.ErrorMessage}");
-                }
-                Console.WriteLine("\nâ‰¡Æ’Ã†Ã­ Next step: Download missing tools and place them in .\\tools\\ directory");
-                return (int)ExitCode.ToolMissing;
-            }
-
-            Console.WriteLine("\nÎ“Â£Â¿ All tools found and ready");
-            Console.WriteLine("\nâ‰¡Æ’Ã†Ã­ Next step: Run 'scan --root <path>' to discover ROMs");
+            table.AddRow(
+                result.Name.EscapeMarkup(),
+                status,
+                (result.Version ?? "n/a").EscapeMarkup(),
+                (result.MinimumVersion ?? "-").EscapeMarkup(),
+                notes.EscapeMarkup());
         }
 
-        await Task.CompletedTask;
-        return (int)ExitCode.OK;
-    }
+        AnsiConsole.Write(table);
 
+        var missingRequired = results.Where(r => !r.IsFound && !r.IsOptional).ToList();
+        if (missingRequired.Count > 0)
+        {
+            var bulletList = string.Join("\n", missingRequired.Select(r => $"[red]- {r.Name}[/]: {(r.ErrorMessage ?? "Place executable in .\\tools").EscapeMarkup()}"));
+            var panel = new Panel(new Markup(bulletList))
+            {
+                Header = new PanelHeader("Action Items"),
+                Border = BoxBorder.Rounded,
+                BorderStyle = Style.Parse("red")
+            };
+            AnsiConsole.Write(panel);
+            AnsiConsole.MarkupLine("\n[bold yellow]Next step:[/] Download the missing tools and drop them into .\\tools then re-run Medical Bay.");
+            return Task.FromResult((int)ExitCode.ToolMissing);
+        }
+
+        AnsiConsole.MarkupLine("\n[green]All required tools detected. Optional tools can be added later.[/]");
+        return Task.FromResult((int)ExitCode.OK);
+    }
     internal static async Task<int> RunScanAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
@@ -362,88 +365,55 @@ public class Program
         AnsiConsole.Write(summary);
 
         return (int)ExitCode.OK;
-    }    private static async Task<int> ShowMenuAsync()
+    }
+    private static async Task<int> ShowMenuAsync()
     {
+        EnsureSessionPrimed();
+
         while (true)
         {
             AnsiConsole.Clear();
             RenderMenuHeader();
 
+            var psxLabel = $"{_currentSystem.Name} Operations";
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
-                    .Title("[bold cyan]Select an operation[/] [grey](Use arrow keys and Enter)[/]")
+                    .Title("[bold cyan]Main Operations[/] [grey](arrow keys + Enter)[/]")
                     .PageSize(10)
-                    .HighlightStyle(Style.Parse("cyan bold"))
                     .AddChoices(
-                        "Medical Bay - Tool Diagnostics",
-                        "Scan - Directory Scan",
-                        "Verify - Hash Integrity",
-                        "Rename - PSX",
-                        "Convert - PSX",
-                        "Merge - PSX BIN Tracks",
-                        "Clean - PSX Organizer",
-                        "Duplicates - PSX",
-                        "DAT - Sync Catalog",
-                        "Extract - Archives",
-                        "Set ROM Root Directory",
-                        "Set Instance Profile",
+                        "Medical Bay",
+                        "ROM Scan & Verify",
+                        psxLabel,
+                        "Archive Extract",
+                        "DAT Sync",
+                        "Settings",
                         _menuDryRun ? "Switch to APPLY mode" : "Switch to DRY-RUN mode",
-                        "Exit"
-                    ));
+                        "Exit"));
 
             switch (choice)
             {
-                case "Medical Bay - Tool Diagnostics":
-                    await RunMedicalBayAsync(new[] { "medical-bay" });
-                    Pause();
+                case "Medical Bay":
+                    await ExecuteMenuAction("Medical Bay", () => RunMedicalBayAsync(Array.Empty<string>()));
                     break;
-                case "Scan - Directory Scan":
-                    await RunMenuScanAsync();
-                    Pause();
+                case "ROM Scan & Verify":
+                    await ShowRomMaintenanceMenuAsync();
                     break;
-                case "Verify - Hash Integrity":
-                    await RunMenuVerifyAsync();
-                    Pause();
+                case string ops when ops == psxLabel:
+                    await ShowPsxOperationsMenuAsync();
                     break;
-                case "Rename - PSX":
-                    await RunMenuRenamePsxAsync();
-                    Pause();
+                case "Archive Extract":
+                    await ExecuteMenuAction("Archive Extract", RunMenuExtractArchivesAsync);
                     break;
-                case "Convert - PSX":
-                    await RunMenuConvertPsxAsync();
-                    Pause();
+                case "DAT Sync":
+                    await ExecuteMenuAction("DAT Sync", RunMenuDatSyncAsync);
                     break;
-                case "Merge - PSX BIN Tracks":
-                    await RunMenuMergePsxAsync();
-                    Pause();
-                    break;
-                case "Clean - PSX Organizer":
-                    await RunMenuCleanPsxAsync();
-                    Pause();
-                    break;
-                case "Duplicates - PSX":
-                    await RunMenuDuplicatesPsxAsync();
-                    Pause();
-                    break;
-                case "DAT - Sync Catalog":
-                    await RunMenuDatSyncAsync();
-                    Pause();
-                    break;
-                case "Extract - Archives":
-                    await RunMenuExtractArchivesAsync();
-                    Pause();
-                    break;
-                case "Set ROM Root Directory":
-                    SetRomRoot();
-                    Pause();
-                    break;
-                case "Set Instance Profile":
-                    SetInstanceProfile();
-                    Pause();
+                case "Settings":
+                    await ShowSettingsMenuAsync();
                     break;
                 case "Switch to APPLY mode":
                 case "Switch to DRY-RUN mode":
                     _menuDryRun = !_menuDryRun;
+                    PersistSession();
                     var mode = _menuDryRun ? "[yellow]DRY-RUN[/]" : "[green]APPLY[/]";
                     AnsiConsole.MarkupLine($"\n[bold]Mode updated:[/] {mode}");
                     Pause();
@@ -454,6 +424,193 @@ public class Program
         }
     }
 
+    private static void EnsureSessionPrimed()
+    {
+        if (_sessionPrimed)
+        {
+            return;
+        }
+
+        _sessionPrimed = true;
+
+        var intro = new Panel("[bold cyan]Welcome back to ARK-Retro-Forge[/]\n[grey]Medical Bay is your first stop. Set your ROM root and active system to reduce prompts later.[/]")
+        {
+            Border = BoxBorder.Rounded,
+            BorderStyle = Style.Parse("teal"),
+            Padding = new Padding(1, 1),
+            Expand = true
+        };
+        AnsiConsole.Write(intro);
+
+        if (string.IsNullOrWhiteSpace(_rememberedRomRoot))
+        {
+            var root = PromptForOptional("Enter ROM root directory (leave blank to decide later)");
+            if (!string.IsNullOrWhiteSpace(root))
+            {
+                _rememberedRomRoot = root;
+            }
+        }
+
+        var adjustSystem = AnsiConsole.Confirm($"Work primarily on {_currentSystem.Name}? (System code: {_currentSystem.Code.ToUpperInvariant()})", false);
+        if (adjustSystem)
+        {
+            _currentSystem = PromptForSystemProfile("Select default system profile");
+        }
+
+        PersistSession();
+    }
+
+    private static async Task ShowRomMaintenanceMenuAsync()
+    {
+        while (true)
+        {
+            var choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[bold cyan]ROM Cache & Hashing[/]")
+                    .AddChoices(
+                        "Scan directories",
+                        "Verify hashes",
+                        "Back"));
+
+            switch (choice)
+            {
+                case "Scan directories":
+                    await ExecuteMenuAction("Scan", RunMenuScanAsync);
+                    break;
+                case "Verify hashes":
+                    await ExecuteMenuAction("Verify", RunMenuVerifyAsync);
+                    break;
+                case "Back":
+                    return;
+            }
+        }
+    }
+
+    private static async Task ShowPsxOperationsMenuAsync()
+    {
+        while (true)
+        {
+            var choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title($"[bold cyan]{_currentSystem.Name} Toolkit[/]")
+                    .AddChoices(
+                        "Rename library",
+                        "Convert images",
+                        "Merge multi-track BINs",
+                        "Clean library",
+                        "Find duplicates",
+                        "Back"));
+
+            switch (choice)
+            {
+                case "Rename library":
+                    await ExecuteMenuAction("Rename", RunMenuRenamePsxAsync);
+                    break;
+                case "Convert images":
+                    await ExecuteMenuAction("Convert", RunMenuConvertPsxAsync);
+                    break;
+                case "Merge multi-track BINs":
+                    await ExecuteMenuAction("Merge", RunMenuMergePsxAsync);
+                    break;
+                case "Clean library":
+                    await ExecuteMenuAction("Clean", RunMenuCleanPsxAsync);
+                    break;
+                case "Find duplicates":
+                    await ExecuteMenuAction("Duplicates", RunMenuDuplicatesPsxAsync);
+                    break;
+                case "Back":
+                    return;
+            }
+        }
+    }
+
+    private static Task ShowSettingsMenuAsync()
+    {
+        while (true)
+        {
+            var choice = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[bold cyan]Settings[/]")
+                    .AddChoices(
+                        "Set ROM root",
+                        "Set active system",
+                        "Set instance profile",
+                        "View session info",
+                        "Back"));
+
+            switch (choice)
+            {
+                case "Set ROM root":
+                    SetRomRoot();
+                    Pause();
+                    break;
+                case "Set active system":
+                    SetSystemProfile();
+                    Pause();
+                    break;
+                case "Set instance profile":
+                    SetInstanceProfile();
+                    Pause();
+                    break;
+                case "View session info":
+                    RenderSessionInfo();
+                    Pause();
+                    break;
+                case "Back":
+                    return Task.CompletedTask;
+            }
+        }
+    }
+
+    private static void RenderSessionInfo()
+    {
+        var info = new Table().Border(TableBorder.Rounded);
+        info.AddColumn("Key");
+        info.AddColumn("Value");
+        info.AddRow("Instance", InstancePathResolver.CurrentInstance.EscapeMarkup());
+        info.AddRow("ROM root", string.IsNullOrWhiteSpace(_rememberedRomRoot) ? "[red]Not set[/]" : _rememberedRomRoot.EscapeMarkup());
+        info.AddRow("System", $"{_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})");
+        info.AddRow("Mode", _menuDryRun ? "DRY-RUN" : "APPLY");
+        AnsiConsole.Write(info);
+    }
+
+    private static SystemProfile PromptForSystemProfile(string title)
+        => AnsiConsole.Prompt(
+            new SelectionPrompt<SystemProfile>()
+                .Title($"[white]{title}[/]")
+                .PageSize(5)
+                .UseConverter(p => $"{p.Name} ({p.Code.ToUpperInvariant()}) - {p.Description}")
+                .AddChoices(SystemProfiles.All));
+
+    private static void SetSystemProfile()
+    {
+        _currentSystem = PromptForSystemProfile("Select default system profile");
+        PersistSession();
+        AnsiConsole.MarkupLine($"[green]System set to {_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})[/]");
+    }
+
+    private static async Task ExecuteMenuAction(string label, Func<Task<int>> action)
+    {
+        try
+        {
+            var exitCode = await action();
+            var status = exitCode == (int)ExitCode.OK
+                ? "[green]Completed[/]"
+                : $"[yellow]Exit code {(ExitCode)exitCode}[/]";
+            AnsiConsole.MarkupLine($"\n[bold]{label}[/]: {status}");
+        }
+        catch (OperationCanceledException)
+        {
+            AnsiConsole.MarkupLine("\n[yellow]Operation cancelled by user.[/]");
+        }
+        catch (Exception ex)
+        {
+            CliLogger.LogError($"Menu action '{label}' failed", ex);
+            AnsiConsole.MarkupLine($"\n[red][IMPACT] | Component: {label.ToLowerInvariant()} | Context: {ex.Message.EscapeMarkup()}[/]");
+        }
+
+        Pause();
+    }
     private static void RenderMenuHeader()
     {
         var modeText = _menuDryRun
@@ -464,13 +621,12 @@ public class Program
             ? "[red]ROM root: Not set[/]"
             : $"[dim]ROM root:[/] {_rememberedRomRoot.EscapeMarkup()}";
 
+        var systemText = $"[dim]System:[/] {_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})";
         var instanceText = $"[dim]Instance:[/] {InstancePathResolver.CurrentInstance.EscapeMarkup()}";
         var tip = "[grey]Tip: Use arrow keys to navigate and Enter to run. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
         var version = GetVersion();
 
-        var header = new Panel(
-            new Markup($"[bold silver]ARK-Retro-Forge v{version}[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{instanceText}\n\n{tip}")
-        )
+        var header = new Panel(new Markup($"[bold silver]ARK-Retro-Forge v{version}[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{systemText}\n{instanceText}\n\n{tip}"))
         {
             Border = BoxBorder.Rounded,
             BorderStyle = Style.Parse("cyan"),
@@ -483,12 +639,12 @@ public class Program
         AnsiConsole.WriteLine();
     }
 
-    private static async Task RunMenuScanAsync()
+    private static async Task<int> RunMenuScanAsync()
     {
         var root = EnsureRomRoot("Enter root folder to scan");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -498,15 +654,15 @@ public class Program
             args.Add("--recursive");
         }
 
-        await RunScanAsync(args.ToArray());
+        return await RunScanAsync(args.ToArray());
     }
 
-    private static async Task RunMenuVerifyAsync()
+    private static async Task<int> RunMenuVerifyAsync()
     {
         var root = EnsureRomRoot("Enter root folder to verify");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -516,15 +672,15 @@ public class Program
             args.Add("--recursive");
         }
 
-        await RunVerifyAsync(args.ToArray());
+        return await RunVerifyAsync(args.ToArray());
     }
 
-    private static async Task RunMenuRenamePsxAsync()
+    private static async Task<int> RunMenuRenamePsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -551,15 +707,15 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: rename will preview changes only.[/]");
         }
 
-        await RenamePsxCommand.RunAsync(args.ToArray());
+        return await RenamePsxCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuConvertPsxAsync()
+    private static async Task<int> RunMenuConvertPsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -590,15 +746,15 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: conversion plans will not create CHDs.[/]");
         }
 
-        await ConvertPsxCommand.RunAsync(args.ToArray());
+        return await ConvertPsxCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuMergePsxAsync()
+    private static async Task<int> RunMenuMergePsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -624,15 +780,15 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: merge will only show planned operations.[/]");
         }
 
-        await MergePsxCommand.RunAsync(args.ToArray());
+        return await MergePsxCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuDuplicatesPsxAsync()
+    private static async Task<int> RunMenuDuplicatesPsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -648,12 +804,15 @@ public class Program
             args.Add("--json");
         }
 
-        await DuplicatesPsxCommand.RunAsync(args.ToArray());
+        return await DuplicatesPsxCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuDatSyncAsync()
+    private static async Task<int> RunMenuDatSyncAsync()
     {
-        var system = PromptForOptional("Filter by system code (psx, ps2, gba, etc.) or leave blank");
+        var defaultSystem = _currentSystem.Code;
+        var prompt = $"Filter by system code (psx, ps2, gba, etc.) or leave blank [{defaultSystem}]";
+        var systemInput = PromptForOptional(prompt);
+        var system = string.IsNullOrWhiteSpace(systemInput) ? defaultSystem : systemInput;
         var force = PromptYesNo("Force download even if cached?", false);
 
         var args = new List<string> { "dat", "sync" };
@@ -667,15 +826,15 @@ public class Program
             args.Add("--force");
         }
 
-        await DatSyncCommand.RunAsync(args.ToArray());
+        return await DatSyncCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuCleanPsxAsync()
+    private static async Task<int> RunMenuCleanPsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
@@ -734,15 +893,15 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: cleaner will preview without moving files.[/]");
         }
 
-        await CleanPsxCommand.RunAsync(args.ToArray());
+        return await CleanPsxCommand.RunAsync(args.ToArray());
     }
 
-    private static async Task RunMenuExtractArchivesAsync()
+    private static async Task<int> RunMenuExtractArchivesAsync()
     {
         var root = EnsureRomRoot("Enter archive root folder");
         if (string.IsNullOrWhiteSpace(root))
         {
-            return;
+            return (int)ExitCode.InvalidArgs;
         }
 
         var output = PromptForOptional("Enter output directory (blank for root)");
@@ -774,7 +933,7 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: extraction will only preview work.[/]");
         }
 
-        await ExtractArchivesCommand.RunAsync(args.ToArray());
+        return await ExtractArchivesCommand.RunAsync(args.ToArray());
     }
 
     private static string PromptForPath(string prompt)
@@ -834,6 +993,7 @@ public class Program
         }
 
         _rememberedRomRoot = root;
+        PersistSession();
         return root;
     }
 
@@ -850,6 +1010,7 @@ public class Program
             _rememberedRomRoot = newRoot;
             AnsiConsole.MarkupLine($"[green]ROM root set to {newRoot.EscapeMarkup()}[/]");
         }
+        PersistSession();
     }
 
     private static void SetInstanceProfile()
@@ -858,13 +1019,30 @@ public class Program
         if (string.IsNullOrWhiteSpace(newInstance))
         {
             InstancePathResolver.SetInstanceName("default");
-            AnsiConsole.MarkupLine("[yellow]Switched to default instance profile.[/]");
         }
         else
         {
             InstancePathResolver.SetInstanceName(newInstance);
-            AnsiConsole.MarkupLine($"[green]Instance profile set to {InstancePathResolver.CurrentInstance.EscapeMarkup()}[/]");
         }
+
+        SessionStateManager.Reload();
+        var session = SessionStateManager.State;
+        _rememberedRomRoot = session.RomRoot;
+        _menuDryRun = session.MenuDryRun;
+        _currentSystem = SystemProfiles.Resolve(session.SystemCode);
+        _sessionPrimed = false;
+        PersistSession();
+        AnsiConsole.MarkupLine($"[green]Instance profile set to {InstancePathResolver.CurrentInstance.EscapeMarkup()}[/]");
+    }
+
+    private static void PersistSession()
+    {
+        SessionStateManager.Update(state => state with
+        {
+            RomRoot = _rememberedRomRoot,
+            MenuDryRun = _menuDryRun,
+            SystemCode = _currentSystem.Code
+        });
     }
 
     private static bool HasFlag(string[] args, string flag)
@@ -1122,6 +1300,8 @@ public class Program
         args = filtered.ToArray();
     }
 }
+
+
 
 
 

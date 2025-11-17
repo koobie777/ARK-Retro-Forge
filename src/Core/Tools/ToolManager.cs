@@ -37,7 +37,8 @@ public class ToolManager
             {
                 Name = toolName,
                 IsFound = false,
-                ErrorMessage = "Unknown tool"
+                ErrorMessage = "Unknown tool",
+                IsOptional = false
             };
         }
 
@@ -49,7 +50,8 @@ public class ToolManager
                 Name = tool.Name,
                 IsFound = false,
                 MinimumVersion = tool.MinimumVersion,
-                ErrorMessage = $"Not found in {_toolsDirectory}"
+                ErrorMessage = $"Not found in {_toolsDirectory}",
+                IsOptional = tool.IsOptional
             };
         }
 
@@ -63,7 +65,8 @@ public class ToolManager
             Path = toolPath,
             Version = versionInfo,
             MinimumVersion = tool.MinimumVersion,
-            MeetsMinimumVersion = true // Simplified - would need actual version comparison
+            MeetsMinimumVersion = true, // Simplified - would need actual version comparison
+            IsOptional = tool.IsOptional
         };
     }
 

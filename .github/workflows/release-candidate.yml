@@ -61,6 +61,7 @@ jobs:
         New-Item -ItemType Directory -Force -Path "$root/tools" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/plugins" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/config/emulators" | Out-Null
+        New-Item -ItemType Directory -Force -Path "$root/config/dat" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/db" | Out-Null
         New-Item -ItemType Directory -Force -Path "$root/logs" | Out-Null
         Copy-Item -Path ./publish/cli-win-x64/ark-retro-forge.exe -Destination $root/
@@ -69,6 +70,7 @@ jobs:
         Copy-Item -Path ./plugins/README.md -Destination "$root/plugins/" -ErrorAction SilentlyContinue
         Copy-Item -Path ./config/README.md -Destination "$root/config/" -ErrorAction SilentlyContinue
         Copy-Item -Path ./config/emulators/README.md -Destination "$root/config/emulators/" -ErrorAction SilentlyContinue
+        Copy-Item -Path ./config/dat/* -Destination "$root/config/dat/" -Recurse -Force -ErrorAction SilentlyContinue
 
     - name: Generate checksums
       shell: pwsh

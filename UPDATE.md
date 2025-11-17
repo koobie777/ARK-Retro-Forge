@@ -18,6 +18,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 ### Infrastructure / Logging
 - Introduced `ArkEnvironment` + `SessionStateManager` to centralize instance path resolution, settings persistence, and Serilog CLI logging.
 - Release Candidate workflow now avoids using `VERSION` as an environment variable name, preventing MSBuild from misparsing RC tags (e.g., `v0.2.0-rc.6`).
+- RC packaging now copies `config/dat/*` so the bundled DAT sync command works out-of-the-box in portable builds.
 - README/AGENTS updated with Medical Bay terminology, DAT intelligence, and the RC branch workflow so doc parity matches the tooling.
 
 ## v0.2.0-rc.5 (2025-11-16)
