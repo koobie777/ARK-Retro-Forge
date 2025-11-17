@@ -11,10 +11,10 @@ internal static class CliLogger
 
     public static void Initialize()
     {
-        var logsDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
+        var logsDirectory = Path.Join(AppContext.BaseDirectory, "logs");
         Directory.CreateDirectory(logsDirectory);
 
-        _logFile = Path.Combine(logsDirectory, $"ark-cli-{DateTime.UtcNow:yyyyMMdd}.log");
+        _logFile = Path.Join(logsDirectory, $"ark-cli-{DateTime.UtcNow:yyyyMMdd}.log");
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
             if (args.ExceptionObject is Exception ex)
