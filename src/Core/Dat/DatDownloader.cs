@@ -72,7 +72,7 @@ public sealed class DatDownloader
     {
         Span<byte> header = stackalloc byte[4];
         using var stream = File.OpenRead(path);
-        if (stream.Read(header) < 4)
+        if (stream.Read(header) != 4)
         {
             return false;
         }
