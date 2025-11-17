@@ -166,7 +166,7 @@ jobs:
         } else {
           $notes = "See UPDATE.md for release notes."
         }
-        $header = "Release Candidate build. Expect Med Bay clearance before APPLY runs.`n`n"
+        $header = "Release Candidate build. Expect Medical Bay clearance before APPLY runs.`n`n"
         ($header + $notes) | Out-File -FilePath ./RELEASE_NOTES_RC.md -Encoding UTF8
 
     - name: Upload workflow artifact
