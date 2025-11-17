@@ -24,9 +24,20 @@ jobs:
       contents: write
     env:
       RELEASE_TAG: ${{ github.ref_name }}
-      CHECKOUT_REF: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.target_ref != '' ? github.event.inputs.target_ref : github.ref }}
 
     steps:
+    - name: Resolve checkout ref
+      shell: pwsh
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        TARGET_REF: ${{ github.event.inputs.target_ref }}
+      run: |
+        $refToUse = $env:GITHUB_REF
+        if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace($env:TARGET_REF)) {
+          $refToUse = $env:TARGET_REF
+        }
+        Add-Content -Path $env:GITHUB_ENV -Value "CHECKOUT_REF=$refToUse"
     - name: Checkout
       uses: actions/checkout@v4
       with:
