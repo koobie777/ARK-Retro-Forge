@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using ARK.Cli.Infrastructure;
 using ARK.Core.Dat;
 using Spectre.Console;
+using HeaderMetadata = ARK.Cli.Infrastructure.ConsoleDecorations.HeaderMetadata;
 
 namespace ARK.Cli.Commands.Dat;
 
@@ -22,16 +23,21 @@ public static class DatSyncCommand
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]Failed to load DAT catalog ({CatalogPath}): {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]Failed to load DAT catalog ({Markup.Escape(CatalogPath)}): {Markup.Escape(ex.Message)}[/]");
             return (int)ExitCode.GeneralError;
         }
 
         var sources = catalog.FilterBySystem(system);
+        ConsoleDecorations.RenderOperationHeader(
+            "DAT Sync",
+            new HeaderMetadata("System", string.IsNullOrWhiteSpace(system) ? "All" : system.ToUpperInvariant()),
+            new HeaderMetadata("Force", force ? "Yes" : "No"),
+            new HeaderMetadata("Instance", InstancePathResolver.CurrentInstance));
         if (sources.Count == 0)
         {
             AnsiConsole.MarkupLine(system == null
                 ? "[yellow]No DAT sources defined in catalog.[/]"
-                : $"[yellow]No DAT sources defined for system '{system}'.[/]");
+                : $"[yellow]No DAT sources defined for system '{Markup.Escape(system)}'.[/]");
             return (int)ExitCode.OK;
         }
 
@@ -48,7 +54,7 @@ public static class DatSyncCommand
             {
                 foreach (var source in sources)
                 {
-                    ctx.Status = $"Downloading [cyan]{source.Name}[/]";
+                    ctx.Status = $"Downloading [cyan]{Markup.Escape(source.Name)}[/]";
                     var systemDirectory = Path.Combine(datRoot, source.System);
                     try
                     {
@@ -57,7 +63,7 @@ public static class DatSyncCommand
                     }
                     catch (Exception ex)
                     {
-                        AnsiConsole.MarkupLine($"[red]  Failed to download {source.Name}: {ex.Message}[/]");
+                        AnsiConsole.MarkupLine($"[red]  Failed to download {Markup.Escape(source.Name)}: {Markup.Escape(ex.Message)}[/]");
                     }
                 }
             });

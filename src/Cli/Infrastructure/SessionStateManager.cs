@@ -7,6 +7,7 @@ internal sealed record SessionState
     public string? RomRoot { get; init; }
     public string SystemCode { get; init; } = "psx";
     public bool MenuDryRun { get; init; } = true;
+    public bool PreventSleep { get; init; }
 }
 
 internal static class SessionStateManager

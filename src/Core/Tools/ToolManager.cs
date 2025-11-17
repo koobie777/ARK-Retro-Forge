@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ARK.Core.Tools;
 
@@ -11,14 +13,68 @@ public class ToolManager
     
     private static readonly ExternalTool[] KnownTools =
     [
-        new() { Name = "chdman", ExecutableName = "chdman.exe", MinimumVersion = "0.261", Description = "MAME CHD Manager - PS1/PS2/Dreamcast CHD compression" },
-        new() { Name = "maxcso", ExecutableName = "maxcso.exe", Description = "PSP/PS2 CSO compression", IsOptional = true },
-        new() { Name = "wit", ExecutableName = "wit.exe", Description = "Wii Image Tool - Wii/WiiU image management", IsOptional = true },
-        new() { Name = "dolphin-tool", ExecutableName = "dolphin-tool.exe", Description = "Dolphin Tool - GameCube/Wii RVZ compression", IsOptional = true },
-        new() { Name = "wuxtool", ExecutableName = "wuxtool.exe", Description = "Wii U WUX compression", IsOptional = true },
-        new() { Name = "nsz", ExecutableName = "nsz.exe", Description = "Nintendo Switch NSZ compression", IsOptional = true },
-        new() { Name = "ffmpeg", ExecutableName = "ffmpeg.exe", Description = "Media file processing", IsOptional = true }
+        new()
+        {
+            Name = "chdman",
+            ExecutableName = "chdman.exe",
+            MinimumVersion = "0.261",
+            Description = "MAME CHD Manager - PS1/PS2/Dreamcast CHD compression",
+            VersionArguments = new[] { "-version" },
+            VersionPattern = @"\d+(\.\d+)+"
+        },
+        new()
+        {
+            Name = "maxcso",
+            ExecutableName = "maxcso.exe",
+            Description = "PSP/PS2 CSO compression",
+            IsOptional = true,
+            VersionArguments = new[] { "--version", "-version" }
+        },
+        new()
+        {
+            Name = "wit",
+            ExecutableName = "wit.exe",
+            Description = "Wii Image Tool - Wii/WiiU image management",
+            IsOptional = true,
+            VersionArguments = new[] { "--version", "-version" }
+        },
+        new()
+        {
+            Name = "dolphin-tool",
+            ExecutableName = "dolphin-tool.exe",
+            Description = "Dolphin Tool - GameCube/Wii RVZ compression",
+            IsOptional = true,
+            VersionArguments = new[] { "--version", "-version" }
+        },
+        new()
+        {
+            Name = "wuxtool",
+            ExecutableName = "wuxtool.exe",
+            Description = "Wii U WUX compression",
+            IsOptional = true,
+            VersionArguments = new[] { "--version", "-version" }
+        },
+        new()
+        {
+            Name = "nsz",
+            ExecutableName = "nsz.exe",
+            Description = "Nintendo Switch NSZ compression",
+            IsOptional = true,
+            VersionArguments = new[] { "--version", "-version" }
+        },
+        new()
+        {
+            Name = "ffmpeg",
+            ExecutableName = "ffmpeg.exe",
+            Description = "Media file processing",
+            IsOptional = true,
+            VersionArguments = new[] { "-version" }
+        }
     ];
+
+    private static readonly string[] DefaultVersionArguments = new[] { "--version", "-version", "-v" };
+    private const int VersionCommandTimeoutMilliseconds = 3000;
+    private static readonly Regex DefaultVersionRegex = new(@"\d+(\.\d+)+", RegexOptions.Compiled);
 
     public ToolManager(string? toolsDirectory = null)
     {
@@ -56,7 +112,7 @@ public class ToolManager
         }
 
         // Try to get version (simplified - would need tool-specific logic)
-        var versionInfo = GetToolVersion(toolPath);
+        var versionInfo = GetToolVersion(toolPath, tool);
 
         return new ToolCheckResult
         {
@@ -139,7 +195,34 @@ public class ToolManager
         return (process.ExitCode, outputBuilder.ToString(), errorBuilder.ToString());
     }
 
-    private static string? GetToolVersion(string toolPath)
+    private static string? GetToolVersion(string toolPath, ExternalTool tool)
+    {
+        var version = TryGetEmbeddedVersion(toolPath);
+        if (!string.IsNullOrWhiteSpace(version))
+        {
+            return version;
+        }
+
+        var arguments = tool.VersionArguments is { Length: > 0 } ? tool.VersionArguments : DefaultVersionArguments;
+        foreach (var args in arguments)
+        {
+            var output = TryRunVersionCommand(toolPath, args);
+            if (string.IsNullOrWhiteSpace(output))
+            {
+                continue;
+            }
+
+            var parsed = ParseVersionFromOutput(output, tool.VersionPattern);
+            if (!string.IsNullOrWhiteSpace(parsed))
+            {
+                return parsed;
+            }
+        }
+
+        return null;
+    }
+
+    private static string? TryGetEmbeddedVersion(string toolPath)
     {
         try
         {
@@ -150,5 +233,96 @@ public class ToolManager
         {
             return null;
         }
+    }
+
+    private static string? TryRunVersionCommand(string toolPath, string arguments)
+    {
+        if (string.IsNullOrWhiteSpace(arguments))
+        {
+            return null;
+        }
+
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = toolPath,
+                Arguments = arguments,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            var outputBuilder = new StringBuilder();
+            var errorBuilder = new StringBuilder();
+
+            process.OutputDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    outputBuilder.AppendLine(e.Data);
+                }
+            };
+
+            process.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    errorBuilder.AppendLine(e.Data);
+                }
+            };
+
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            if (!process.WaitForExit(VersionCommandTimeoutMilliseconds))
+            {
+                try
+                {
+                    process.Kill();
+                }
+                catch
+                {
+                    // ignored
+                }
+            }
+
+            var combined = outputBuilder.ToString() + errorBuilder.ToString();
+            return string.IsNullOrWhiteSpace(combined) ? null : combined;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ParseVersionFromOutput(string output, string? pattern)
+    {
+        if (string.IsNullOrWhiteSpace(output))
+        {
+            return null;
+        }
+
+        Regex regex;
+        if (!string.IsNullOrWhiteSpace(pattern))
+        {
+            regex = new Regex(pattern, RegexOptions.Compiled | RegexOptions.IgnoreCase);
+        }
+        else
+        {
+            regex = DefaultVersionRegex;
+        }
+
+        var match = regex.Match(output);
+        if (match.Success)
+        {
+            return match.Value;
+        }
+
+        var firstLine = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return firstLine?.Trim();
     }
 }

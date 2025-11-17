@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ARK.Core.Dat;
@@ -52,13 +51,34 @@ public sealed class DatMetadataIndex
             return string.Empty;
         }
 
-        var builder = new StringBuilder(title.Trim());
+        var builder = new System.Text.StringBuilder(title.Trim());
         if (!string.IsNullOrWhiteSpace(region))
         {
             builder.Append(" (").Append(region.Trim()).Append(')');
         }
 
         return Normalize(builder.ToString());
+    }
+
+    public IReadOnlyList<DatTitleMetadata> FindSimilar(string? title, int maxResults = 5)
+    {
+        if (string.IsNullOrWhiteSpace(title) || maxResults <= 0)
+        {
+            return Array.Empty<DatTitleMetadata>();
+        }
+
+        var normalized = Normalize(title);
+        return _entries
+            .Select(entry => new
+            {
+                Metadata = entry.Value,
+                Distance = CalculateDistance(normalized, entry.Key)
+            })
+            .OrderBy(x => x.Distance)
+            .ThenBy(x => x.Metadata.Title, StringComparer.OrdinalIgnoreCase)
+            .Take(maxResults)
+            .Select(x => x.Metadata)
+            .ToList();
     }
 
     private void ProcessFile(string path)
@@ -166,6 +186,44 @@ public sealed class DatMetadataIndex
         var withoutDisc = DiscPattern.Replace(value, string.Empty);
         var collapsedWhitespace = Regex.Replace(withoutDisc, @"\s+", " ");
         return collapsedWhitespace.Trim().ToUpperInvariant();
+    }
+
+    private static int CalculateDistance(string source, string target)
+    {
+        if (string.Equals(source, target, StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        var n = source.Length;
+        var m = target.Length;
+        if (n == 0 || m == 0)
+        {
+            return Math.Max(n, m);
+        }
+
+        var dp = new int[n + 1, m + 1];
+        for (var i = 0; i <= n; i++)
+        {
+            dp[i, 0] = i;
+        }
+        for (var j = 0; j <= m; j++)
+        {
+            dp[0, j] = j;
+        }
+
+        for (var i = 1; i <= n; i++)
+        {
+            for (var j = 1; j <= m; j++)
+            {
+                var cost = char.ToUpperInvariant(source[i - 1]) == char.ToUpperInvariant(target[j - 1]) ? 0 : 1;
+                dp[i, j] = Math.Min(
+                    Math.Min(dp[i - 1, j] + 1, dp[i, j - 1] + 1),
+                    dp[i - 1, j - 1] + cost);
+            }
+        }
+
+        return dp[n, m];
     }
 }
 

@@ -22,18 +22,36 @@ public sealed class DatDownloader
             return DatDownloadResult.Skipped(destinationPath);
         }
 
-        using var response = await _httpClient.GetAsync(source.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        var tempPath = Path.Combine(destinationDirectory, $"{targetFileName}.{Guid.NewGuid():N}.download");
+        SafeDelete(tempPath);
 
-        await using (var destinationStream = File.Create(destinationPath))
-        await using (var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken))
+        try
         {
-            await contentStream.CopyToAsync(destinationStream, cancellationToken);
+            using var response = await _httpClient.GetAsync(source.Url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            response.EnsureSuccessStatusCode();
+
+            await using (var destinationStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            await using (var contentStream = await response.Content.ReadAsStreamAsync(cancellationToken))
+            {
+                await contentStream.CopyToAsync(destinationStream, cancellationToken);
+            }
+
+            WaitForFileRelease(tempPath);
+
+            if (IsZipArchive(tempPath))
+            {
+                destinationPath = ExtractZipArchive(tempPath, destinationDirectory);
+            }
+            else
+            {
+                SafeMove(tempPath, destinationPath, overwrite: true);
+            }
         }
-
-        if (IsZipArchive(destinationPath))
+        catch
         {
-            destinationPath = ExtractZipArchive(destinationPath, destinationDirectory);
+            SafeDelete(tempPath);
+
+            throw;
         }
 
         return DatDownloadResult.Downloaded(destinationPath);
@@ -95,16 +113,16 @@ public sealed class DatDownloader
         try
         {
             entry.ExtractToFile(extractedPath, overwrite: true);
-            File.Delete(zipPath);
+            WaitForFileRelease(extractedPath);
         }
         catch
         {
-            if (File.Exists(extractedPath))
-            {
-                File.Delete(extractedPath);
-            }
-
+            SafeDelete(extractedPath);
             throw;
+        }
+        finally
+        {
+            SafeDelete(zipPath);
         }
 
         return extractedPath;
@@ -143,6 +161,86 @@ public sealed class DatDownloader
         }
 
         return candidate;
+    }
+    private static void SafeDelete(string path, int attempts = 5, int delayMs = 200)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                File.Delete(path);
+                return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                System.Threading.Thread.Sleep(delayMs);
+            }
+            catch (UnauthorizedAccessException) when (attempt < attempts)
+            {
+                System.Threading.Thread.Sleep(delayMs);
+            }
+        }
+    }
+
+    private static void SafeMove(string source, string destination, bool overwrite)
+    {
+        for (var attempt = 1; attempt <= 5; attempt++)
+        {
+            try
+            {
+                WaitForFileRelease(source);
+                if (overwrite && File.Exists(destination))
+                {
+                    WaitForFileRelease(destination);
+                    File.Delete(destination);
+                }
+
+                File.Move(source, destination);
+                return;
+            }
+            catch (IOException) when (attempt < 5)
+            {
+                System.Threading.Thread.Sleep(200);
+            }
+            catch (UnauthorizedAccessException) when (attempt < 5)
+            {
+                System.Threading.Thread.Sleep(200);
+            }
+        }
+
+        if (overwrite && File.Exists(destination))
+        {
+            File.Delete(destination);
+        }
+
+        File.Move(source, destination);
+    }
+
+    private static void WaitForFileRelease(string path, int attempts = 30, int delayMs = 300)
+    {
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                using (File.Open(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    return;
+                }
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                System.Threading.Thread.Sleep(delayMs);
+            }
+            catch (UnauthorizedAccessException) when (attempt < attempts)
+            {
+                System.Threading.Thread.Sleep(delayMs);
+            }
+        }
     }
 }
 

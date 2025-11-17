@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Cli.Commands.PSX;
@@ -7,7 +9,9 @@ using ARK.Cli.Commands.Dat;
 using ARK.Core.Tools;
 using ARK.Core.Hashing;
 using ARK.Core.Database;
+using ARK.Core.Systems.PSX;
 using Spectre.Console;
+using HeaderMetadata = ARK.Cli.Infrastructure.ConsoleDecorations.HeaderMetadata;
 
 namespace ARK.Cli;
 
@@ -17,6 +21,7 @@ public class Program
     private static string? _rememberedRomRoot;
     private static SystemProfile _currentSystem = SystemProfiles.Default;
     private static bool _sessionPrimed;
+    private static bool _preventSleep;
     private static readonly HashSet<string> ScanExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".bin", ".cue", ".iso", ".chd", ".cso", ".pbp",
@@ -36,12 +41,15 @@ public class Program
     {
         CliLogger.Initialize();
         ParseGlobalArgs(ref args);
+        TryApplyConsoleDefaults();
         PrintBanner();
 
         var session = SessionStateManager.State;
         _menuDryRun = session.MenuDryRun;
         _rememberedRomRoot = session.RomRoot;
         _currentSystem = SystemProfiles.Resolve(session.SystemCode);
+        _preventSleep = session.PreventSleep;
+        ApplySleepInhibition();
         CliLogger.LogInfo($"Session restored | Root: {_rememberedRomRoot ?? "<unset>"} | System: {_currentSystem.Code} | Mode: {(_menuDryRun ? "DRY" : "APPLY")}");
 
         if (args.Length == 0)
@@ -63,17 +71,17 @@ public class Program
         {
             return command switch
             {
-                "doctor" or "medical" or "medical-bay" => await RunMedicalBayAsync(args),
-                "scan" => await RunScanAsync(args),
-                "verify" => await RunVerifyAsync(args),
-                "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RenamePsxCommand.RunAsync(args),
-                "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await ConvertPsxCommand.RunAsync(args),
-                "merge" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await MergePsxCommand.RunAsync(args),
-                "clean" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await CleanPsxCommand.RunAsync(args),
-                "duplicates" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
-                "dupes" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await DuplicatesPsxCommand.RunAsync(args),
-                "extract" when args.Length > 1 && args[1].Equals("archives", StringComparison.OrdinalIgnoreCase) => await ExtractArchivesCommand.RunAsync(args),
-                "dat" when args.Length > 1 && args[1].Equals("sync", StringComparison.OrdinalIgnoreCase) => await DatSyncCommand.RunAsync(args),
+                "doctor" or "medical" or "medical-bay" => await RunWithOperationScope("medical bay", () => RunMedicalBayAsync(args)),
+                "scan" => await RunWithOperationScope("scan", () => RunScanAsync(args)),
+                "verify" => await RunWithOperationScope("verify", () => RunVerifyAsync(args)),
+                "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("rename psx", () => RenamePsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("convert psx", () => ConvertPsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "merge" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("merge psx", () => MergePsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "clean" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("clean psx", () => CleanPsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "duplicates" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("duplicates psx", () => DuplicatesPsxCommand.RunAsync(args)),
+                "dupes" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("duplicates psx", () => DuplicatesPsxCommand.RunAsync(args)),
+                "extract" when args.Length > 1 && args[1].Equals("archives", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("extract archives", () => ExtractArchivesCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "dat" when args.Length > 1 && args[1].Equals("sync", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("dat sync", () => DatSyncCommand.RunAsync(args)),
                 "--help" or "-h" or "help" => ShowHelp(),
                 "--version" or "-v" => ShowVersion(),
                 _ => ShowUnknownCommand(command)
@@ -87,13 +95,15 @@ public class Program
         catch (Exception ex)
         {
             CliLogger.LogError($"Unhandled exception while running '{command}'", ex);
-            AnsiConsole.MarkupLine($"\n[red][[]IMPACT[]] | Component: {command} | Context: {ex.Message.EscapeMarkup()}[/]");
+            var context = Markup.Escape(ex.Message);
+            var component = Markup.Escape(command);
+            AnsiConsole.MarkupLine($"\n[red][[IMPACT]] | Component: {component} | Context: {context}[/]");
             return (int)ExitCode.GeneralError;
         }
     }
 
     [RequiresUnreferencedCode("Medical Bay serializes tool results to JSON when requested.")]
-    private static Task<int> RunMedicalBayAsync(string[] args)
+    private static async Task<int> RunMedicalBayAsync(string[] args)
     {
         var json = args.Contains("--json");
         var toolManager = new ToolManager();
@@ -106,10 +116,65 @@ public class Program
                 WriteIndented = true
             });
             Console.WriteLine(jsonOutput);
-            return Task.FromResult((int)ExitCode.OK);
+            return (int)ExitCode.OK;
         }
 
-        var table = new Table().Border(TableBorder.Rounded).Title("[bold cyan]Medical Bay[/]");
+        var session = SessionStateManager.State;
+        var systemProfile = SystemProfiles.Resolve(session.SystemCode);
+        var datSummaries = DatStatusReporter.Inspect().ToList();
+
+        var romRootMissing = string.IsNullOrWhiteSpace(session.RomRoot);
+        var romRootValue = romRootMissing ? "[red]Not set[/]" : session.RomRoot!;
+
+        ConsoleDecorations.RenderOperationHeader(
+            "Medical Bay",
+            new HeaderMetadata("Instance", InstancePathResolver.CurrentInstance),
+            new HeaderMetadata("ROM Root", romRootValue, IsMarkup: romRootMissing),
+            new HeaderMetadata("System", $"{systemProfile.Name} ({systemProfile.Code.ToUpperInvariant()})"),
+            new HeaderMetadata(
+                "DAT Catalogs",
+                BuildDatHeaderSummary(datSummaries),
+                IsMarkup: true));
+
+        RenderToolTable(results);
+        RenderDatSnapshot(datSummaries);
+
+        var missingRequired = results.Where(r => !r.IsFound && !r.IsOptional).ToList();
+        if (missingRequired.Count > 0)
+        {
+            var bulletList = string.Join("\n", missingRequired.Select(r => $"[red]- {r.Name}[/]: {(r.ErrorMessage ?? "Place executable in .\\tools").EscapeMarkup()}"));
+            var panel = new Panel(new Markup(bulletList))
+            {
+                Header = new PanelHeader("Action Items"),
+                Border = BoxBorder.Rounded,
+                BorderStyle = Style.Parse("red")
+            };
+            AnsiConsole.Write(panel);
+            AnsiConsole.MarkupLine("\n[bold yellow]Next step:[/] Download the missing tools and drop them into .\\tools then re-run Medical Bay.");
+            return (int)ExitCode.ToolMissing;
+        }
+
+        var interactive = AnsiConsole.Profile.Capabilities.Interactive;
+        if (interactive && datSummaries.Count > 0)
+        {
+            var suggestConsole = datSummaries.Any(s => !s.HasCatalog || s.IsStale);
+            if (PromptYesNo("Open the DAT console for catalog actions?", suggestConsole))
+            {
+                if (await ShowDatConsoleAsync(datSummaries))
+                {
+                    datSummaries = DatStatusReporter.Inspect().ToList();
+                    RenderDatSnapshot(datSummaries);
+                }
+            }
+        }
+
+        AnsiConsole.MarkupLine("\n[green]All required tools detected. Optional tools can be added later.[/]");
+        return (int)ExitCode.OK;
+    }
+
+    private static void RenderToolTable(IEnumerable<ToolCheckResult> results)
+    {
+        var table = new Table().Border(TableBorder.Rounded).Title("[bold]Tooling Loadout[/]");
         table.AddColumn("Tool");
         table.AddColumn("Status");
         table.AddColumn("Version");
@@ -136,43 +201,488 @@ public class Program
         }
 
         AnsiConsole.Write(table);
+    }
 
-        var missingRequired = results.Where(r => !r.IsFound && !r.IsOptional).ToList();
-        if (missingRequired.Count > 0)
+    private static void RenderDatSnapshot(IReadOnlyList<DatStatusSummary> summaries, bool showOverflowHint = true)
+    {
+        if (summaries.Count == 0)
         {
-            var bulletList = string.Join("\n", missingRequired.Select(r => $"[red]- {r.Name}[/]: {(r.ErrorMessage ?? "Place executable in .\\tools").EscapeMarkup()}"));
-            var panel = new Panel(new Markup(bulletList))
-            {
-                Header = new PanelHeader("Action Items"),
-                Border = BoxBorder.Rounded,
-                BorderStyle = Style.Parse("red")
-            };
-            AnsiConsole.Write(panel);
-            AnsiConsole.MarkupLine("\n[bold yellow]Next step:[/] Download the missing tools and drop them into .\\tools then re-run Medical Bay.");
-            return Task.FromResult((int)ExitCode.ToolMissing);
+            AnsiConsole.MarkupLine("\n[yellow]DAT catalog offline.[/] Run `dat sync` to hydrate your instance cache.");
+            return;
         }
 
-        AnsiConsole.MarkupLine("\n[green]All required tools detected. Optional tools can be added later.[/]");
-        return Task.FromResult((int)ExitCode.OK);
+        RenderDatSummaryPanel(summaries);
+
+        var prioritized = summaries
+            .OrderBy(s => GetDatStatusPriority(s))
+            .ThenBy(s => s.System, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var snapshot = summaries
+            .OrderByDescending(s => s.LocalFileCount)
+            .ThenBy(s => GetDatStatusPriority(s))
+            .ThenBy(s => s.System, StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
+        RenderDatStatusTable(snapshot, "[bold]DAT Snapshot[/]");
+
+        if (showOverflowHint && prioritized.Count > snapshot.Count)
+        {
+            AnsiConsole.MarkupLine($"[grey]Showing {snapshot.Count} of {prioritized.Count} systems. Open the DAT console for the full list.[/]");
+        }
+    }
+
+    private static void RenderDatSummaryPanel(IReadOnlyList<DatStatusSummary> summaries)
+    {
+        var ready = summaries.Count(s => s.HasCatalog && !s.IsStale);
+        var stale = summaries.Count(s => s.HasCatalog && s.IsStale);
+        var missing = summaries.Count - ready - stale;
+        var latest = summaries
+            .Select(s => s.LastUpdatedUtc)
+            .Where(d => d.HasValue)
+            .OrderByDescending(d => d!.Value)
+            .FirstOrDefault();
+
+        var summaryTable = new Table().HideHeaders();
+        summaryTable.AddColumn("Key");
+        summaryTable.AddColumn("Value");
+        summaryTable.AddRow("[green]Ready[/]", ready.ToString("N0"));
+        summaryTable.AddRow("[yellow]Stale[/]", stale.ToString("N0"));
+        summaryTable.AddRow("[red]Missing[/]", missing.ToString("N0"));
+        summaryTable.AddRow("[dim]Latest sync[/]", FormatDatTimestamp(latest));
+
+        var panel = new Panel(summaryTable)
+        {
+            Header = new PanelHeader("DAT Summary"),
+            Border = BoxBorder.Rounded,
+            BorderStyle = Style.Parse("silver")
+        };
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(panel);
+    }
+
+    private static void RenderDatStatusTable(IEnumerable<DatStatusSummary> summaries, string? title = null, bool allowEmptyHint = false)
+    {
+        var rows = summaries.ToList();
+        if (rows.Count == 0)
+        {
+            if (allowEmptyHint)
+            {
+                AnsiConsole.MarkupLine("[yellow]No DAT entries match the current filter.[/]");
+            }
+            return;
+        }
+
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("System");
+        table.AddColumn("Status");
+        table.AddColumn("Sources");
+        table.AddColumn("Files");
+        table.AddColumn("Last Sync (UTC)");
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            table.Title = new TableTitle(title);
+        }
+
+        foreach (var summary in rows)
+        {
+            table.AddRow(
+                GetColoredSystem(summary),
+                GetDatStatusMarkup(summary),
+                summary.SourceCount.ToString("N0"),
+                summary.LocalFileCount.ToString("N0"),
+                FormatDatTimestamp(summary.LastUpdatedUtc));
+        }
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.Write(table);
+    }
+
+    private static string GetDatStatusMarkup(DatStatusSummary summary)
+        => summary.Status switch
+        {
+            "Ready" => "[green]Ready[/]",
+            "Stale" => "[yellow]Stale[/]",
+            _ => "[red]Missing[/]"
+        };
+
+    private static string GetColoredSystem(DatStatusSummary summary)
+    {
+        var code = summary.System.ToUpperInvariant();
+        return summary.Status switch
+        {
+            "Ready" => $"[green]{code}[/]",
+            "Stale" => $"[yellow]{code}[/]",
+            _ => $"[red]{code}[/]"
+        };
+    }
+
+    private static int GetDatStatusPriority(DatStatusSummary summary)
+    {
+        if (!summary.HasCatalog)
+        {
+            return 0;
+        }
+
+        return summary.IsStale ? 1 : 2;
+    }
+
+    private static string FormatDatTimestamp(DateTime? timestamp)
+        => timestamp?.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) ?? "n/a";
+
+    private static string BuildDatHeaderSummary(IReadOnlyList<DatStatusSummary> summaries)
+    {
+        if (summaries.Count == 0)
+        {
+            return "[yellow]Catalog offline[/]";
+        }
+
+        var ready = summaries.Count(s => s.HasCatalog && !s.IsStale);
+        var stale = summaries.Count(s => s.HasCatalog && s.IsStale);
+        var missing = summaries.Count - ready - stale;
+        return $"[green]{ready} ready[/], [yellow]{stale} stale[/], [red]{missing} missing[/]";
+    }
+
+    private static async Task<bool> PromptDatSyncAsync(IReadOnlyList<DatStatusSummary> pool, bool preselectAll, string title, bool forceSelected = false)
+    {
+        if (pool.Count == 0)
+        {
+            return false;
+        }
+
+        var prompt = new MultiSelectionPrompt<DatStatusSummary>()
+            .Title(title)
+            .InstructionsText("[grey](SPACE = toggle, ENTER = sync, ESC = cancel)[/]")
+            .MoreChoicesText("[grey](Type to filter system codes.)[/]")
+            .NotRequired()
+            .PageSize(Math.Clamp(pool.Count, 1, 15))
+            .UseConverter(FormatDatChoice)
+            .AddChoices(pool);
+
+        if (preselectAll)
+        {
+            foreach (var item in pool)
+            {
+                prompt.Select(item);
+            }
+        }
+
+        List<DatStatusSummary> selection;
+        try
+        {
+            selection = PromptWithCancel(() => AnsiConsole.Prompt(prompt), "DAT sync selection", offerRetryPrompt: false);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+
+        if (selection.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[grey]No catalogs selected.[/]");
+            return false;
+        }
+
+        await SyncDatSystemsAsync(selection, forceSelected);
+        return true;
+    }
+
+    private static async Task<bool> ShowDatConsoleAsync(IReadOnlyList<DatStatusSummary> initialSummaries)
+    {
+        var datSummaries = initialSummaries.ToList();
+        var updated = false;
+
+        while (true)
+        {
+            AnsiConsole.Clear();
+            AnsiConsole.Write(new Rule("[bold cyan]DAT Console[/]"));
+            RenderDatSnapshot(datSummaries, showOverflowHint: false);
+
+            string choice;
+            try
+            {
+                choice = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[bold cyan]Select a DAT action[/]")
+                            .PageSize(8)
+                            .AddChoices(
+                                "View catalog",
+                                "Sync missing/stale",
+                                "Sync specific systems",
+                                "Sync ready systems (force)",
+                                $"Sync {_currentSystem.Code.ToUpperInvariant()}",
+                                "Show DAT folder",
+                                "Refresh",
+                                "Back")),
+                    "DAT console",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                AnsiConsole.MarkupLine("[yellow]DAT console exit requested.[/]");
+                return updated;
+            }
+
+            switch (choice)
+            {
+                case "View catalog":
+                    ShowDatCatalogBrowser(datSummaries);
+                    break;
+                case "Sync missing/stale":
+                {
+                    var targets = datSummaries.Where(s => !s.HasCatalog || s.IsStale).ToList();
+                    if (targets.Count == 0)
+                    {
+                        AnsiConsole.MarkupLine("[green]All catalogs are already ready.[/]");
+                        Pause();
+                        break;
+                    }
+
+                    if (await PromptDatSyncAsync(targets, preselectAll: true, "[bold yellow]Sync missing / stale catalogs[/]\n[grey]Type to filter; SPACE toggles; ENTER to sync; ESC cancels.[/]"))
+                    {
+                        datSummaries = DatStatusReporter.Inspect().ToList();
+                        updated = true;
+                    }
+                    break;
+                }
+                case "Sync specific systems":
+                    if (await PromptDatSyncAsync(datSummaries, preselectAll: false, "[bold cyan]Select DAT catalogs to sync[/]\n[grey]Type to filter; SPACE toggles; ENTER to sync; ESC cancels.[/]"))
+                    {
+                        datSummaries = DatStatusReporter.Inspect().ToList();
+                        updated = true;
+                    }
+                    break;
+                case "Sync ready systems (force)":
+                {
+                    var readyTargets = datSummaries.Where(s => s.HasCatalog && !s.IsStale).ToList();
+                    if (readyTargets.Count == 0)
+                    {
+                        AnsiConsole.MarkupLine("[yellow]No ready catalogs available to refresh.[/]");
+                        Pause();
+                        break;
+                    }
+
+                    if (await PromptDatSyncAsync(readyTargets, preselectAll: false, "[bold cyan]Force refresh ready catalogs[/]\n[grey]Type to filter; SPACE toggles; ENTER to sync; ESC cancels.[/]", forceSelected: true))
+                    {
+                        datSummaries = DatStatusReporter.Inspect().ToList();
+                        updated = true;
+                    }
+                    break;
+                }
+                case string active when active.StartsWith("Sync ", StringComparison.OrdinalIgnoreCase):
+                {
+                    var currentSummary = datSummaries.FirstOrDefault(s => s.System.Equals(_currentSystem.Code, StringComparison.OrdinalIgnoreCase));
+                    if (currentSummary == null)
+                    {
+                        AnsiConsole.MarkupLine($"[yellow]No DAT catalog entry found for {_currentSystem.Code.ToUpperInvariant()}.[/]");
+                        Pause();
+                        break;
+                    }
+
+                    bool force;
+                    try
+                    {
+                        force = PromptYesNo("Force re-download even if ready?", currentSummary.IsStale);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        break;
+                    }
+
+                    await SyncDatSystemsAsync(new[] { currentSummary }, force);
+                    datSummaries = DatStatusReporter.Inspect().ToList();
+                    updated = true;
+                    break;
+                }
+                case "Show DAT folder":
+                {
+                    var datRoot = Path.Combine(InstancePathResolver.GetInstanceRoot(), "dat");
+                    AnsiConsole.MarkupLine($"Instance DAT directory: [dim]{datRoot.EscapeMarkup()}[/]");
+                    Pause();
+                    break;
+                }
+                case "Refresh":
+                    datSummaries = DatStatusReporter.Inspect().ToList();
+                    break;
+                case "Back":
+                    AnsiConsole.Clear();
+                    return updated;
+            }
+        }
+    }
+
+    private static void ShowDatCatalogBrowser(IReadOnlyList<DatStatusSummary> summaries)
+    {
+        if (summaries.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]DAT catalog offline.[/]");
+            Pause();
+            return;
+        }
+
+        var filter = DatStatusFilter.All;
+        var search = string.Empty;
+
+        while (true)
+        {
+            AnsiConsole.Clear();
+            var filtered = summaries
+                .Where(summary => filter switch
+                {
+                    DatStatusFilter.Ready => summary.HasCatalog && !summary.IsStale,
+                    DatStatusFilter.Stale => summary.HasCatalog && summary.IsStale,
+                    DatStatusFilter.Missing => !summary.HasCatalog,
+                    _ => true
+                })
+                .Where(summary => string.IsNullOrWhiteSpace(search) || summary.System.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(summary => summary.System, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var title = $"[bold]DAT Catalog[/] ({filtered.Count}/{summaries.Count})";
+            if (filter != DatStatusFilter.All)
+            {
+                title += $" [grey]| Filter: {filter}[/]";
+            }
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                title += $" [grey]| Search: {search.ToUpperInvariant()}[/]";
+            }
+
+            RenderDatStatusTable(filtered, title, allowEmptyHint: true);
+
+            string action;
+            try
+            {
+                action = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[bold cyan]Catalog Browser[/]")
+                            .PageSize(4)
+                            .AddChoices("Filter status", "Search", "Reset filters", "Back")),
+                    "DAT catalog browser",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            switch (action)
+            {
+                case "Filter status":
+                {
+                    string filterChoice;
+                    try
+                    {
+                        filterChoice = PromptWithCancel(
+                            () => AnsiConsole.Prompt(
+                                new SelectionPrompt<string>()
+                                    .Title("Show which status?")
+                                    .AddChoices("All", "Ready", "Stale", "Missing")),
+                            "Filter status",
+                            offerRetryPrompt: false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        continue;
+                    }
+                    filter = filterChoice switch
+                    {
+                        "Ready" => DatStatusFilter.Ready,
+                        "Stale" => DatStatusFilter.Stale,
+                        "Missing" => DatStatusFilter.Missing,
+                        _ => DatStatusFilter.All
+                    };
+                    break;
+                }
+                case "Search":
+                {
+                    string searchInput;
+                    try
+                    {
+                        searchInput = PromptWithCancel(
+                            () => AnsiConsole.Prompt(
+                                new TextPrompt<string>("Enter system code filter (leave blank to keep current):")
+                                    .AllowEmpty()),
+                            "Catalog search",
+                            offerRetryPrompt: false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        continue;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(searchInput))
+                    {
+                        search = searchInput.Trim();
+                    }
+                    break;
+                }
+                case "Reset filters":
+                    filter = DatStatusFilter.All;
+                    search = string.Empty;
+                    break;
+                case "Back":
+                    AnsiConsole.Clear();
+                    return;
+            }
+        }
+    }
+
+    private enum DatStatusFilter
+    {
+        All,
+        Ready,
+        Stale,
+        Missing
+    }
+
+    private static string FormatDatChoice(DatStatusSummary summary)
+    {
+        var status = summary.Status;
+        var lastSync = FormatDatTimestamp(summary.LastUpdatedUtc);
+        return $"{summary.System.ToUpperInvariant()} · {status} · Files: {summary.LocalFileCount:N0} · Last: {lastSync}";
+    }
+
+    private static async Task SyncDatSystemsAsync(IEnumerable<DatStatusSummary> summaries, bool force = false)
+    {
+        foreach (var summary in summaries)
+        {
+            var syncArgs = new List<string> { "dat", "sync", "--system", summary.System };
+            if (force || summary.IsStale)
+            {
+                syncArgs.Add("--force");
+            }
+
+            await DatSyncCommand.RunAsync(syncArgs.ToArray());
+        }
     }
     internal static async Task<int> RunScanAsync(string[] args)
     {
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][[]IMPACT[]] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: scan | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][[]IMPACT[]] | Component: scan | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[IMPACT]] | Component: scan | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = HasFlag(args, "--recursive");
-        AnsiConsole.MarkupLine($"[cyan][SCAN][/]: {(recursive ? "Recursive" : "Top-level")} scan of {root.EscapeMarkup()}");
-        AnsiConsole.WriteLine();
+
+        ConsoleDecorations.RenderOperationHeader(
+            "ROM Scan",
+            new HeaderMetadata("Root", root),
+            new HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
+            new HeaderMetadata("Instance", InstancePathResolver.CurrentInstance),
+            new HeaderMetadata("Indexed Extensions", ScanExtensions.Count.ToString("N0")));
 
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var files = Directory.EnumerateFiles(root, "*.*", searchOption)
@@ -212,6 +722,7 @@ public class Program
                 var task = ctx.AddTask("Indexing ROMs", maxValue: files.Count);
                 foreach (var file in files)
                 {
+                    OperationContextScope.ThrowIfCancellationRequested();
                     var info = new FileInfo(file);
                     totalBytes += info.Length;
 
@@ -275,19 +786,24 @@ public class Program
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red][[]IMPACT[]] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: verify | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red][[]IMPACT[]] | Component: verify | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[IMPACT]] | Component: verify | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         var recursive = HasFlag(args, "--recursive");
-        AnsiConsole.MarkupLine($"[cyan][VERIFY][/]: Hashing {(recursive ? "recursive" : "top-level")} files in {root.EscapeMarkup()}");
-        AnsiConsole.WriteLine();
+
+        ConsoleDecorations.RenderOperationHeader(
+            "Verify ROMs",
+            new HeaderMetadata("Root", root),
+            new HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
+            new HeaderMetadata("Instance", InstancePathResolver.CurrentInstance),
+            new HeaderMetadata("Hashes", "CRC32 / MD5 / SHA1"));
 
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var files = Directory.EnumerateFiles(root, "*.*", searchOption)
@@ -328,6 +844,7 @@ public class Program
                 var task = ctx.AddTask("Hashing ROMs", maxValue: files.Count);
                 foreach (var file in files)
                 {
+                    OperationContextScope.ThrowIfCancellationRequested();
                     task.Description = $"Hashing {TruncateLabel(Path.GetFileName(file))}";
 
                     var metadataRecord = BuildRomRecord(file, DateTime.UtcNow);
@@ -376,19 +893,31 @@ public class Program
             RenderMenuHeader();
 
             var psxLabel = $"{_currentSystem.Name} Operations";
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold cyan]Main Operations[/] [grey](arrow keys + Enter)[/]")
-                    .PageSize(10)
-                    .AddChoices(
-                        "Medical Bay",
-                        "ROM Scan & Verify",
-                        psxLabel,
-                        "Archive Extract",
-                        "DAT Sync",
-                        "Settings",
-                        _menuDryRun ? "Switch to APPLY mode" : "Switch to DRY-RUN mode",
-                        "Exit"));
+            string choice;
+            try
+            {
+                choice = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[bold cyan]Main Operations[/] [grey](arrow keys + Enter | ESC to cancel)[/]")
+                            .PageSize(10)
+                            .AddChoices(
+                                "Medical Bay",
+                                "ROM Scan & Verify",
+                                psxLabel,
+                                "Archive Extract",
+                                "DAT Sync",
+                                "DAT Console",
+                                "Settings",
+                                _menuDryRun ? "Switch to APPLY mode" : "Switch to DRY-RUN mode",
+                                "Exit")),
+                    "Main menu",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                return (int)ExitCode.UserCancelled;
+            }
 
             switch (choice)
             {
@@ -402,10 +931,13 @@ public class Program
                     await ShowPsxOperationsMenuAsync();
                     break;
                 case "Archive Extract":
-                    await ExecuteMenuAction("Archive Extract", RunMenuExtractArchivesAsync);
+                    await ExecuteMenuAction("Archive Extract", RunMenuExtractArchivesAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "DAT Sync":
                     await ExecuteMenuAction("DAT Sync", RunMenuDatSyncAsync);
+                    break;
+                case "DAT Console":
+                    await ExecuteMenuAction("DAT Console", RunMenuDatConsoleAsync);
                     break;
                 case "Settings":
                     await ShowSettingsMenuAsync();
@@ -444,17 +976,32 @@ public class Program
 
         if (string.IsNullOrWhiteSpace(_rememberedRomRoot))
         {
-            var root = PromptForOptional("Enter ROM root directory (leave blank to decide later)");
-            if (!string.IsNullOrWhiteSpace(root))
+            try
             {
-                _rememberedRomRoot = root;
+                var root = PromptForOptional("Enter ROM root directory (leave blank to decide later)");
+                if (!string.IsNullOrWhiteSpace(root))
+                {
+                    _rememberedRomRoot = root;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                AnsiConsole.MarkupLine("[yellow]ROM root prompt skipped.[/]");
             }
         }
 
-        var adjustSystem = AnsiConsole.Confirm($"Work primarily on {_currentSystem.Name}? (System code: {_currentSystem.Code.ToUpperInvariant()})", false);
-        if (adjustSystem)
+        try
         {
-            _currentSystem = PromptForSystemProfile("Select default system profile");
+            var keepSystem = PromptYesNo($"Continue working on {_currentSystem.Name}? (System code: {_currentSystem.Code.ToUpperInvariant()})", true);
+            if (!keepSystem)
+            {
+                _currentSystem = PromptForSystemProfile("Select default system profile");
+                _rememberedRomRoot = null;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            AnsiConsole.MarkupLine("[yellow]System selection skipped.[/]");
         }
 
         PersistSession();
@@ -464,13 +1011,26 @@ public class Program
     {
         while (true)
         {
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold cyan]ROM Cache & Hashing[/]")
-                    .AddChoices(
-                        "Scan directories",
-                        "Verify hashes",
-                        "Back"));
+            AnsiConsole.Clear();
+            RenderMenuHeader();
+            string choice;
+            try
+            {
+                choice = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[bold cyan]ROM Cache & Hashing[/] [grey](ESC to return)[/]")
+                            .AddChoices(
+                                "Scan directories",
+                                "Verify hashes",
+                                "Back")),
+                    "ROM cache menu",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
 
             switch (choice)
             {
@@ -490,30 +1050,43 @@ public class Program
     {
         while (true)
         {
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title($"[bold cyan]{_currentSystem.Name} Toolkit[/]")
-                    .AddChoices(
-                        "Rename library",
-                        "Convert images",
-                        "Merge multi-track BINs",
-                        "Clean library",
-                        "Find duplicates",
-                        "Back"));
+            AnsiConsole.Clear();
+            RenderMenuHeader();
+            string choice;
+            try
+            {
+                choice = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title($"[bold cyan]{_currentSystem.Name} Toolkit[/] [grey](ESC to return)[/]")
+                            .AddChoices(
+                                "Rename library",
+                                "Convert images",
+                                "Merge multi-track BINs",
+                                "Clean library",
+                                "Find duplicates",
+                                "Back")),
+                    $"{_currentSystem.Name} toolkit",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
 
             switch (choice)
             {
                 case "Rename library":
-                    await ExecuteMenuAction("Rename", RunMenuRenamePsxAsync);
+                    await ExecuteMenuAction("Rename", RunMenuRenamePsxAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "Convert images":
-                    await ExecuteMenuAction("Convert", RunMenuConvertPsxAsync);
+                    await ExecuteMenuAction("Convert", RunMenuConvertPsxAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "Merge multi-track BINs":
-                    await ExecuteMenuAction("Merge", RunMenuMergePsxAsync);
+                    await ExecuteMenuAction("Merge", RunMenuMergePsxAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "Clean library":
-                    await ExecuteMenuAction("Clean", RunMenuCleanPsxAsync);
+                    await ExecuteMenuAction("Clean", RunMenuCleanPsxAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "Find duplicates":
                     await ExecuteMenuAction("Duplicates", RunMenuDuplicatesPsxAsync);
@@ -528,15 +1101,29 @@ public class Program
     {
         while (true)
         {
-            var choice = AnsiConsole.Prompt(
-                new SelectionPrompt<string>()
-                    .Title("[bold cyan]Settings[/]")
-                    .AddChoices(
-                        "Set ROM root",
-                        "Set active system",
-                        "Set instance profile",
-                        "View session info",
-                        "Back"));
+            AnsiConsole.Clear();
+            RenderMenuHeader();
+            string choice;
+            try
+            {
+                choice = PromptWithCancel(
+                    () => AnsiConsole.Prompt(
+                        new SelectionPrompt<string>()
+                            .Title("[bold cyan]Settings[/] [grey](ESC to return)[/]")
+                            .AddChoices(
+                                "Set ROM root",
+                                "Set active system",
+                                "Set instance profile",
+                                "Toggle sleep prevention",
+                                "View session info",
+                                "Back")),
+                    "Settings menu",
+                    offerRetryPrompt: false);
+            }
+            catch (OperationCanceledException)
+            {
+                return Task.CompletedTask;
+            }
 
             switch (choice)
             {
@@ -550,6 +1137,10 @@ public class Program
                     break;
                 case "Set instance profile":
                     SetInstanceProfile();
+                    Pause();
+                    break;
+                case "Toggle sleep prevention":
+                    ToggleSleepInhibition();
                     Pause();
                     break;
                 case "View session info":
@@ -571,16 +1162,19 @@ public class Program
         info.AddRow("ROM root", string.IsNullOrWhiteSpace(_rememberedRomRoot) ? "[red]Not set[/]" : _rememberedRomRoot.EscapeMarkup());
         info.AddRow("System", $"{_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})");
         info.AddRow("Mode", _menuDryRun ? "DRY-RUN" : "APPLY");
+        info.AddRow("Sleep prevention", _preventSleep ? "Enabled" : "Disabled");
         AnsiConsole.Write(info);
     }
 
     private static SystemProfile PromptForSystemProfile(string title)
-        => AnsiConsole.Prompt(
-            new SelectionPrompt<SystemProfile>()
-                .Title($"[white]{title}[/]")
-                .PageSize(5)
-                .UseConverter(p => $"{p.Name} ({p.Code.ToUpperInvariant()}) - {p.Description}")
-                .AddChoices(SystemProfiles.All));
+        => PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new SelectionPrompt<SystemProfile>()
+                    .Title($"[white]{title}[/]")
+                    .PageSize(5)
+                    .UseConverter(p => $"{p.Name} ({p.Code.ToUpperInvariant()}) - {p.Description}")
+                    .AddChoices(SystemProfiles.All)),
+            title);
 
     private static void SetSystemProfile()
     {
@@ -589,27 +1183,96 @@ public class Program
         AnsiConsole.MarkupLine($"[green]System set to {_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})[/]");
     }
 
-    private static async Task ExecuteMenuAction(string label, Func<Task<int>> action)
+    private static void ToggleSleepInhibition()
+    {
+        _preventSleep = !_preventSleep;
+        ApplySleepInhibition();
+        SessionStateManager.Update(state => state with { PreventSleep = _preventSleep });
+        var stateText = _preventSleep ? "[green]Sleep/hibernate prevention enabled[/]" : "[yellow]Sleep/hibernate prevention disabled[/]";
+        AnsiConsole.MarkupLine(stateText);
+    }
+
+    private static void ApplySleepInhibition()
+    {
+        var state = EXECUTION_STATE.ES_CONTINUOUS;
+        if (_preventSleep)
+        {
+            state |= EXECUTION_STATE.ES_SYSTEM_REQUIRED | EXECUTION_STATE.ES_DISPLAY_REQUIRED;
+        }
+
+        try
+        {
+            SetThreadExecutionState(state);
+        }
+        catch
+        {
+            // Ignore environments that don't support this Win32 API.
+        }
+    }
+
+    private static void TryApplyConsoleDefaults()
     {
         try
         {
-            var exitCode = await action();
-            var status = exitCode == (int)ExitCode.OK
-                ? "[green]Completed[/]"
-                : $"[yellow]Exit code {(ExitCode)exitCode}[/]";
-            AnsiConsole.MarkupLine($"\n[bold]{label}[/]: {status}");
+            if (Console.IsOutputRedirected)
+            {
+                return;
+            }
+
+            var targetWidth = Math.Min(150, Console.LargestWindowWidth);
+            var targetHeight = Math.Min(45, Console.LargestWindowHeight);
+            if (targetWidth > Console.WindowWidth || targetHeight > Console.WindowHeight)
+            {
+                Console.SetWindowSize(Math.Max(Console.WindowWidth, targetWidth), Math.Max(Console.WindowHeight, targetHeight));
+            }
         }
-        catch (OperationCanceledException)
+        catch
         {
-            AnsiConsole.MarkupLine("\n[yellow]Operation cancelled by user.[/]");
+            // Non-fatal: resizing console may not be supported in all hosts.
         }
-        catch (Exception ex)
+    }
+
+
+    private static async Task ExecuteMenuAction(string label, Func<Task<int>> action, bool watchForEscape = false)
+    {
+        while (true)
         {
-            CliLogger.LogError($"Menu action '{label}' failed", ex);
-            AnsiConsole.MarkupLine($"\n[red][[]IMPACT[]] | Component: {label.ToLowerInvariant()} | Context: {ex.Message.EscapeMarkup()}[/]");
+        try
+        {
+            var exitCode = await RunWithOperationScope(label, action, watchForEscape);
+                var status = exitCode == (int)ExitCode.OK
+                    ? "[green]Completed[/]"
+                    : $"[yellow]Exit code {(ExitCode)exitCode}[/]";
+                var safeLabel = Markup.Escape(label);
+                AnsiConsole.MarkupLine($"\n[bold]{safeLabel}[/]: {status}");
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                var decision = ShowPromptCancelledOptions($"{label} action");
+                if (decision == PromptCancelAction.Return)
+                {
+                    AnsiConsole.MarkupLine("\n[yellow]Operation cancelled.[/]");
+                    break;
+                }
+            }
+            catch (Exception ex)
+            {
+                CliLogger.LogError($"Menu action '{label}' failed", ex);
+                var component = Markup.Escape(label.ToLowerInvariant());
+                var context = Markup.Escape(ex.Message);
+                AnsiConsole.MarkupLine($"\n[red][[IMPACT]] | Component: {component} | Context: {context}[/]");
+                break;
+            }
         }
 
         Pause();
+    }
+
+    private static async Task<int> RunWithOperationScope(string label, Func<Task<int>> action, bool watchForEscape = false)
+    {
+        using var scope = OperationContextScope.Begin(label, watchForEscape);
+        return await action();
     }
     private static void RenderMenuHeader()
     {
@@ -623,10 +1286,21 @@ public class Program
 
         var systemText = $"[dim]System:[/] {_currentSystem.Name} ({_currentSystem.Code.ToUpperInvariant()})";
         var instanceText = $"[dim]Instance:[/] {InstancePathResolver.CurrentInstance.EscapeMarkup()}";
-        var tip = "[grey]Tip: Use arrow keys to navigate and Enter to run. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
+        var datSummary = DatStatusReporter.Inspect(_currentSystem.Code).FirstOrDefault();
+        var datText = datSummary switch
+        {
+            null => "[yellow]DAT status: catalog offline[/]",
+            _ when !datSummary.HasCatalog => "[red]DAT status: missing[/]",
+            _ when datSummary.IsStale => "[yellow]DAT status: stale[/]",
+            _ => "[green]DAT status: ready[/]"
+        };
+        var sleepText = _preventSleep
+            ? "[green]Sleep prevention: Enabled[/]"
+            : "[yellow]Sleep prevention: Disabled[/]";
+        var tip = "[grey]Tip: Use arrow keys to navigate, Enter to run, and ESC to cancel any prompt. Toggle DRY-RUN/APPLY, set ROM root, or switch instance any time.[/]";
         var version = GetVersion();
 
-        var header = new Panel(new Markup($"[bold silver]ARK-Retro-Forge v{version}[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{systemText}\n{instanceText}\n\n{tip}"))
+        var header = new Panel(new Markup($"[bold silver]ARK-Retro-Forge v{version}[/]\n[dim]Interactive Operations Menu[/]\n\nMode: {modeText}\n{rootText}\n{systemText}\n{instanceText}\n{datText}\n{sleepText}\n\n{tip}"))
         {
             Border = BoxBorder.Rounded,
             BorderStyle = Style.Parse("cyan"),
@@ -686,6 +1360,7 @@ public class Program
         var recursive = PromptYesNo("Scan recursively?", true);
         var apply = !_menuDryRun;
         var playlistMode = PromptForPlaylistMode();
+        var restoreArticles = PromptYesNo("Restore trailing articles (\", The\") to the front?", false);
 
         var args = new List<string> { "rename", "psx", "--root", root };
         if (recursive)
@@ -720,7 +1395,8 @@ public class Program
 
         var recursive = PromptYesNo("Scan recursively?", true);
         var apply = !_menuDryRun;
-        var rebuild = PromptYesNo("Force rebuild existing CHDs?", false);
+        var target = PromptForConversionTarget();
+        var rebuild = PromptYesNo("Force rebuild existing outputs?", false);
         var deleteSource = apply && PromptYesNo("Delete source files after conversion?", false);
 
         var args = new List<string> { "convert", "psx", "--root", root };
@@ -739,6 +1415,16 @@ public class Program
         if (deleteSource)
         {
             args.Add("--delete-source");
+        }
+        if (target != PsxConversionTarget.Chd)
+        {
+            args.Add("--to");
+            args.Add(target switch
+            {
+                PsxConversionTarget.BinCue => "bin",
+                PsxConversionTarget.Iso => "iso",
+                _ => "chd"
+            });
         }
 
         if (!apply)
@@ -774,7 +1460,6 @@ public class Program
         {
             args.Add("--delete-source");
         }
-
         if (!apply)
         {
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: merge will only show planned operations.[/]");
@@ -829,6 +1514,19 @@ public class Program
         return await DatSyncCommand.RunAsync(args.ToArray());
     }
 
+    private static async Task<int> RunMenuDatConsoleAsync()
+    {
+        var summaries = DatStatusReporter.Inspect().ToList();
+        if (summaries.Count == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]DAT catalog offline. Run `dat sync` to download sources first.[/]");
+            return (int)ExitCode.OK;
+        }
+
+        await ShowDatConsoleAsync(summaries);
+        return (int)ExitCode.OK;
+    }
+
     private static async Task<int> RunMenuCleanPsxAsync()
     {
         var root = EnsureRomRoot("Enter PSX root folder");
@@ -838,13 +1536,19 @@ public class Program
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
-        var moveMultiTrack = PromptYesNo("Move multi-track BIN/CUE sets into a dedicated folder?", true);
+        var moveMultiTrack = PromptYesNo("Move multi-track BIN/CUE sets into per-title folders?", true);
+        var moveMultiDisc = PromptYesNo("Move multi-disc sets (Disc 1/Disc 2) into Title (Region) folders?", true);
         var generateCues = PromptYesNo("Generate missing CUE files when detected?", true);
         var flattenSingles = PromptYesNo("Flatten single-disc folders back into the root?", true);
         var ingestRoot = PromptForOptional("Optional import directory to ingest (blank to skip)");
-        var ingestMove = !string.IsNullOrWhiteSpace(ingestRoot) && PromptYesNo("Move imported ROMs into the PSX root?", true);
-        var multiDirName = PromptForOptional("Multi-track folder name (blank for 'PSX MultiTrack')");
-        var importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
+        string? importDirName = null;
+        var ingestMove = false;
+        if (!string.IsNullOrWhiteSpace(ingestRoot))
+        {
+            importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
+            ingestMove = PromptYesNo("Move imported ROMs into the PSX root?", true);
+        }
+        var multiDirName = PromptForOptional("Multi-track container folder (blank keeps sets beside the ROM root using Title (Region))");
         var apply = !_menuDryRun && PromptYesNo("Apply changes (moves/writes)?", true);
 
         var args = new List<string> { "clean", "psx", "--root", root };
@@ -859,6 +1563,10 @@ public class Program
         if (moveMultiTrack)
         {
             args.Add("--move-multitrack");
+        }
+        if (moveMultiDisc)
+        {
+            args.Add("--move-multidisc");
         }
         if (generateCues)
         {
@@ -876,16 +1584,16 @@ public class Program
             {
                 args.Add("--ingest-move");
             }
+            if (!string.IsNullOrWhiteSpace(importDirName))
+            {
+                args.Add("--import-dir");
+                args.Add(importDirName);
+            }
         }
         if (!string.IsNullOrWhiteSpace(multiDirName))
         {
             args.Add("--multitrack-dir");
             args.Add(multiDirName);
-        }
-        if (!string.IsNullOrWhiteSpace(importDirName))
-        {
-            args.Add("--import-dir");
-            args.Add(importDirName);
         }
 
         if (!apply)
@@ -936,45 +1644,131 @@ public class Program
         return await ExtractArchivesCommand.RunAsync(args.ToArray());
     }
 
+    private enum PromptCancelAction
+    {
+        Retry,
+        Return
+    }
+
+    private static T PromptWithCancel<T>(Func<T> promptFactory, string context, bool offerRetryPrompt = true)
+    {
+        while (true)
+        {
+            try
+            {
+                return promptFactory();
+            }
+            catch (OperationCanceledException)
+            {
+                if (!offerRetryPrompt)
+                {
+                    throw;
+                }
+
+                if (ShowPromptCancelledOptions(context) == PromptCancelAction.Return)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
+    private static PromptCancelAction ShowPromptCancelledOptions(string context)
+    {
+        AnsiConsole.MarkupLine($"\n[yellow]{context} cancelled via ESC.[/]");
+        AnsiConsole.MarkupLine("[grey]Press [bold]R[/] to retry or [bold]M[/] to return.[/]");
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true).Key;
+            switch (key)
+            {
+                case ConsoleKey.R:
+                    AnsiConsole.MarkupLine("[grey]Retrying prompt...[/]");
+                    return PromptCancelAction.Retry;
+                case ConsoleKey.M:
+                case ConsoleKey.Enter:
+                case ConsoleKey.Escape:
+                    AnsiConsole.MarkupLine("[grey]Returning to previous menu.[/]");
+                    return PromptCancelAction.Return;
+            }
+        }
+    }
+
     private static string PromptForPath(string prompt)
     {
-        var response = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[white]{prompt}[/]\n[bold]>[/] ")
-                .AllowEmpty()
-                .PromptStyle("green")
-        );
+        var response = PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new TextPrompt<string>($"[white]{Markup.Escape(prompt)}[/]\n[bold]>[/] ")
+                    .AllowEmpty()
+                    .PromptStyle("green")),
+            prompt);
         return response.Trim();
     }
 
     private static string PromptForOptional(string prompt)
     {
-        var response = AnsiConsole.Prompt(
-            new TextPrompt<string>($"[white]{prompt}[/]\n[bold]>[/] ")
-                .AllowEmpty()
-                .PromptStyle("green")
-        );
+        var response = PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new TextPrompt<string>($"[white]{Markup.Escape(prompt)}[/]\n[bold]>[/] ")
+                    .AllowEmpty()
+                    .PromptStyle("green")),
+            prompt);
         return response.Trim();
     }
 
     private static bool PromptYesNo(string prompt, bool defaultValue)
     {
-        return AnsiConsole.Confirm($"[white]{prompt}[/]", defaultValue);
+        var defaultLabel = defaultValue ? "Yes" : "No";
+        var choices = defaultValue
+            ? new[] { "Yes", "No" }
+            : new[] { "No", "Yes" };
+
+        var choice = PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title($"[white]{Markup.Escape(prompt)}[/] [grey](default: {defaultLabel})[/]")
+                    .PageSize(3)
+                    .AddChoices(choices)),
+            prompt);
+
+        return string.Equals(choice, "Yes", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string PromptForPlaylistMode()
     {
-        var response = AnsiConsole.Prompt(
-            new TextPrompt<string>("Playlist mode (create/update/off) [create]:")
-                .AllowEmpty()
-                .PromptStyle("green")
-        ).Trim().ToLowerInvariant();
+        var response = PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new TextPrompt<string>(Markup.Escape("Playlist mode (create/update/off) [create]:"))
+                    .AllowEmpty()
+                    .PromptStyle("green")),
+            "Playlist mode").Trim().ToLowerInvariant();
         return string.IsNullOrWhiteSpace(response) ? "create" : response;
+    }
+
+    private static PsxConversionTarget PromptForConversionTarget()
+    {
+        var choices = new[]
+        {
+            ("CHD (cue/bin -> chd)", PsxConversionTarget.Chd),
+            ("BIN/CUE (chd -> cue/bin)", PsxConversionTarget.BinCue),
+            ("ISO (chd -> iso)", PsxConversionTarget.Iso)
+        };
+
+        var selection = PromptWithCancel(
+            () => AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("[white]Select conversion target[/]")
+                    .AddChoices(choices.Select(c => c.Item1))),
+            "Conversion target");
+
+        return choices.First(c => c.Item1 == selection).Item2;
     }
 
     private static void Pause()
     {
         AnsiConsole.MarkupLine("\n[grey]Press ENTER to return to the menu...[/]");
         Console.ReadLine();
+        AnsiConsole.Clear();
     }
 
     private static string? EnsureRomRoot(string prompt)
@@ -1041,7 +1835,8 @@ public class Program
         {
             RomRoot = _rememberedRomRoot,
             MenuDryRun = _menuDryRun,
-            SystemCode = _currentSystem.Code
+            SystemCode = _currentSystem.Code,
+            PreventSleep = _preventSleep
         });
     }
 
@@ -1076,6 +1871,18 @@ public class Program
         order = Math.Clamp(order, 0, units.Length - 1);
         var value = bytes / Math.Pow(1024, order);
         return $"{value:F2} {units[order]}";
+    }
+
+    [DllImport("kernel32.dll")]
+    private static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
+
+    [Flags]
+    private enum EXECUTION_STATE : uint
+    {
+        ES_AWAYMODE_REQUIRED = 0x00000040,
+        ES_CONTINUOUS = 0x80000000,
+        ES_DISPLAY_REQUIRED = 0x00000002,
+        ES_SYSTEM_REQUIRED = 0x00000001
     }
 
     private static readonly Regex TitleRegionPattern = new(@"^(?<title>.+?)\s*\((?<region>[^)]+)\)", RegexOptions.Compiled);
@@ -1247,11 +2054,8 @@ public class Program
 
     private static string GetVersion()
     {
-        var version = typeof(Program).Assembly
-            .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
-            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>()
-            .FirstOrDefault()?.InformationalVersion ?? "0.1.0-dev";
-        return version;
+        // Keep in sync with the release candidate tags (e.g., v0.2.0-rc.12)
+        return "0.2.0-rc.12";
     }
 
     private static bool HasInteractiveConsole()

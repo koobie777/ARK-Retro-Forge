@@ -78,10 +78,20 @@ public record PsxDiscInfo
     /// <summary>
     /// Whether this disc has multiple tracks (multi-BIN layout)
     /// </summary>
-    public bool IsMultiTrack => TrackCount.HasValue && TrackCount.Value > 1;
+    public bool IsMultiTrack => TrackNumber.HasValue;
     
     /// <summary>
     /// Referenced CUE file path for this BIN (if applicable)
     /// </summary>
     public string? CueFilePath { get; init; }
+
+    /// <summary>
+    /// Potential DAT matches when serial detection fails.
+    /// </summary>
+    public IReadOnlyList<PsxSerialCandidate> SerialCandidates { get; init; } = Array.Empty<PsxSerialCandidate>();
 }
+
+/// <summary>
+/// Represents a candidate DAT match for serial recovery.
+/// </summary>
+public record PsxSerialCandidate(string Title, string? Region, string? Serial, int? DiscCount);

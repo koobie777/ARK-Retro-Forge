@@ -35,24 +35,26 @@ public class PsxIntegrationTests
             // Disc 1 BIN should normalize from "Disc 1 of 2" to "Disc 1"
             var disc1BinOp = operations.First(o => o.SourcePath == disc1Bin);
             Assert.False(disc1BinOp.IsAlreadyNamed);
-            Assert.Contains("(Disc 1).bin", disc1BinOp.DestinationPath);
+            Assert.Contains("(Disc 1)", disc1BinOp.DestinationPath);
+            Assert.EndsWith(".bin", disc1BinOp.DestinationPath, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("of 2", disc1BinOp.DestinationPath);
 
             // Disc 1 CUE should normalize from "Disc 1 of 2" to "Disc 1"
             var disc1CueOp = operations.First(o => o.SourcePath == disc1Cue);
             Assert.False(disc1CueOp.IsAlreadyNamed);
-            Assert.Contains("(Disc 1).cue", disc1CueOp.DestinationPath);
+            Assert.Contains("(Disc 1)", disc1CueOp.DestinationPath);
+            Assert.EndsWith(".cue", disc1CueOp.DestinationPath, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("of 2", disc1CueOp.DestinationPath);
 
-            // Disc 2 BIN currently has no disc suffix - parser won't auto-detect it's disc 2
-            // (this would require multi-disc grouping which is future work)
+            // Disc 2 BIN lacked suffix originally but multi-disc grouping should inject it now
             var disc2BinOp = operations.First(o => o.SourcePath == disc2Bin);
-            // For now, it should be considered already named since it matches the standard format
-            Assert.True(disc2BinOp.IsAlreadyNamed);
+            Assert.False(disc2BinOp.IsAlreadyNamed);
+            Assert.Contains("(Disc 2)", disc2BinOp.DestinationPath);
 
-            // Disc 2 CUE currently has no disc suffix
+            // Disc 2 CUE also receives the generated suffix
             var disc2CueOp = operations.First(o => o.SourcePath == disc2Cue);
-            Assert.True(disc2CueOp.IsAlreadyNamed);
+            Assert.False(disc2CueOp.IsAlreadyNamed);
+            Assert.Contains("(Disc 2)", disc2CueOp.DestinationPath);
         }
         finally
         {
@@ -92,14 +94,16 @@ public class PsxIntegrationTests
             Assert.Equal(1, disc1Op.DiscInfo.DiscNumber);
             Assert.Equal(2, disc1Op.DiscInfo.DiscCount);
             Assert.True(disc1Op.DiscInfo.IsMultiDisc);
-            Assert.Contains("(Disc 1).chd", disc1Op.DestinationPath);
+            Assert.Contains("(Disc 1)", disc1Op.DestinationPath);
+            Assert.EndsWith(".chd", disc1Op.DestinationPath, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("of 2", disc1Op.DestinationPath);
 
             var disc2Op = operations.First(o => o.SourcePath == disc2Cue);
             Assert.Equal(2, disc2Op.DiscInfo.DiscNumber);
             Assert.Equal(2, disc2Op.DiscInfo.DiscCount);
             Assert.True(disc2Op.DiscInfo.IsMultiDisc);
-            Assert.Contains("(Disc 2).chd", disc2Op.DestinationPath);
+            Assert.Contains("(Disc 2)", disc2Op.DestinationPath);
+            Assert.EndsWith(".chd", disc2Op.DestinationPath, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain("of 2", disc2Op.DestinationPath);
         }
         finally

@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ARK.Core.Systems.PSX;
 
 /// <summary>
@@ -9,44 +11,48 @@ public class PsxNameFormatter
     /// Generate a canonical filename from PSX disc metadata
     /// </summary>
     /// <param name="discInfo">The disc metadata</param>
+    /// <param name="restoreArticles">Whether trailing articles (", The") should be restored to the front of the title.</param>
     /// <returns>Formatted filename with extension</returns>
-    public static string Format(PsxDiscInfo discInfo)
+    public static string Format(PsxDiscInfo discInfo, bool restoreArticles = false)
     {
-        var parts = new List<string>();
-        
-        // Add title
-        if (!string.IsNullOrWhiteSpace(discInfo.Title))
+        var builder = new StringBuilder();
+        var title = discInfo.Title?.Trim();
+        if (!string.IsNullOrWhiteSpace(title))
         {
-            parts.Add(discInfo.Title.Trim());
+            builder.Append(restoreArticles ? RestoreArticle(title) : title);
         }
-        
-        // Add region
+
         if (!string.IsNullOrWhiteSpace(discInfo.Region))
         {
-            parts.Add($"({discInfo.Region.Trim()})");
+            if (builder.Length > 0)
+            {
+                builder.Append(' ');
+            }
+            builder.Append($"({discInfo.Region.Trim()})");
         }
-        
-        // Add serial
-        if (!string.IsNullOrWhiteSpace(discInfo.Serial))
-        {
-            parts.Add($"[{discInfo.Serial.Trim()}]");
-        }
-        
-        var baseName = string.Join(" ", parts);
-        
-        // Add disc suffix for multi-disc titles
-        // Single-disc titles should NOT have (Disc 1)
+
         if (discInfo.IsMultiDisc && discInfo.DiscNumber.HasValue)
         {
-            baseName += $" (Disc {discInfo.DiscNumber.Value})";
+            builder.Append($" (Disc {discInfo.DiscNumber.Value})");
         }
-        
-        // Add extension
+
+        if (discInfo.TrackNumber.HasValue)
+        {
+            builder.Append($" (Track {discInfo.TrackNumber.Value:00})");
+        }
+
+        if (!string.IsNullOrWhiteSpace(discInfo.Serial))
+        {
+            builder.Append($" [{discInfo.Serial.Trim()}]");
+        }
+
+        var baseName = builder.ToString().Trim();
+
         if (!string.IsNullOrWhiteSpace(discInfo.Extension))
         {
             baseName += discInfo.Extension;
         }
-        
+
         return SanitizeFileName(baseName);
     }
     
@@ -79,5 +85,18 @@ public class PsxNameFormatter
         var invalidChars = Path.GetInvalidFileNameChars();
         var sanitized = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
         return sanitized.Trim();
+    }
+
+    private static string RestoreArticle(string title)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(title, @"^(?<core>.+),\s*(?<article>The|A|An)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return title;
+        }
+
+        var article = match.Groups["article"].Value;
+        var core = match.Groups["core"].Value.Trim();
+        return $"{article} {core}";
     }
 }

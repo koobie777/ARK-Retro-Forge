@@ -1,118 +1,105 @@
 # ARK-Retro-Forge
 
-> **ARK Protocol Field Manual** – Portable .NET 8 toolkit for scanning, verifying, converting, and organizing ROM payloads across Sony/Nintendo/SEGA ecosystems. Every verb defaults to **DRY-RUN** and ships as a single-file EXE with zero installers.
+> **Mission Tagline:** Ark Station distributes a portable .NET 8 toolkit for charting, validating, and organizing ROM cargo across Sony/Nintendo/SEGA sectors. Every sortie launches in **DRY-RUN** and ships as a single-file EXE; no installers, no registry debris.
 
-## Transmission Overview
+---
 
-- **Command Deck:** `ark-retro-forge` (no args) launches a Spectre.Console menu with live status, DRY-RUN/APPLY toggle, ROM-root memory, and per-instance routing.
-- **Zero ROM Policy:** No ROMs, BIOS, keys, or third-party tools are bundled. You supply your own assets and utilities (chdman, maxcso, etc.).
-- **Instance Profiles:** `--instance <name>` isolates databases, logs, and DAT caches under `./instances/<profile>/` for parallel RC/dev/stable workflows.
-- **DAT Intelligence:** `dat sync` plus a built-in metadata index lets rename/merge/clean flows reason about serials, disc counts, and playlists even when filenames are noisy.
+## Mission Signal
 
-## Operations Manifest
+- **Command Deck** – Running `ark-retro-forge` opens the Spectre.Console UI with live telemetry, DRY-RUN/APPLY toggle, remembered ROM root, and per-instance routing.
+- **Instance Profiles** – `--instance <profile>` keeps databases, DAT caches, and logs under `./instances/<profile>/`. Spin RC, dev, and lab branches in parallel without cross-contamination.
+- **Zero ROM Policy** – Ark transports tooling only. Bring your own ROMs/BIOS/keys plus the external utilities (`chdman`, `maxcso`, `wit`, `ffmpeg`, etc.) under `./tools/`.
+- **DAT Intelligence** – `dat sync` pulls Redump/No-Intro catalogs into each instance. Renamer, Cleaner, and Merge planners use this intel to recover serials, disc counts, playlists, and warnings even when filenames are noisy, while PSX analyzers now read BIN/ISO headers first and only fall back to DAT entries when necessary.
+- **Telemetry-Free** – No network traffic unless you explicitly run `dat sync`. No analytics. Logs stay in your mission folder.
+
+---
+
+## Flight Manifest
 
 | Operation | Purpose | Highlights |
 |-----------|---------|------------|
-| `medical-bay` | Environment readiness | Detects missing external tools, prints fixes, JSON export. |
-| `scan` | Inventory ROMs | Recursive Spectre progress, per-extension stats, ROM cache hydration. |
-| `verify` | Hash integrity | Streaming CRC32/MD5/SHA1 updates ROM cache; throughput metrics. |
+| `medical-bay` | Tooling diagnostics | Detects required/optional utilities, shows version + path, emits JSON & Serilog logs. |
+| `scan` | ROM discovery | Recursive Spectre progress, per-extension stats, hydrates the ROM cache. |
+| `verify` | Hash integrity | Streams CRC32/MD5/SHA1 with throughput metrics; updates ROM cache. |
 | `rename psx` | Deterministic naming | `Title (Region) [Serial]` output, playlist planner integration. |
-| `convert psx` | CHD/BIN/ISO pipelines | Bidirectional CHD↔BIN/ISO with media (CD/DVD) detection, delete-source/rebuild flags. |
-| `merge psx` | Multi-track to single BIN | Validates CUE sheets, rewrites destination BIN/CUE, optional cleanup. |
-| `clean psx` | Organizer & staging | Moves multi-track BINs into dedicated folders, generates missing CUEs, ingests external directories using ROM-cache + DAT intelligence, flattens stray single-disc folders. |
-| `duplicates psx` | Hash-based dedupe | SHA1/MD5 detection, grouped reports, optional JSON to `logs/`. |
-| `extract archives` | ZIP/7Z/RAR | Batch header, ESC cancel, optional delete-source after extraction. |
-| `dat sync` | DAT catalog fetcher | Downloads Redump/No-Intro JSON-defined sources into instance-scoped `dat/` folders. |
+| `convert psx` | BIN/ISO/CHD pipelines | Media detection, delete-source safeguards, `--rebuild` support. |
+| `merge psx` | Multi-track consolidation | DAT-aware planner rewrites single BIN/CUE and highlights blockers. |
+| `clean psx` | Organizer & staging | Moves multi-track + multi-disc sets into `<Title (Region)>/<Title (Region) (Disc N)>`, builds missing CUEs, flattens safe folders, ingests staged imports. |
+| `duplicates psx` | Hash dedupe | SHA1/MD5/CRC32 detection with live hashing progress + optional JSON report. |
+| `extract archives` | ZIP/7Z/RAR management | Batch header, ESC cancel, optional delete-source. |
+| `dat sync` | Catalog fetcher | Downloads JSON-defined Redump/No-Intro DATs into instance `dat/` folders. |
+
+---
 
 ## Mission Console (Interactive Menu)
 
-1. **Medical Bay** – run this first to confirm toolchain alignment.  
-2. **Scan / Verify** – each prompt offers recursive toggle, ROM-root confirmation, and brings Spectre dashboards online.  
-3. **PSX Ops** – rename / convert / merge / clean / duplicates; menu prompts mirror CLI flags and respect global DRY-RUN state.  
-4. **Extract / DAT Sync** – manage archives and DAT catalogs from the same console.
+1. **Medical Bay** – always run before deploying. Confirms tooling loadout, shows a DAT snapshot, and can drop into the DAT console for per-system syncs.
+2. **Scan / Verify** – offers recursive toggle, ROM-root reminder, Spectre dashboards per run.
+3. **PSX Ops** – rename / convert / merge / clean / duplicates w/ prompts mirroring CLI flags and DRY-RUN awareness.
+4. **Archive Extract & DAT Sync** – manage ingestion + catalog refresh without leaving the deck.
 
-> Tip: DRY-RUN mode persists during the session. Switch to APPLY from the menu before executing destructive operations. Sessions reset back to DRY-RUN when restarted.
+> DRY-RUN persists per session. Flip to APPLY before destructive operations; the deck resets to DRY-RUN next launch. Press **ESC** to cancel any prompt or return to the previous menu.
 
-## Operation Details
+---
 
-### Medical Bay (Environment Diagnostics)
-- Replaces the legacy `doctor` verb with richer Spectre output, a JSON export, and Serilog logging so hardware/tool mismatches are obvious.
-- Runs before every RC release to confirm `chdman`, `maxcso`, `wit`, `ffmpeg`, etc. exist in `.\tools\`.
-- Accessible via `ark-retro-forge medical-bay` or from the interactive menu.
+## Ops Briefs
+All verbs now open with a Spectre header that highlights the current instance, scope, and DRY-RUN/APPLY mode so you immediately know whether changes will be written. ESC always cancels the current prompt/menu.
+
+### Medical Bay
+- Replaces the legacy `doctor` check with richer Spectre output + JSON export.
+- Displays Ready/Optional/Missing status, minimum version, and path per tool.
+- Surfaces DAT catalog health (Ready/Stale/Missing) per system, renders a compact snapshot, and offers the DAT console for filtering/searching the full catalog plus quick-sync presets (missing/stale, ready/force, active system). ESC skips any prompt instantly.
+- `ark-retro-forge medical-bay` or via the menu.
 
 ### Scan
-- Discovers supported extensions (`.bin/.cue/.iso/.chd/.pbp` plus Nintendo/Sega formats).
-- Populates the per-instance SQLite ROM cache (`file_path`, `size`, `title`, `region`, `rom_id`, timestamps).
-- Presents per-extension totals and file-size aggregation to highlight what was indexed.
-
-```ps1
-ark-retro-forge scan --root F:\ROMs --recursive
-```
+- Discovers supported extensions (`.bin/.cue/.iso/.chd/.pbp` + Nintendo/Sega formats).
+- Hydrates the SQLite ROM cache per instance.
+- Shows per-extension totals + file size distribution.
 
 ### Verify
-- Streaming hashes per file; updates cached CRC32/MD5/SHA1 and throughput metrics.
-- Designed for large libraries (cancellable with Ctrl+C). Works best after `scan`.
-
-```ps1
-ark-retro-forge verify --root F:\ROMs --recursive
-```
+- Streams CRC32/MD5/SHA1 per file, recording throughput + elapsed time.
+- Safe to cancel; best executed after `scan` to keep cache hot.
 
 ### Rename (PSX)
-- Applies the canonical `Title (Region) [Serial]` schema with disc numbering.
-- Integrates playlist planner to build or update `.m3u` multi-disc playlists.
-- Dry-runs by default; `--apply` commits changes.
-
-```ps1
-ark-retro-forge rename psx --root F:\PSX --recursive --apply
-```
+- Applies canonical `Title (Region) [Serial]` naming, disc numbering, and playlist building.
+- Honors DAT intel to recover missing serials and disc counts.
+- Strips trailing language markers like `(En,Ja,Fr)` by default; pass `--keep-language-tags` if you prefer to keep them.
 
 ### Convert (PSX)
-- Supports `--to chd|bin|iso` with CD/DVD auto-detection; leverages user-supplied `chdman`.
-- `--delete-source` requires `--apply`. Use `--rebuild` to force reconversion even if CHDs exist.
-
-```ps1
-ark-retro-forge convert psx --root F:\PSX --to chd --recursive --apply --delete-source
-```
+- CD/DVD-aware CHD/BIN/ISO conversions powered by user-supplied `chdman`.
+- `--delete-source` requires `--apply`. `--rebuild` forces conversion even if CHDs exist.
 
 ### Merge (PSX)
-- Uses `PsxBinMergePlanner` plus the DAT metadata index to identify multi-track BIN/CUE layouts, prevent multi-disc SKUs from merging incorrectly, and rewrites a single BIN with updated CUE references.
-- Optional source deletion (post-merge) safeguarded by prompts/dry-run.
-
-```ps1
-ark-retro-forge merge psx --root F:\PSX --recursive --apply
-```
+- Consolidates multi-track BIN/CUE layouts into a single BIN + updated CUE.
+- Blocks merges when disc metadata indicates a true multi-disc SKU.
 
 ### Clean (PSX Organizer)
-- Corrals multi-track sets into `PSX MultiTrack/<Game>/` (configurable).
-- Generates missing single-track CUE sheets, flattens stray single-disc directories back into the root, and ingests ROMs from a secondary location if the ROM cache/DAT catalog confirm legitimacy.
-- Prompts to hydrate the ROM cache via `scan` when needed.
+- Corrals multi-track discs into `<Title (Region)>/<Title (Region)>` directories (configurable container available).
+- Detects Disc 1/Disc 2/Disc 3 sets and rehousing them into `<Title (Region)>/<Title (Region) (Disc N)>` so flattening never destroys true multi-disc structures.
+- Generates missing CUE files by grouping Track 01/Track 02 BINs (data track first, audio tracks after), ingests ROMs from staging directories using ROM cache + DAT validation, and flattens only safe single-disc folders.
 
-```ps1
-ark-retro-forge clean psx --root F:\PSX --recursive --move-multitrack --generate-cues --flatten --ingest-root F:\Imports --apply
-```
+### Duplicates (PSX)
+- Hashes every file (SHA1 default) with a Spectre progress bar and summary stats.
+- Groups duplicates by hash; optional `--json` output to `logs/` for review.
 
 ### Extract Archives
-- Presents a clean header with root/output metadata, supports recursive scanning, optional delete-source, and ESC/Ctrl+C cancellation.
-
-```ps1
-ark-retro-forge extract archives --root C:\Downloads --output F:\Staging --recursive --apply --delete-source
-```
+- Recap header with root/output info, recursive mode, optional delete-source, ESC cancel support.
 
 ### DAT Sync
-- Reads `config/dat/dat-sources.json`, fetches each source into `instances/<profile>/dat/<system>/`, and skips downloads unless `--force` is provided.
+- Reads `config/dat/dat-sources.json`, downloads catalogs into `instances/<profile>/dat/<system>/`, respects cache unless `--force` is supplied.
 
-```ps1
-ark-retro-forge dat sync --system psx --force
-```
+---
 
 ## Quick Start Checklist
 
-1. **Download Release:** grab the latest `ark-retro-forge.exe` (RC/stable).
-2. **Provision Tools:** place `chdman.exe`, `maxcso.exe`, etc. inside `.\tools\`.
-3. **Run `medical-bay`:** ensure all dependencies are detected.
-4. **Set ROM Root:** via menu or CLI `--root`. Save it for future sessions.
-5. **Scan + Verify:** hydrate the ROM cache and record hashes.
-6. **Run Ops:** rename/convert/merge/clean/extract as needed (toggle APPLY to execute).
+1. **Download** the latest RC/stable release.
+2. **Provision tools** (`chdman`, `maxcso`, etc.) under `./tools/`.
+3. **Run `medical-bay`** to confirm diagnostics.
+4. **Set ROM root** (menu or CLI) and save for reuse.
+5. **Scan + Verify** to populate ROM + hash caches.
+6. **Execute ops** (rename/convert/merge/clean/extract) once APPLY is engaged.
+
+---
 
 ## CLI Reference
 
@@ -123,59 +110,59 @@ ark-retro-forge verify --root D:\ROMs --recursive
 ark-retro-forge rename psx --root D:\PSX --recursive --apply
 ark-retro-forge convert psx --root D:\PSX --to chd --apply --delete-source
 ark-retro-forge merge psx --root D:\PSX --recursive --apply
-ark-retro-forge clean psx --root D:\PSX --ingest-root D:\Imports --apply
+ark-retro-forge clean psx --root D:\PSX --move-multitrack --move-multidisc --generate-cues --flatten --apply
+ark-retro-forge duplicates psx --root D:\PSX --recursive --hash md5 --json
 ark-retro-forge extract archives --root C:\Downloads --output D:\Incoming --recursive --apply
 ark-retro-forge dat sync --system psx --force
 ```
 
-Global options (available on every command):
+**Global options:** `--dry-run` (default), `--apply`, `--force`, `--workers <N>`, `--instance <name>`, `--theme`, `--verbose`.
 
-- `--dry-run` (default), `--apply`, `--force`
-- `--workers <N>` control parallelism where applicable
-- `--instance <name>` isolates data stores
-- `--report`, `--verbose`, `--theme` for additional diagnostics/preferences
+---
 
-## Development & Building
+## Build & Layout
 
 ```powershell
 dotnet restore
 dotnet build -c Release
 dotnet test -c Release
-dotnet publish src/Cli/ARK.Cli.csproj -c Release -r win-x64 ^
-  -p:PublishSingleFile=true -p:SelfContained=true -p:PublishTrimmed=true
+dotnet publish src/Cli/ARK.Cli.csproj `
+  -c Release `
+  -r win-x64 `
+  --self-contained true `
+  -p:PublishSingleFile=true `
+  -p:PublishTrimmed=true `
+  -p:SuppressTrimAnalysisWarnings=true
 ```
-
-Project layout:
 
 ```
 src/
-  Core/   - hashing, DAT catalog, serializers, database, planners
-  Cli/    - Spectre.Console verbs + interactive menu
-config/   - emulator templates, DAT source catalog
-tools/    - user-supplied external executables
+  Core/   # hashing, DAT catalog, planners, persistence
+  Cli/    # Spectre.Console verbs + interactive menu
+config/   # emulator templates, DAT definitions
+tools/    # user-supplied binaries (chdman, etc.)
 instances/<profile>/
-  db/     - SQLite ROM cache
-  dat/    - downloaded DAT archives
-  logs/   - rolling Spectre/Serilog logs
+  db/     # SQLite ROM cache
+  dat/    # downloaded DAT archives
+  logs/   # Serilog + Spectre history
 ```
-
-## Security & Policy
-
-- Follows the strict **NO ROM / NO BIOS / NO DRM KEYS** rule (see `SECURITY.md`).
-- No telemetry, no network access required (except optional `dat sync`).
-- Open-source under MIT – audit or extend as needed.
-
-## Support Channels
-
-- Issues: [github.com/koobie777/ARK-Retro-Forge/issues](https://github.com/koobie777/ARK-Retro-Forge/issues)
-- Wiki / Docs: ongoing at the same repo.
-- Side Project Inspiration: [ARK-Ecosystem](https://github.com/koobie777/ARK-Ecosystem) – theming/alignment for protocols.
-
-## Release Flow
-
-- **RC builds** (`vX.Y.Z-rc.N`) – ship early features for testers. Tag and push to trigger the “Release Candidate” workflow.
-- **Stable builds** (`vX.Y.Z`) – once RC feedback lands, tag/push to run the “Release” workflow.
 
 ---
 
-*ARK-Retro-Forge is part of the broader ARK tooling experiments. Treat every operation like a mission: plan with DRY-RUN, confirm with APPLY, and keep your ROM cache synchronized.*
+## Protocol & Support
+
+- **Security** – Strict **NO ROM / NO BIOS / NO DRM KEYS** policy (see `SECURITY.md`). No telemetry.
+- **Issues** – [github.com/koobie777/ARK-Retro-Forge/issues](https://github.com/koobie777/ARK-Retro-Forge/issues)
+- **Docs** – Live in this repo (README/UPDATE) and the wider [ARK-Ecosystem](https://github.com/koobie777/ARK-Ecosystem).
+- **Sponsor** – [github.com/sponsors/koobie777](https://github.com/sponsors/koobie777)
+
+---
+
+## Release Flow
+
+- **RC builds** (`vX.Y.Z-rc.N`) – tag from `rc-upgrade` to trigger the Release Candidate workflow.
+- **Stable builds** (`vX.Y.Z`) – after RC sign-off, tag from `main` to push a stable release.
+
+---
+
+*Treat every operation like a sortie: stage in DRY-RUN, confirm with APPLY, keep your ROM cache synchronized, and never skip Medical Bay.*

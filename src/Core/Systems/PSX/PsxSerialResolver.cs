@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace ARK.Core.Systems.PSX;
@@ -7,6 +8,8 @@ namespace ARK.Core.Systems.PSX;
 /// </summary>
 public partial class PsxSerialResolver : IPsxSerialResolver
 {
+    private const int ProbeWindowBytes = 4 * 1024 * 1024;
+
     // Standard PSX serial pattern: SLUS-01234, SCUS-94567, etc.
     [GeneratedRegex(@"\[([A-Z]{4}-\d{5})\]", RegexOptions.IgnoreCase)]
     private static partial Regex StandardSerialPattern();
@@ -14,6 +17,10 @@ public partial class PsxSerialResolver : IPsxSerialResolver
     // Lightspan serial pattern: LSP-12345
     [GeneratedRegex(@"\[?(LSP-\d{5,6})\]?", RegexOptions.IgnoreCase)]
     private static partial Regex LightspanSerialPattern();
+
+    // Serial markers embedded in SYSTEM.CNF (e.g., SLUS_012.34;1)
+    [GeneratedRegex(@"([A-Z]{4})_(\d{3})\.(\d{2})", RegexOptions.IgnoreCase)]
+    private static partial Regex DiscSerialPattern();
     
     public bool TryFromFilename(string filename, out string? serial)
     {
@@ -48,9 +55,55 @@ public partial class PsxSerialResolver : IPsxSerialResolver
     
     public bool TryFromDiscProbe(string filePath, out string? serial)
     {
-        // TODO: Implement disc probing for serial extraction
-        // This would require reading the disc image and extracting SYSTEM.CNF or similar
         serial = null;
-        return false;
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return false;
+        }
+
+        var extension = Path.GetExtension(filePath);
+        if (!extension.Equals(".bin", StringComparison.OrdinalIgnoreCase) &&
+            !extension.Equals(".iso", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(filePath);
+            var bufferLength = (int)Math.Min(stream.Length, ProbeWindowBytes);
+            if (bufferLength <= 0)
+            {
+                return false;
+            }
+
+            var buffer = new byte[bufferLength];
+            var read = stream.Read(buffer, 0, bufferLength);
+            if (read <= 0)
+            {
+                return false;
+            }
+
+            var ascii = Encoding.ASCII.GetString(buffer, 0, read);
+            var match = DiscSerialPattern().Match(ascii);
+            if (!match.Success)
+            {
+                return false;
+            }
+
+            var prefix = match.Groups[1].Value.ToUpperInvariant();
+            var firstBlock = match.Groups[2].Value;
+            var secondBlock = match.Groups[3].Value;
+            serial = $"{prefix}-{firstBlock}{secondBlock}".Trim();
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 }
