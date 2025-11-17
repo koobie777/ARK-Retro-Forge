@@ -102,9 +102,17 @@ public sealed class DatMetadataIndex
                 }
             }
         }
-        catch (Exception)
+        catch (IOException)
         {
-            // Ignore malformed DATs; operations will continue with partial data.
+            // Ignore IO errors; operations will continue with partial data.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Ignore permission errors; operations will continue with partial data.
+        }
+        catch (FormatException)
+        {
+            // Ignore format errors; operations will continue with partial data.
         }
     }
 
