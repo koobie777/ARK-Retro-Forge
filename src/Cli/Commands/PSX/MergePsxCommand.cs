@@ -49,7 +49,7 @@ public static class MergePsxCommand
         var planner = new PsxBinMergePlanner();
         var operations = planner.PlanMerges(root, recursive);
 
-        var eligibleOperations = operations.Where(o => string.IsNullOrWhiteSpace(o.Warning)).ToList();
+        var eligibleOperations = operations.Where(o => !o.IsBlocked).ToList();
         var skippedOperations = operations.Count - eligibleOperations.Count;
 
         if (operations.Count == 0)
@@ -63,19 +63,31 @@ public static class MergePsxCommand
         table.AddColumn("[cyan]Title[/]");
         table.AddColumn("[yellow]Tracks[/]");
         table.AddColumn("[green]Status[/]");
-        table.AddColumn("[red]Warning[/]");
+        table.AddColumn("[red]Notes[/]");
 
         foreach (var op in operations)
         {
-            var status = op.Warning != null
+            var status = op.IsBlocked
                 ? "[red]SKIP[/]"
-                : "[yellow]MERGE[/]";
+                : op.AlreadyMerged
+                    ? "[green]READY[/]"
+                    : "[yellow]MERGE[/]";
+
+            var notes = new List<string>();
+            if (!string.IsNullOrWhiteSpace(op.BlockReason))
+            {
+                notes.Add(op.BlockReason);
+            }
+            if (op.Notes.Count > 0)
+            {
+                notes.AddRange(op.Notes);
+            }
 
             table.AddRow(
                 (op.Title ?? "Unknown").EscapeMarkup(),
                 op.TrackSources.Count.ToString(),
                 status,
-                (op.Warning ?? string.Empty).EscapeMarkup()
+                string.Join("; ", notes).EscapeMarkup()
             );
         }
 
@@ -87,7 +99,7 @@ public static class MergePsxCommand
         AnsiConsole.MarkupLine($"  Ready to merge: [green]{eligibleOperations.Count}[/]");
         if (skippedOperations > 0)
         {
-            AnsiConsole.MarkupLine($"  Skipped (warnings): [red]{skippedOperations}[/]");
+            AnsiConsole.MarkupLine($"  Skipped (blocked): [red]{skippedOperations}[/]");
         }
         AnsiConsole.WriteLine();
 
