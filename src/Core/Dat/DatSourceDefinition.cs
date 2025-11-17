@@ -19,6 +19,9 @@ public sealed record DatSourceDefinition
     [JsonPropertyName("url")]
     public required string Url { get; init; }
 
+    /// <summary>
+    /// Optional URL to download cue sheet files associated with this DAT source.
+    /// </summary>
     [JsonPropertyName("cueUrl")]
     public string? CueUrl { get; init; }
 
