@@ -40,8 +40,17 @@ public static class MergePsxCommand
             new HeaderMetadata("Delete source", deleteFlag ? "[red]Yes[/]" : "No", IsMarkup: deleteFlag));
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX merge");
 
-        var planner = new PsxBinMergePlanner();
-        var operations = planner.PlanMerges(root, recursive);
+        List<PsxBinMergeOperation> operations;
+        AnsiConsole.Status()
+            .Spinner(Spinner.Known.Dots)
+            .SpinnerStyle(Style.Parse("yellow"))
+            .Start("Scanning for multi-track CUE files...", ctx =>
+            {
+                var planner = new PsxBinMergePlanner();
+                operations = planner.PlanMerges(root, recursive);
+                ctx.Status($"Found {operations.Count} multi-track layout(s)");
+                Thread.Sleep(500); // Brief pause to show result
+            });
 
         var eligibleOperations = operations.Where(o => !o.IsBlocked).ToList();
         var skippedOperations = operations.Count - eligibleOperations.Count;
