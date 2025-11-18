@@ -6,6 +6,14 @@ This file contains release notes for ARK-Retro-Forge releases.
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v1.0.1 (2025-11-18)
+
+### CLI / UX
+- `merge psx` now displays a spinning status indicator during the CUE file scan phase, preventing the appearance of a hang when scanning large recursive directory trees. The scanner reports the total number of multi-track layouts found before rendering the merge table.
+
+### Infrastructure / Release
+- Bumped version to `v1.0.1` across CLI banner, README quick-start, and AGENTS.md tagging examples.
+
 ## v1.0.0 (2025-11-17)
 
 ### Infrastructure / Release
