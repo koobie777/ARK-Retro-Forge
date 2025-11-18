@@ -74,7 +74,7 @@
 
 * Tag RCs `vX.Y.Z-rc.N` to trigger the release-candidate workflow; stable releases use `vX.Y.Z`.
 
-* Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc-upgrade` for RCs, `main` for stable). Example: `git checkout rc-upgrade && git pull && git tag v1.0.1-rc.1 && git push origin v1.0.1-rc.1`.
+* Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc-upgrade` for RCs, `main` for stable). Example: `git checkout rc-upgrade && git pull && git tag v1.0.2-rc.1 && git push origin v1.0.2-rc.1`.
 
 * One logical change per PR with description, linked issue, CLI screenshots for UX shifts, test plan, and rollback notes.
 

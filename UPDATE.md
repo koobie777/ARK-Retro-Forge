@@ -6,6 +6,14 @@ This file contains release notes for ARK-Retro-Forge releases.
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v1.0.2 (2025-11-18)
+
+### PSX Tooling
+- Fixed `merge psx` creating duplicate merged BIN/CUE files when re-running merges. The service now deletes any existing merged output before creating the new merged file.
+- Fixed `merge psx --delete-source` to delete source track BIN files immediately after copying each track (saves disk space during merge), then removes the original CUE and prunes empty parent directories after successful completion.
+- Fixed `clean psx --move-multitrack` to always create multi-track containers INSIDE a `Title (Region)` subdirectory instead of placing them beside the ROM root, maintaining proper organization hierarchy.
+- Added `--remove-duplicates` flag to `clean psx` command, integrating hash-based duplicate detection and removal. The cleaner scans for duplicates during the planning phase, confirms removal with the user, keeps the first file in each duplicate group, and deletes the rest. Duplicate summary appears in the final operations table showing hash, title, file count, and space savings.
+
 ## v1.0.1 (2025-11-18)
 
 ### CLI / UX

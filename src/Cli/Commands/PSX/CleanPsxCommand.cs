@@ -48,6 +48,7 @@ public static class CleanPsxCommand
         var generateCues = args.Contains("--generate-cues");
         var moveIngest = args.Contains("--ingest-move");
         var flattenSingles = args.Contains("--flatten");
+        var removeDuplicates = args.Contains("--remove-duplicates");
         var autoYes = args.Contains("--yes");
         var interactive = AnsiConsole.Profile.Capabilities.Interactive;
         var datSummary = DatStatusReporter.Inspect("psx").FirstOrDefault();
@@ -74,6 +75,7 @@ public static class CleanPsxCommand
         List<CueCreationPlan> cuePlans = new();
         List<IngestMovePlan> ingestPlans = new();
         List<FlattenMovePlan> flattenPlans = new();
+        List<DuplicateGroup> duplicateGroups = new();
 
         var planningSteps = new List<(string Label, Func<Task> Work)>
         {
@@ -99,6 +101,15 @@ public static class CleanPsxCommand
             ("Checking folders safe to flatten", () =>
             {
                 flattenPlans = PlanFlattenMoves(root, recursive);
+                return Task.CompletedTask;
+            }),
+            ("Scanning for duplicates", () =>
+            {
+                if (removeDuplicates)
+                {
+                    var detector = new PsxDuplicateDetector();
+                    duplicateGroups = detector.ScanForDuplicates(root, recursive, "SHA1");
+                }
                 return Task.CompletedTask;
             })
         };
@@ -127,7 +138,7 @@ public static class CleanPsxCommand
                 }
             });
 
-        RenderSummary(multiTrackPlans, multiDiscPlans, cuePlans, ingestPlans, flattenPlans);
+        RenderSummary(multiTrackPlans, multiDiscPlans, cuePlans, ingestPlans, flattenPlans, duplicateGroups);
 
         OperationContextScope.ThrowIfCancellationRequested();
 
@@ -156,6 +167,12 @@ public static class CleanPsxCommand
             flattenSingles = autoYes || AnsiConsole.Confirm($"Flatten {flattenPlans.Count} single-disc folder(s) into the PSX root?");
         }
 
+        if (removeDuplicates && duplicateGroups.Count > 0 && apply && interactive)
+        {
+            var totalDupes = duplicateGroups.Sum(g => g.Files.Count - 1);
+            removeDuplicates = autoYes || AnsiConsole.Confirm($"[red]Delete {totalDupes} duplicate file(s)?[/] (Keeps first in each group)");
+        }
+
         if (!apply)
         {
             AnsiConsole.MarkupLine("[yellow]DRY-RUN:[/] Preview only. Use --apply to make changes.");
@@ -167,6 +184,7 @@ public static class CleanPsxCommand
         var createdCues = generateCues ? ExecuteCueCreations(cuePlans) : 0;
         var movedImports = moveIngest ? ExecuteIngestMoves(ingestPlans) : 0;
         var flattened = flattenSingles ? ExecuteFlattenMoves(flattenPlans, root) : 0;
+        var removedDuplicates = removeDuplicates ? ExecuteDuplicateRemoval(duplicateGroups) : 0;
 
         AnsiConsole.MarkupLine("[green]Clean-up complete.[/]");
         AnsiConsole.MarkupLine($"  Multi-track sets moved: {movedMultiTrack}");
@@ -188,16 +206,19 @@ public static class CleanPsxCommand
         var planner = new PsxBinMergePlanner();
         var operations = planner.PlanMerges(root, recursive);
         var plans = new List<MultiTrackMovePlan>();
-        var baseRoot = string.IsNullOrWhiteSpace(multiTrackDirName)
-            ? root
-            : Path.Combine(root, SanitizePathSegment(multiTrackDirName));
 
         foreach (var op in operations.Where(op => op.TrackSources.Count > 1))
         {
             ThrowIfCancelled();
             var baseFolder = BuildTitleRegionFolder(op.DiscInfo.Title, op.DiscInfo.Region);
             var discFolder = BuildDiscFolderName(baseFolder, op.DiscInfo.DiscNumber, op.DiscInfo.DiscCount);
-            var destDir = Path.Combine(baseRoot, baseFolder, discFolder);
+            
+            // Always create container inside subdirectory, never beside root
+            var containerDir = string.IsNullOrWhiteSpace(multiTrackDirName)
+                ? Path.Combine(root, baseFolder)
+                : Path.Combine(root, SanitizePathSegment(multiTrackDirName), baseFolder);
+            
+            var destDir = Path.Combine(containerDir, discFolder);
 
             var files = op.TrackSources.Select(t => t.AbsolutePath).Where(File.Exists).ToList();
             if (File.Exists(op.CuePath))
@@ -426,7 +447,8 @@ public static class CleanPsxCommand
         IReadOnlyCollection<MultiDiscMovePlan> multiDiscPlans,
         IReadOnlyCollection<CueCreationPlan> cuePlans,
         IReadOnlyCollection<IngestMovePlan> ingestPlans,
-        IReadOnlyCollection<FlattenMovePlan> flattenPlans)
+        IReadOnlyCollection<FlattenMovePlan> flattenPlans,
+        List<DuplicateGroup> duplicateGroups)
     {
         var infoTable = new Table().Border(TableBorder.Rounded);
         infoTable.AddColumn("[cyan]Focus[/]");
@@ -437,6 +459,11 @@ public static class CleanPsxCommand
         infoTable.AddRow("Missing CUE files", cuePlans.Count.ToString("N0"));
         infoTable.AddRow("Import candidates", ingestPlans.Count.ToString("N0"));
         infoTable.AddRow("Flatten candidates", flattenPlans.Count.ToString("N0"));
+        if (duplicateGroups.Count > 0)
+        {
+            var totalDupes = duplicateGroups.Sum(g => g.Files.Count - 1);
+            infoTable.AddRow("Duplicate files", totalDupes.ToString("N0"));
+        }
 
         AnsiConsole.Write(infoTable);
 
@@ -524,6 +551,32 @@ public static class CleanPsxCommand
             if (flattenPlans.Count > 5)
             {
                 table.AddRow("[grey]…[/]", "[grey]…[/]");
+            }
+            AnsiConsole.Write(table);
+        }
+
+        if (duplicateGroups.Count > 0)
+        {
+            var table = new Table { Title = new TableTitle("[red]Duplicates[/]") };
+            table.AddColumn("Hash");
+            table.AddColumn("Title");
+            table.AddColumn("Files");
+            table.AddColumn("Size");
+            foreach (var group in duplicateGroups.Take(5))
+            {
+                var dupeCount = group.Files.Count - 1; // First kept
+                var size = group.Files.Skip(1).Sum(f => f.FileSize);
+                var sizeStr = FormatBytes(size);
+                
+                table.AddRow(
+                    group.Hash[..8], // First 8 chars of hash
+                    group.Files[0].DiscInfo.Title ?? "Unknown",
+                    dupeCount.ToString("N0"),
+                    sizeStr);
+            }
+            if (duplicateGroups.Count > 5)
+            {
+                table.AddRow("[grey]…[/]", "[grey]…[/]", "[grey]…[/]", "[grey]…[/]");
             }
             AnsiConsole.Write(table);
         }
@@ -633,6 +686,30 @@ public static class CleanPsxCommand
         }
 
         return flattened;
+    }
+
+    private static int ExecuteDuplicateRemoval(List<DuplicateGroup> groups)
+    {
+        var removed = 0;
+        foreach (var group in groups)
+        {
+            ThrowIfCancelled();
+            // Keep first file, delete the rest
+            foreach (var file in group.Files.Skip(1))
+            {
+                try
+                {
+                    File.Delete(file.FilePath);
+                    removed++;
+                }
+                catch (Exception ex)
+                {
+                    AnsiConsole.MarkupLine($"[yellow]Warning: Failed to delete {file.FilePath.EscapeMarkup()}: {ex.Message.EscapeMarkup()}[/]");
+                }
+            }
+        }
+
+        return removed;
     }
 
     private static List<CueTrackPlan> BuildCueTrackPlans(IEnumerable<string> binPaths)
@@ -876,6 +953,19 @@ public static class CleanPsxCommand
     private sealed record IngestMovePlan(string SourcePath, string DestinationPath, string? Title, string? Region);
     private sealed record FlattenMovePlan(string Directory, IReadOnlyList<string> Files);
     private sealed record DiscEntry(string FilePath, PsxDiscInfo Info);
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
 
     private static void ThrowIfCancelled()
         => OperationContextScope.ThrowIfCancellationRequested();
