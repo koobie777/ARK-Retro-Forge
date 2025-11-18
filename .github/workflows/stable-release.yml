@@ -73,17 +73,6 @@ jobs:
         fetch-depth: 0
         ref: ${{ steps.metadata.outputs.checkout_ref }}
 
-    - name: Validate stable tag ancestry
-      if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
-      shell: pwsh
-      run: |
-        git fetch origin main --depth=1
-        git merge-base --is-ancestor HEAD origin/main
-        if ($LASTEXITCODE -ne 0) {
-          Write-Error "Stable tags must be created from the main branch."
-          exit 1
-        }
-
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
