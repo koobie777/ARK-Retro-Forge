@@ -86,9 +86,7 @@ public static class CleanPsxCommand
             }),
             ("Planning multi-disc sets", () =>
             {
-                multiDiscPlans = AnsiConsole.Status()
-                    .Spinner(Spinner.Known.Dots)
-                    .Start("Scanning directories...", ctx => PlanMultiDiscMoves(root, recursive));
+                multiDiscPlans = PlanMultiDiscMoves(root, recursive);
                 return Task.CompletedTask;
             }),
             ("Scanning for missing CUE files", () =>
