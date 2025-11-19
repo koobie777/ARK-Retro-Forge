@@ -46,6 +46,8 @@ public record PsxBinTrackSource
     /// <summary>
     /// Plan multi-track BIN merges starting at the specified root.
     /// </summary>
+    /// <param name="rootPath">Root directory to scan for CUE files.</param>
+    /// <param name="recursive">Whether to search recursively in subdirectories.</param>
     /// <param name="outputDirectory">Optional directory where merged files should be placed. If null, outputs to same directory as source.</param>
     public List<PsxBinMergeOperation> PlanMerges(string rootPath, bool recursive = false, string? outputDirectory = null)
     {
