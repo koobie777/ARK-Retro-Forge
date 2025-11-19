@@ -46,7 +46,7 @@ public static class MergePsxCommand
             .Start("Scanning for multi-track CUE files...", ctx =>
             {
                 var planner = new PsxBinMergePlanner();
-                var ops = planner.PlanMerges(root, recursive);
+                var ops = planner.PlanMerges(root, recursive, outputDirectory: root);
                 ctx.Status($"Found {ops.Count} multi-track layout(s)");
                 Thread.Sleep(500); // Brief pause to show result
                 return ops;

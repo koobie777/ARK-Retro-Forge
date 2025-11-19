@@ -46,7 +46,8 @@ public record PsxBinTrackSource
     /// <summary>
     /// Plan multi-track BIN merges starting at the specified root.
     /// </summary>
-    public List<PsxBinMergeOperation> PlanMerges(string rootPath, bool recursive = false)
+    /// <param name="outputDirectory">Optional directory where merged files should be placed. If null, outputs to same directory as source.</param>
+    public List<PsxBinMergeOperation> PlanMerges(string rootPath, bool recursive = false, string? outputDirectory = null)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var cueFiles = Directory.GetFiles(rootPath, "*.cue", searchOption);
@@ -70,8 +71,9 @@ public record PsxBinTrackSource
             var discInfo = _parser.Parse(cueFile);
             var mergeBaseName = BuildMergeBaseName(cueFile);
 
-            var destinationBinPath = Path.Combine(directory, mergeBaseName + ".bin");
-            var destinationCuePath = Path.Combine(directory, mergeBaseName + ".cue");
+            var outputDir = outputDirectory ?? directory;
+            var destinationBinPath = Path.Combine(outputDir, mergeBaseName + ".bin");
+            var destinationCuePath = Path.Combine(outputDir, mergeBaseName + ".cue");
 
             var trackSources = cueSheet.Files.Select((fileEntry, index) =>
             {

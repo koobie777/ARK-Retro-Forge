@@ -41,9 +41,7 @@ public static class CleanPsxCommand
             ingestRoot = null;
         }
 
-        var multiTrackDirName = GetArgValue(args, "--multitrack-dir") ?? string.Empty;
         var importDirName = GetArgValue(args, "--import-dir") ?? "PSX Imports";
-        var moveMultiTrack = args.Contains("--move-multitrack");
         var moveMultiDisc = args.Contains("--move-multidisc");
         var generateCues = args.Contains("--generate-cues");
         var moveIngest = args.Contains("--ingest-move");
@@ -70,7 +68,6 @@ public static class CleanPsxCommand
 
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX clean");
 
-        List<MultiTrackMovePlan> multiTrackPlans = new();
         List<MultiDiscMovePlan> multiDiscPlans = new();
         List<CueCreationPlan> cuePlans = new();
         List<IngestMovePlan> ingestPlans = new();
@@ -79,14 +76,11 @@ public static class CleanPsxCommand
 
         var planningSteps = new List<(string Label, Func<Task> Work)>
         {
-            ("Planning multi-track moves", () =>
-            {
-                multiTrackPlans = PlanMultiTrackMoves(root, recursive, multiTrackDirName);
-                return Task.CompletedTask;
-            }),
             ("Planning multi-disc sets", () =>
             {
-                multiDiscPlans = PlanMultiDiscMoves(root, recursive);
+                multiDiscPlans = AnsiConsole.Status()
+                    .Spinner(Spinner.Known.Dots)
+                    .Start("Scanning directories...", ctx => PlanMultiDiscMoves(root, recursive));
                 return Task.CompletedTask;
             }),
             ("Scanning for missing CUE files", () =>
@@ -138,14 +132,9 @@ public static class CleanPsxCommand
                 }
             });
 
-        RenderSummary(multiTrackPlans, multiDiscPlans, cuePlans, ingestPlans, flattenPlans, duplicateGroups);
+        RenderSummary(multiDiscPlans, cuePlans, ingestPlans, flattenPlans, duplicateGroups);
 
         OperationContextScope.ThrowIfCancellationRequested();
-
-        if (!moveMultiTrack && multiTrackPlans.Count > 0 && apply && interactive)
-        {
-            moveMultiTrack = autoYes || AnsiConsole.Confirm($"Move {multiTrackPlans.Count} multi-track set(s) into [steelblue]{multiTrackDirName}[/]?");
-        }
 
         if (!moveMultiDisc && multiDiscPlans.Count > 0 && apply && interactive)
         {
@@ -179,7 +168,6 @@ public static class CleanPsxCommand
             return (int)ExitCode.OK;
         }
 
-        var movedMultiTrack = moveMultiTrack ? ExecuteMultiTrackMoves(multiTrackPlans) : 0;
         var movedMultiDiscs = moveMultiDisc ? ExecuteMultiDiscMoves(multiDiscPlans) : 0;
         var createdCues = generateCues ? ExecuteCueCreations(cuePlans) : 0;
         var movedImports = moveIngest ? ExecuteIngestMoves(ingestPlans) : 0;
@@ -187,7 +175,6 @@ public static class CleanPsxCommand
         var removedDuplicates = removeDuplicates ? ExecuteDuplicateRemoval(duplicateGroups) : 0;
 
         AnsiConsole.MarkupLine("[green]Clean-up complete.[/]");
-        AnsiConsole.MarkupLine($"  Multi-track sets moved: {movedMultiTrack}");
         AnsiConsole.MarkupLine($"  Multi-disc sets organized: {movedMultiDiscs}");
         AnsiConsole.MarkupLine($"  CUE files generated: {createdCues}");
         AnsiConsole.MarkupLine($"  Imported ROMs moved: {movedImports}");
@@ -443,7 +430,6 @@ public static class CleanPsxCommand
     }
 
     private static void RenderSummary(
-        IReadOnlyCollection<MultiTrackMovePlan> multiTrackPlans,
         IReadOnlyCollection<MultiDiscMovePlan> multiDiscPlans,
         IReadOnlyCollection<CueCreationPlan> cuePlans,
         IReadOnlyCollection<IngestMovePlan> ingestPlans,
@@ -454,7 +440,6 @@ public static class CleanPsxCommand
         infoTable.AddColumn("[cyan]Focus[/]");
         infoTable.AddColumn("[green]Count[/]");
 
-        infoTable.AddRow("Multi-track sets", multiTrackPlans.Count.ToString("N0"));
         infoTable.AddRow("Multi-disc sets", multiDiscPlans.Count.ToString("N0"));
         infoTable.AddRow("Missing CUE files", cuePlans.Count.ToString("N0"));
         infoTable.AddRow("Import candidates", ingestPlans.Count.ToString("N0"));
@@ -466,22 +451,6 @@ public static class CleanPsxCommand
         }
 
         AnsiConsole.Write(infoTable);
-
-        if (multiTrackPlans.Count > 0)
-        {
-            var table = new Table { Title = new TableTitle("[steelblue]Multi-Track Sets[/]") };
-            table.AddColumn("Title");
-            table.AddColumn("Files");
-            foreach (var plan in multiTrackPlans.Take(5))
-            {
-                table.AddRow(plan.Title ?? "PSX", plan.Files.Count.ToString("N0"));
-            }
-            if (multiTrackPlans.Count > 5)
-            {
-                table.AddRow("[grey]…[/]", "[grey]…[/]");
-            }
-            AnsiConsole.Write(table);
-        }
 
         if (multiDiscPlans.Count > 0)
         {
