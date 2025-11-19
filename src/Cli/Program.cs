@@ -1536,50 +1536,39 @@ public class Program
         }
 
         var defaults = SessionStateManager.State.CleanPsx;
+        
+        // Descriptive choices map
+        var choiceMap = new Dictionary<string, string>
+        {
+            { "Recursive", "Recursive Scan (Include subdirectories)" },
+            { "MultiTrack", "Organize Multi-Track Sets (Merge .bin/.cue tracks into Title folders)" },
+            { "MultiDisc", "Organize Multi-Disc Sets (Group Disc 1/2/etc. into Title folders)" },
+            { "Cues", "Generate Missing CUEs (Create .cue files for .bin files)" },
+            { "Flatten", "Flatten Single-Disc Folders (Move single-disc games to root)" },
+            { "Ingest", "Import Staged ROMs (Process 'Ingest' folder)" }
+        };
+
         var prompt = new MultiSelectionPrompt<string>()
             .Title("Select [green]cleaning operations[/] to perform:")
             .PageSize(10)
             .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
-            .AddChoices(
-                "Scan recursively",
-                "Organize multi-track sets",
-                "Organize multi-disc sets",
-                "Generate missing CUEs",
-                "Flatten single-disc folders",
-                "Ingest imports");
+            .AddChoices(choiceMap.Values);
 
-        if (defaults.Recursive)
-        {
-            prompt.Select("Scan recursively");
-        }
-        if (defaults.MultiTrack)
-        {
-            prompt.Select("Organize multi-track sets");
-        }
-        if (defaults.MultiDisc)
-        {
-            prompt.Select("Organize multi-disc sets");
-        }
-        if (defaults.GenerateCues)
-        {
-            prompt.Select("Generate missing CUEs");
-        }
-        if (defaults.Flatten)
-        {
-            prompt.Select("Flatten single-disc folders");
-        }
-        if (defaults.Ingest)
-        {
-            prompt.Select("Ingest imports");
-        }
+        if (defaults.Recursive) prompt.Select(choiceMap["Recursive"]);
+        if (defaults.MultiTrack) prompt.Select(choiceMap["MultiTrack"]);
+        if (defaults.MultiDisc) prompt.Select(choiceMap["MultiDisc"]);
+        if (defaults.GenerateCues) prompt.Select(choiceMap["Cues"]);
+        if (defaults.Flatten) prompt.Select(choiceMap["Flatten"]);
+        if (defaults.Ingest) prompt.Select(choiceMap["Ingest"]);
 
         var selections = AnsiConsole.Prompt(prompt);
-        var recursive = selections.Contains("Scan recursively");
-        var moveMultiTrack = selections.Contains("Organize multi-track sets");
-        var moveMultiDisc = selections.Contains("Organize multi-disc sets");
-        var generateCues = selections.Contains("Generate missing CUEs");
-        var flattenSingles = selections.Contains("Flatten single-disc folders");
-        var doIngest = selections.Contains("Ingest imports");
+        
+        var recursive = selections.Contains(choiceMap["Recursive"]);
+        var moveMultiTrack = selections.Contains(choiceMap["MultiTrack"]);
+        var moveMultiDisc = selections.Contains(choiceMap["MultiDisc"]);
+        var generateCues = selections.Contains(choiceMap["Cues"]);
+        var flattenSingles = selections.Contains(choiceMap["Flatten"]);
+        var doIngest = selections.Contains(choiceMap["Ingest"]);
 
         // Save preferences
         SessionStateManager.Update(s => s with

@@ -66,7 +66,7 @@ public static class CleanPsxCommand
             new HeaderMetadata("Root", root),
             new HeaderMetadata("Recursive", recursive ? "Yes" : "No"),
             new HeaderMetadata("DAT", datStatus, IsMarkup: true),
-            new HeaderMetadata("Ingest", string.IsNullOrWhiteSpace(ingestRoot) ? "n/a" : ingestRoot!));
+            new HeaderMetadata("Import Folder", string.IsNullOrWhiteSpace(ingestRoot) ? "n/a" : ingestRoot!));
 
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX clean");
 
