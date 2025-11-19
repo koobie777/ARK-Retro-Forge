@@ -111,11 +111,11 @@ This file contains release notes for ARK-Retro-Forge releases.
 ## v0.2.0-rc.7 (2025-11-17)
 
 ### Infrastructure / Release
-- Completely rebuilt the Release Candidate workflow with metadata-driven ref selection, NuGet caching, artifact uploads, and rc-upgrade ancestry validation so tags/manual dispatches always package RC bits from the correct branch.
+- Completely rebuilt the Release Candidate workflow with metadata-driven ref selection, NuGet caching, artifact uploads, and rc ancestry validation so tags/manual dispatches always package RC bits from the correct branch.
 - Manual workflow_dispatch runs now keep artifacts without attempting to publish GitHub releases, while tag-triggered runs auto-publish RC zips/checksums with Medical Bay reminders baked into the notes.
 
 ### Documentation
-- `AGENTS.md` spells out that contributors must create and push RC/stable tags from the correct branch (e.g., `rc-upgrade` for `v0.2.0-rc.7`), preventing future releases from accidentally targeting `main`.
+- `AGENTS.md` spells out that contributors must create and push RC/stable tags from the correct branch (e.g., `rc` for `v0.2.0-rc.7`), preventing future releases from accidentally targeting `main`.
 
 ## v0.2.0-rc.6 (2025-11-16)
 

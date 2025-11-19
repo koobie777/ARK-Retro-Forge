@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Branch or tag to build (must track rc-upgrade)"
+        description: "Branch or tag to build (must track rc)"
         required: false
-        default: "rc-upgrade"
+        default: "rc"
       release_label:
         description: "Label used for manual dispatch runs (defaults to run-based stub)"
         required: false
@@ -77,10 +77,10 @@ jobs:
       if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') }}
       shell: pwsh
       run: |
-        git fetch origin rc-upgrade --depth=1
-        git merge-base --is-ancestor HEAD origin/rc-upgrade
+        git fetch origin rc --depth=1
+        git merge-base --is-ancestor HEAD origin/rc
         if ($LASTEXITCODE -ne 0) {
-          Write-Error "RC tags must be created from the rc-upgrade branch."
+          Write-Error "RC tags must be created from the rc branch."
           exit 1
         }
 

@@ -70,11 +70,11 @@
 
 * **Conventional Commits** (e.g., `feat(core): add CHD planner (#123)`).
 
-* Work lands on feature branches -> `rc-upgrade`. Open PRs targeting `main`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
+* Work lands on feature branches -> `rc`. Open PRs targeting `main`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
 
 * Tag RCs `vX.Y.Z-rc.N` to trigger the release-candidate workflow; stable releases use `vX.Y.Z`.
 
-* Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc-upgrade` for RCs, `main` for stable). Example: `git checkout rc-upgrade && git pull && git tag v1.0.2-rc.1 && git push origin v1.0.2-rc.1`.
+* Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc` for RCs, `main` for stable). Example: `git checkout rc && git pull && git tag v1.0.2-rc.1 && git push origin v1.0.2-rc.1`.
 
 * One logical change per PR with description, linked issue, CLI screenshots for UX shifts, test plan, and rollback notes.
 

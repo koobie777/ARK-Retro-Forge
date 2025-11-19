@@ -160,7 +160,7 @@ instances/<profile>/
 
 ## Release Flow
 
-- **RC builds** (`vX.Y.Z-rc.N`) – tag from `rc-upgrade` to trigger the Release Candidate workflow.
+- **RC builds** (`vX.Y.Z-rc.N`) – tag from `rc` to trigger the Release Candidate workflow.
 - **Stable builds** (`vX.Y.Z`) – after RC sign-off, tag from `main` to push a stable release.
 
 ---

@@ -4,7 +4,7 @@
 1. **Start in DRY-RUN** – every CLI verb defaults to preview mode. Never force destructive actions unless a user explicitly opts into APPLY.
 2. **Call Medical Bay First** – the environment check was renamed from `doctor`. Reference `ark-retro-forge medical-bay` (or menu equivalent) before other suggestions.
 3. **Respect Instances** – all tooling persists data under `instances/<profile>/`. Read/write paths must stay inside the repo (portable-only security rule).
-4. **Know the Branch Flow** – feature work lives on `rc-upgrade`, `main` is protected. Pull requests must target `main` and pass `Build and Test`, `CodeQL`, and `Release Candidate` checks.
+4. **Know the Branch Flow** – feature work lives on `rc`, `main` is protected. Pull requests must target `main` and pass `Build and Test`, `CodeQL`, and `Release Candidate` checks.
 5. **Tagging** – RC tags are `vX.Y.Z-rc.N` and trigger `.github/workflows/release-candidate.yml`. Avoid using environment variables named `VERSION` in workflows.
 
 ## When Editing Code
@@ -18,7 +18,7 @@
 - Update `README.md` + `UPDATE.md` whenever user-facing behavior changes (new verbs/options, renamed commands, RC notes).
 - `AGENTS.md` captures repo rules for human + AI contributors. Align new guidance with that file.
 - Mention Medical Bay (not doctor) in docs, issue replies, and UX text.
-- Release steps: push to `rc-upgrade`, open PR to `main`, merge when checks pass, then tag `vX.Y.Z-rc.N`. Stable releases follow later.
+- Release steps: push to `rc`, open PR to `main`, merge when checks pass, then tag `vX.Y.Z-rc.N`. Stable releases follow later.
 
 ## Security & Testing
 - Follow the **NO ROM/BIOS/KEY** policy. Keep tooling portable; never write outside the repo folder.
