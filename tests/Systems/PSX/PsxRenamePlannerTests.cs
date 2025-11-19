@@ -5,7 +5,7 @@ namespace ARK.Tests.Systems.PSX;
 public class PsxRenamePlannerTests
 {
     [Fact]
-    public void PlanRenames_DiscOfFormat_ShouldNormalize()
+    public async Task PlanRenames_DiscOfFormat_ShouldNormalize()
     {
         // Arrange
         var planner = new PsxRenamePlanner();
@@ -19,7 +19,7 @@ public class PsxRenamePlannerTests
         try
         {
             // Act
-            var operations = planner.PlanRenames(testDir, recursive: false);
+            var operations = await planner.PlanRenamesAsync(testDir, recursive: false);
             var operation = operations.Single();
             
             // Debug output
@@ -46,7 +46,7 @@ public class PsxRenamePlannerTests
     }
 
     [Fact]
-    public void PlanRenames_StripsLanguageTagsByDefault()
+    public async Task PlanRenames_StripsLanguageTagsByDefault()
     {
         var planner = new PsxRenamePlanner();
         var testDir = Path.Combine(Path.GetTempPath(), "ark-lang-default-" + Guid.NewGuid());
@@ -57,7 +57,7 @@ public class PsxRenamePlannerTests
 
         try
         {
-            var operations = planner.PlanRenames(testDir, recursive: false);
+            var operations = await planner.PlanRenamesAsync(testDir, recursive: false);
             var op = operations.Single();
 
             Assert.DoesNotContain("(En,Fr)", op.DestinationPath);
@@ -74,7 +74,7 @@ public class PsxRenamePlannerTests
     }
 
     [Fact]
-    public void PlanRenames_CanKeepLanguageTagsWhenRequested()
+    public async Task PlanRenames_CanKeepLanguageTagsWhenRequested()
     {
         var planner = new PsxRenamePlanner();
         var testDir = Path.Combine(Path.GetTempPath(), "ark-lang-keep-" + Guid.NewGuid());
@@ -85,7 +85,7 @@ public class PsxRenamePlannerTests
 
         try
         {
-            var operations = planner.PlanRenames(testDir, stripLanguageTags: false);
+            var operations = await planner.PlanRenamesAsync(testDir, stripLanguageTags: false);
             var op = operations.Single();
 
             Assert.Contains("(En,Fr)", op.DestinationPath);

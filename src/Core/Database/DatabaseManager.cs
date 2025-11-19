@@ -85,6 +85,33 @@ public class DatabaseManager : IAsyncDisposable
                 INSERT OR IGNORE INTO schema_version (version, description, applied_at)
                 VALUES (1, 'Initial schema', @AppliedAt);
             ", new { AppliedAt = DateTime.UtcNow.ToString("O") });
+            currentVersion = 1;
+        }
+
+        if (currentVersion < 2)
+        {
+            // Migration v2: Add PSX metadata columns
+            try 
+            {
+                await _connection!.ExecuteAsync("ALTER TABLE rom_cache ADD COLUMN serial TEXT;");
+            } catch { /* Ignore if exists */ }
+            try 
+            {
+                await _connection!.ExecuteAsync("ALTER TABLE rom_cache ADD COLUMN disc_number INTEGER;");
+            } catch { /* Ignore if exists */ }
+            try 
+            {
+                await _connection!.ExecuteAsync("ALTER TABLE rom_cache ADD COLUMN disc_count INTEGER;");
+            } catch { /* Ignore if exists */ }
+            try 
+            {
+                await _connection!.ExecuteAsync("ALTER TABLE rom_cache ADD COLUMN version TEXT;");
+            } catch { /* Ignore if exists */ }
+
+            await _connection!.ExecuteAsync(@"
+                INSERT INTO schema_version (version, description, applied_at)
+                VALUES (2, 'Add PSX metadata columns', @AppliedAt);
+            ", new { AppliedAt = DateTime.UtcNow.ToString("O") });
         }
     }
 

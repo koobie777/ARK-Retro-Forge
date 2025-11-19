@@ -43,6 +43,11 @@ internal static class CancellationMonitor
             return true;
         }
 
+        if (key.Key == ConsoleKey.Q)
+        {
+            return true;
+        }
+
         if (key.Key == ConsoleKey.B)
         {
             // Treat both lowercase and uppercase B as "Back" regardless of Shift.

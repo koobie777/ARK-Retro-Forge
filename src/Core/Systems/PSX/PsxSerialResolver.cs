@@ -8,7 +8,7 @@ namespace ARK.Core.Systems.PSX;
 /// </summary>
 public partial class PsxSerialResolver : IPsxSerialResolver
 {
-    private const int ProbeWindowBytes = 4 * 1024 * 1024;
+    private const int ProbeWindowBytes = 512 * 1024; // 512KB should be enough for SYSTEM.CNF
 
     // Standard PSX serial pattern: SLUS-01234, SCUS-94567, etc.
     [GeneratedRegex(@"\[([A-Z]{4}-\d{5})\]", RegexOptions.IgnoreCase)]

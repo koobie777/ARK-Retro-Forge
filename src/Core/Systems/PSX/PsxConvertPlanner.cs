@@ -45,26 +45,27 @@ public class PsxConvertPlanner
     /// <param name="recursive">Whether to scan recursively</param>
     /// <param name="rebuild">Force rebuild even if destination exists</param>
     /// <param name="target">Desired target format</param>
-    public List<PsxConvertOperation> PlanConversions(string rootPath, bool recursive = false, bool rebuild = false, PsxConversionTarget target = PsxConversionTarget.Chd)
+    /// <param name="flatten">Whether to flatten output to the root directory</param>
+    public List<PsxConvertOperation> PlanConversions(string rootPath, bool recursive = false, bool rebuild = false, PsxConversionTarget target = PsxConversionTarget.Chd, bool flatten = false)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         return target switch
         {
-            PsxConversionTarget.Chd => PlanCueToChd(rootPath, searchOption, rebuild),
-            PsxConversionTarget.BinCue => PlanChdToBinCue(rootPath, searchOption, rebuild),
-            PsxConversionTarget.Iso => PlanChdToIso(rootPath, searchOption, rebuild),
+            PsxConversionTarget.Chd => PlanCueToChd(rootPath, searchOption, rebuild, flatten),
+            PsxConversionTarget.BinCue => PlanChdToBinCue(rootPath, searchOption, rebuild, flatten),
+            PsxConversionTarget.Iso => PlanChdToIso(rootPath, searchOption, rebuild, flatten),
             _ => new List<PsxConvertOperation>()
         };
     }
 
-    private List<PsxConvertOperation> PlanCueToChd(string rootPath, SearchOption searchOption, bool rebuild)
+    private List<PsxConvertOperation> PlanCueToChd(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var cueFiles = Directory.GetFiles(rootPath, "*.cue", searchOption);
 
         foreach (var cueFile in cueFiles)
         {
-            var directory = Path.GetDirectoryName(cueFile) ?? string.Empty;
+            var directory = flatten ? rootPath : (Path.GetDirectoryName(cueFile) ?? string.Empty);
             var discInfo = _parser.Parse(cueFile);
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(cueFile, "PSX");
             var chdDiscInfo = discInfo with { Extension = ".chd" };
@@ -86,14 +87,14 @@ public class PsxConvertPlanner
         return operations;
     }
 
-    private List<PsxConvertOperation> PlanChdToBinCue(string rootPath, SearchOption searchOption, bool rebuild)
+    private List<PsxConvertOperation> PlanChdToBinCue(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var chdFiles = Directory.GetFiles(rootPath, "*.chd", searchOption);
 
         foreach (var chdFile in chdFiles)
         {
-            var directory = Path.GetDirectoryName(chdFile) ?? string.Empty;
+            var directory = flatten ? rootPath : (Path.GetDirectoryName(chdFile) ?? string.Empty);
             var baseName = Path.GetFileNameWithoutExtension(chdFile);
             var destinationCue = Path.Combine(directory, baseName + ".cue");
             var destinationBin = Path.Combine(directory, baseName + ".bin");
@@ -120,14 +121,14 @@ public class PsxConvertPlanner
         return operations;
     }
 
-    private List<PsxConvertOperation> PlanChdToIso(string rootPath, SearchOption searchOption, bool rebuild)
+    private List<PsxConvertOperation> PlanChdToIso(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var chdFiles = Directory.GetFiles(rootPath, "*.chd", searchOption);
 
         foreach (var chdFile in chdFiles)
         {
-            var directory = Path.GetDirectoryName(chdFile) ?? string.Empty;
+            var directory = flatten ? rootPath : (Path.GetDirectoryName(chdFile) ?? string.Empty);
             var baseName = Path.GetFileNameWithoutExtension(chdFile);
             var destinationPath = Path.Combine(directory, baseName + ".iso");
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);

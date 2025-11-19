@@ -27,7 +27,7 @@ FILE "Demo Game (USA) (Track 02).bin" BINARY
         File.WriteAllText(cuePath, cueContents);
 
         var planner = new PsxBinMergePlanner();
-        var operations = planner.PlanMerges(root);
+        var operations = await planner.PlanMergesAsync(root);
         Assert.Single(operations);
 
         var operation = operations[0];
@@ -71,7 +71,7 @@ FILE "Segments\Audio\Demo Game (USA) (Track 02).bin" BINARY
         File.WriteAllText(cuePath, cueContents);
 
         var planner = new PsxBinMergePlanner();
-        var operations = planner.PlanMerges(root);
+        var operations = await planner.PlanMergesAsync(root);
         Assert.Single(operations);
 
         var operation = operations[0];
@@ -113,7 +113,7 @@ FILE "Demo Game (USA) (Track 02).bin" BINARY
 """);
 
         var planner = new PsxBinMergePlanner();
-        var operations = planner.PlanMerges(root);
+        var operations = await planner.PlanMergesAsync(root);
         Assert.Single(operations);
         var operation = operations[0];
 

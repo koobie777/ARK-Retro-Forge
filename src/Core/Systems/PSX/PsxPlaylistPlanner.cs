@@ -99,7 +99,7 @@ public class PsxPlaylistPlanner
         {
             // Group discs by title and region (multi-disc sets)
             var multiDiscSets = discs
-                .Where(d => !string.IsNullOrWhiteSpace(d.Title) && !string.IsNullOrWhiteSpace(d.Region))
+                .Where(d => !string.IsNullOrWhiteSpace(d.Title))
                 .GroupBy(d => (d.Title, d.Region))
                 .Where(g => g.Count() > 1 || g.Any(d => d.IsMultiDisc))
                 .ToList();
@@ -107,8 +107,10 @@ public class PsxPlaylistPlanner
             foreach (var set in multiDiscSets)
             {
                 var title = set.Key.Title!;
-                var region = set.Key.Region!;
-                var playlistName = $"{title} ({region}).m3u";
+                var region = set.Key.Region;
+                var playlistName = !string.IsNullOrWhiteSpace(region) 
+                    ? $"{title} ({region}).m3u" 
+                    : $"{title}.m3u";
                 var playlistPath = Path.Combine(directory, playlistName);
                 
                 // Determine which files to include in playlist
@@ -141,6 +143,13 @@ public class PsxPlaylistPlanner
                     }
                 }
                 
+                // Skip single-disc playlists unless explicitly requested or it's a known multi-disc title with missing discs
+                // User requested: "play list creation is for mulit disc games not singles too"
+                if (discFilenames.Count < 2)
+                {
+                    continue;
+                }
+
                 // Check if playlist exists
                 var existingContent = File.Exists(playlistPath) ? File.ReadAllText(playlistPath) : null;
                 
@@ -171,7 +180,7 @@ public class PsxPlaylistPlanner
                     {
                         PlaylistPath = playlistPath,
                         Title = title,
-                        Region = region,
+                        Region = region ?? string.Empty,
                         DiscFilenames = discFilenames,
                         OperationType = operationType,
                         ExistingContent = existingContent
@@ -205,5 +214,118 @@ public class PsxPlaylistPlanner
         // Write new playlist content
         var content = string.Join(Environment.NewLine, operation.DiscFilenames);
         File.WriteAllText(operation.PlaylistPath, content);
+    }
+
+    /// <summary>
+    /// Plan playlist operations based on planned rename operations
+    /// </summary>
+    public List<PsxPlaylistOperation> PlanPlaylistsFromRenames(
+        IEnumerable<PsxRenameOperation> renameOps,
+        bool createNew = true,
+        bool updateExisting = true)
+    {
+        var operations = new List<PsxPlaylistOperation>();
+        
+        // Group by destination directory
+        var byDirectory = renameOps
+            .GroupBy(op => Path.GetDirectoryName(op.DestinationPath) ?? string.Empty);
+
+        foreach (var dirGroup in byDirectory)
+        {
+            var directory = dirGroup.Key;
+            
+            // Group by Title/Region
+            var sets = dirGroup
+                .Where(op => !op.DiscInfo.IsAudioTrack) // Skip audio tracks
+                .GroupBy(op => (Title: op.DiscInfo.Title, Region: op.DiscInfo.Region))
+                .Where(g => !string.IsNullOrWhiteSpace(g.Key.Title));
+
+            foreach (var set in sets)
+            {
+                var title = set.Key.Title!;
+                var region = set.Key.Region;
+                
+                // Skip single-disc sets
+                if (set.Count() < 2)
+                {
+                    continue;
+                }
+
+                var playlistName = !string.IsNullOrWhiteSpace(region) 
+                    ? $"{title} ({region}).m3u" 
+                    : $"{title}.m3u";
+                
+                var playlistPath = Path.Combine(directory, playlistName);
+                
+                // Group by disc number to handle multiple files per disc (e.g. CUE + BINs)
+                var discGroups = set
+                    .GroupBy(op => op.DiscInfo.DiscNumber ?? 1)
+                    .OrderBy(g => g.Key);
+
+                var discFilenames = new List<string>();
+                var extensionPriority = new[] { ".chd", ".cue", ".bin", ".iso", ".pbp" };
+
+                foreach (var discGroup in discGroups)
+                {
+                    // Pick the best file for this disc
+                    var selectedOp = discGroup
+                        .OrderBy(op => Array.IndexOf(extensionPriority, Path.GetExtension(op.DestinationPath).ToLowerInvariant()) switch
+                        {
+                            -1 => int.MaxValue,
+                            var idx => idx
+                        })
+                        .FirstOrDefault();
+
+                    if (selectedOp != null)
+                    {
+                        discFilenames.Add(Path.GetFileName(selectedOp.DestinationPath));
+                    }
+                }
+
+                // Skip single-disc sets (unless user wants single disc playlists, but usually not for rename side-effect)
+                if (discFilenames.Count < 2)
+                {
+                    continue;
+                }
+
+                // Check existing
+                var existingContent = File.Exists(playlistPath) ? File.ReadAllText(playlistPath) : null;
+                PlaylistOperationType operationType;
+
+                if (existingContent == null)
+                {
+                    operationType = createNew ? PlaylistOperationType.Create : PlaylistOperationType.None;
+                }
+                else
+                {
+                    // Check if update is needed
+                    var currentLines = existingContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                        .Select(l => l.Trim())
+                        .Where(l => !l.StartsWith("#"))
+                        .ToList();
+                    
+                    var needsUpdate = !currentLines.SequenceEqual(discFilenames);
+                    
+                    operationType = needsUpdate && updateExisting 
+                        ? PlaylistOperationType.Update 
+                        : PlaylistOperationType.None;
+                }
+
+                if (operationType != PlaylistOperationType.None)
+                {
+                    operations.Add(new PsxPlaylistOperation
+                    {
+                        PlaylistPath = playlistPath,
+                        Title = title,
+                        Region = region ?? string.Empty,
+                        DiscFilenames = discFilenames,
+                        OperationType = operationType,
+                        ExistingContent = existingContent
+                    });
+                }
+            }
+        }
+
+        return operations;
     }
 }

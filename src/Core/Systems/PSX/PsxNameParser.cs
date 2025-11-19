@@ -23,10 +23,18 @@ public partial class PsxNameParser
     // Matches: "Title (Region) [Serial]" - standard format without disc info
     [GeneratedRegex(@"^(.+?)\s*\(([^)]+)\)\s*\[([^\]]+)\]", RegexOptions.IgnoreCase)]
     private static partial Regex StandardPattern();
+
+    // Matches: "Title (Region)" - simple format without serial
+    [GeneratedRegex(@"^(.+?)\s*\(([^)]+)\)$", RegexOptions.IgnoreCase)]
+    private static partial Regex SimplePattern();
     
     // Matches: "(Track N)" or "(Track NN)" anywhere in the filename
     [GeneratedRegex(@"\(Track (\d+)\)", RegexOptions.IgnoreCase)]
     private static partial Regex TrackPattern();
+
+    // Matches: "(Rev N)", "(v1.0)", "(Ver 1.0)" anywhere in the filename
+    [GeneratedRegex(@"\((?:Rev|v|Ver\.?)\s*[\d.]+\)", RegexOptions.IgnoreCase)]
+    private static partial Regex VersionPattern();
     
     public PsxNameParser(
         IPsxSerialResolver? serialResolver = null,
@@ -38,6 +46,12 @@ public partial class PsxNameParser
         _datMetadata = datMetadata ?? DatMetadataCache.ForSystem("psx");
     }
     
+    public PsxContentType Classify(string filePath, string? serial)
+    {
+        var filename = Path.GetFileName(filePath);
+        return _contentClassifier.Classify(filename, serial);
+    }
+
     /// <summary>
     /// Parse a PSX filename to extract disc metadata
     /// </summary>
@@ -50,94 +64,213 @@ public partial class PsxNameParser
         string? title = null;
         string? region = null;
         string? serial = null;
+        string? version = null;
         int? discNumber = null;
         int? discCount = null;
         string? warning = null;
         var serialCandidates = new List<PsxSerialCandidate>();
+
+        // Extract version early
+        var versionMatch = VersionPattern().Match(nameWithoutExt);
+        if (versionMatch.Success)
+        {
+            version = versionMatch.Value.Trim('(', ')');
+        }
+
+        // 1. Internal Probe (Highest Priority for Identity)
+        // Try to read the serial directly from the disc header
+        var probed = _serialResolver.TryFromDiscProbe(filePath, out serial);
+        if (!probed && extension.Equals(".cue", StringComparison.OrdinalIgnoreCase))
+        {
+            var dataTrack = TryResolveDataTrackFromCue(filePath);
+            if (!string.IsNullOrWhiteSpace(dataTrack))
+            {
+                _serialResolver.TryFromDiscProbe(dataTrack, out serial);
+            }
+        }
+
+        // 2. DAT Lookup (Identity -> Metadata)
+        // If we found a serial, use it to fetch the official Title/Region from the DAT
+        if (!string.IsNullOrWhiteSpace(serial) && _datMetadata.TryGetBySerial(serial, out var metadata))
+        {
+            title = metadata.Title;
+            region = metadata.Region;
+            discCount = metadata.DiscCount;
+            
+            foreach (var candidateSerial in metadata.Serials)
+            {
+                serialCandidates.Add(new PsxSerialCandidate(metadata.Title, metadata.Region, candidateSerial, metadata.DiscCount));
+            }
+        }
+
+        // 3. Filename Parsing (Fallback & Supplement)
+        // We always need to parse the filename to get the Disc Number (which isn't in the header)
+        // and to fallback for Title/Region if the Probe/DAT failed.
         
-        // Try to match full standard format with optional disc info
         var match = FullNamePattern().Match(nameWithoutExt);
         if (match.Success)
         {
-            title = match.Groups[1].Value.Trim();
-            region = match.Groups[2].Value.Trim();
-            serial = match.Groups[3].Value.Trim();
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = match.Groups[1].Value.Trim();
+            }
+            if (string.IsNullOrWhiteSpace(region))
+            {
+                var candidateRegion = match.Groups[2].Value.Trim();
+                if (!VersionPattern().IsMatch($"({candidateRegion})"))
+                {
+                    region = candidateRegion;
+                }
+                else
+                {
+                    version = version ?? candidateRegion;
+                }
+            }
+            if (string.IsNullOrWhiteSpace(serial))
+            {
+                serial = match.Groups[3].Value.Trim(); // Only if probe failed
+            }
             
             if (match.Groups[4].Success)
             {
                 discNumber = int.Parse(match.Groups[4].Value);
             }
-            
             if (match.Groups[5].Success)
             {
-                discCount = int.Parse(match.Groups[5].Value);
+                discCount = discCount ?? int.Parse(match.Groups[5].Value);
             }
         }
         else
         {
-            // Try standard pattern without disc info
             match = StandardPattern().Match(nameWithoutExt);
             if (match.Success)
             {
-                title = match.Groups[1].Value.Trim();
-                region = match.Groups[2].Value.Trim();
-                serial = match.Groups[3].Value.Trim();
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    title = match.Groups[1].Value.Trim();
+                }
+                if (string.IsNullOrWhiteSpace(region))
+                {
+                    var candidateRegion = match.Groups[2].Value.Trim();
+                    if (!VersionPattern().IsMatch($"({candidateRegion})"))
+                    {
+                        region = candidateRegion;
+                    }
+                    else
+                    {
+                        version = version ?? candidateRegion;
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(serial))
+                {
+                    serial = match.Groups[3].Value.Trim();
+                }
             }
             
-            // Check for disc pattern anywhere in the name
             var discMatch = DiscPattern().Match(nameWithoutExt);
             if (discMatch.Success)
             {
                 discNumber = int.Parse(discMatch.Groups[1].Value);
                 if (discMatch.Groups[2].Success)
                 {
-                    discCount = int.Parse(discMatch.Groups[2].Value);
+                    discCount = discCount ?? int.Parse(discMatch.Groups[2].Value);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                var simpleMatch = SimplePattern().Match(nameWithoutExt);
+                if (simpleMatch.Success)
+                {
+                    var candidateRegion = simpleMatch.Groups[2].Value.Trim();
+                    // Avoid matching (Disc 1) or (Track 1) as region, or language lists (En,Fr), or pure numbers (1), or versions
+                    if (!candidateRegion.StartsWith("Disc ", StringComparison.OrdinalIgnoreCase) && 
+                        !candidateRegion.StartsWith("Track ", StringComparison.OrdinalIgnoreCase) &&
+                        !VersionPattern().IsMatch($"({candidateRegion})") &&
+                        !candidateRegion.Contains(',') &&
+                        !int.TryParse(candidateRegion, out _))
+                    {
+                        title = simpleMatch.Groups[1].Value.Trim();
+                        region = candidateRegion;
+                    }
                 }
             }
         }
-        
-        // If no serial found in structured format, try to extract from anywhere in filename
+
+        // 4. Last Resort Serial Extraction
+        // If probe failed AND filename regex failed, try loose serial extraction from filename
         if (string.IsNullOrWhiteSpace(serial))
         {
             _serialResolver.TryFromFilename(filename, out serial);
         }
 
-        if (string.IsNullOrWhiteSpace(serial))
+        // 4b. DAT Lookup for Filename-Derived Serial
+        // If we found a serial via filename (Probe failed), we should still try to look it up
+        // to get the official Title/Region/DiscCount from the DAT.
+        if (!string.IsNullOrWhiteSpace(serial) && _datMetadata.TryGetBySerial(serial, out var filenameMetadata))
         {
-            var probed = _serialResolver.TryFromDiscProbe(filePath, out serial);
-            if (!probed && extension.Equals(".cue", StringComparison.OrdinalIgnoreCase))
+            // Only overwrite if we don't have a title yet, or if we want to canonicalize
+            if (string.IsNullOrWhiteSpace(title))
             {
-                var dataTrack = TryResolveDataTrackFromCue(filePath);
-                if (!string.IsNullOrWhiteSpace(dataTrack))
-                {
-                    _serialResolver.TryFromDiscProbe(dataTrack, out serial);
-                }
+                title = filenameMetadata.Title;
+                region = filenameMetadata.Region;
+                discCount = filenameMetadata.DiscCount;
+            }
+            
+            foreach (var candidateSerial in filenameMetadata.Serials)
+            {
+                serialCandidates.Add(new PsxSerialCandidate(filenameMetadata.Title, filenameMetadata.Region, candidateSerial, filenameMetadata.DiscCount));
             }
         }
-        
-        // If still no title, use the filename as title
+
+        // 5. Last Resort Title Cleanup
         if (string.IsNullOrWhiteSpace(title))
         {
             title = nameWithoutExt;
-            // Remove disc suffix from title if present
             var discMatch = DiscPattern().Match(title);
             if (discMatch.Success)
             {
                 title = title[..discMatch.Index].Trim();
             }
-            // Remove track suffix from title if present
+            
             var trackMatchTemp = TrackPattern().Match(title);
             if (trackMatchTemp.Success)
             {
                 title = title[..trackMatchTemp.Index].Trim();
             }
-            // Remove serial brackets from title if present
+
+            var versionMatchTemp = VersionPattern().Match(title);
+            if (versionMatchTemp.Success)
+            {
+                title = title[..versionMatchTemp.Index].Trim();
+            }
+            
             if (!string.IsNullOrWhiteSpace(serial))
             {
                 title = title.Replace($"[{serial}]", "").Trim();
             }
         }
-        
+
+        // 6. DAT Enrichment (Title -> Metadata)
+        // If we still have no serial (Probe failed, Filename failed), try to look up by Title
+        if (string.IsNullOrWhiteSpace(serial) && !string.IsNullOrWhiteSpace(title))
+        {
+            DatTitleMetadata? titleMetadata = null;
+            if (_datMetadata.TryGet(title, region, out titleMetadata) || _datMetadata.TryGet(title, null, out titleMetadata))
+            {
+                if (titleMetadata != null)
+                {
+                    serial = titleMetadata.Serials.FirstOrDefault();
+                    discCount = discCount ?? titleMetadata.DiscCount;
+                    
+                    foreach (var candidateSerial in titleMetadata.Serials)
+                    {
+                        serialCandidates.Add(new PsxSerialCandidate(titleMetadata.Title, titleMetadata.Region, candidateSerial, titleMetadata.DiscCount));
+                    }
+                }
+            }
+        }
+
         // Detect multi-track layout
         int? trackNumber = null;
         int? trackCount = null;
@@ -148,53 +281,16 @@ public partial class PsxNameParser
         if (trackMatch.Success)
         {
             trackNumber = int.Parse(trackMatch.Groups[1].Value);
-            // Track 01 is typically the data track, Track 02+ are audio tracks
             isAudioTrack = trackNumber > 1;
             
-            // Try to find associated CUE file
             var directory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(directory) && extension.Equals(".bin", StringComparison.OrdinalIgnoreCase))
             {
-                // Look for a CUE file with similar name (without track suffix)
                 var baseName = nameWithoutExt[..trackMatch.Index].Trim();
                 var potentialCue = Path.Combine(directory, baseName + ".cue");
                 if (File.Exists(potentialCue))
                 {
                     cueFilePath = potentialCue;
-                }
-            }
-        }
-        
-        // Enrich with DAT metadata when available
-        title = title?.Trim();
-        region = region?.Trim();
-        if (!string.IsNullOrWhiteSpace(title))
-        {
-            DatTitleMetadata? metadata = null;
-            if (_datMetadata.TryGet(title, region, out metadata) || _datMetadata.TryGet(title, null, out metadata))
-            {
-                if (metadata != null)
-                {
-                    serial ??= metadata.Serials.FirstOrDefault();
-                    if (!discCount.HasValue && metadata.DiscCount.HasValue)
-                    {
-                        discCount = metadata.DiscCount;
-                    }
-
-                    foreach (var candidateSerial in metadata.Serials)
-                    {
-                        serialCandidates.Add(new PsxSerialCandidate(metadata.Title, metadata.Region, candidateSerial, metadata.DiscCount));
-                    }
-                }
-            }
-
-            if (serialCandidates.Count == 0)
-            {
-                var similar = _datMetadata.FindSimilar(title, maxResults: 3);
-                foreach (var entry in similar)
-                {
-                    var candidateSerial = entry.Serials.FirstOrDefault();
-                    serialCandidates.Add(new PsxSerialCandidate(entry.Title, entry.Region, candidateSerial, entry.DiscCount));
                 }
             }
         }
@@ -219,7 +315,6 @@ public partial class PsxNameParser
             }
         }
         
-        // Additional warning for multi-track audio files
         if (isAudioTrack && string.IsNullOrWhiteSpace(serial))
         {
             warning = warning != null ? $"{warning}; Audio track from multi-track disc" : "Audio track from multi-track disc";
@@ -231,6 +326,7 @@ public partial class PsxNameParser
             Title = title,
             Region = region,
             Serial = serial,
+            Version = version,
             DiscNumber = discNumber,
             DiscCount = discCount,
             ContentType = contentType,

@@ -71,13 +71,15 @@ public class Program
         {
             return command switch
             {
-                "doctor" or "medical" or "medical-bay" => await RunWithOperationScope("medical bay", () => RunMedicalBayAsync(args)),
-                "scan" => await RunWithOperationScope("scan", () => RunScanAsync(args)),
-                "verify" => await RunWithOperationScope("verify", () => RunVerifyAsync(args)),
+                "doctor" or "medical" or "medical-bay" => await RunWithOperationScope("medical bay", () => RunMedicalBayAsync(args), watchForEscape: true),
+                "scan" => await RunWithOperationScope("scan", () => RunScanAsync(args), watchForEscape: true),
+                "verify" => await RunWithOperationScope("verify", () => RunVerifyAsync(args), watchForEscape: true),
                 "rename" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("rename psx", () => RenamePsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
                 "convert" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("convert psx", () => ConvertPsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
                 "merge" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("merge psx", () => MergePsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
-                "clean" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("clean psx", () => CleanPsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "clean" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("clean psx", () => CleanPsxCommand.RunAsync(args), watchForEscape: true),
+                "playlist" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("playlist psx", () => PlaylistPsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
+                "cue" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("cue psx", () => CuePsxCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
                 "duplicates" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("duplicates psx", () => DuplicatesPsxCommand.RunAsync(args)),
                 "dupes" when args.Length > 1 && args[1].Equals("psx", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("duplicates psx", () => DuplicatesPsxCommand.RunAsync(args)),
                 "extract" when args.Length > 1 && args[1].Equals("archives", StringComparison.OrdinalIgnoreCase) => await RunWithOperationScope("extract archives", () => ExtractArchivesCommand.RunAsync(args), watchForEscape: HasFlag(args, "--apply")),
@@ -705,6 +707,13 @@ public class Program
         long totalBytes = 0;
         var startTime = DateTime.UtcNow;
 
+        // Initialize PSX parser if we are in PSX mode
+        PsxNameParser? psxParser = null;
+        if (_currentSystem.Code.Equals("psx", StringComparison.OrdinalIgnoreCase))
+        {
+            psxParser = new PsxNameParser();
+        }
+
         var progressColumns = new ProgressColumn[]
         {
             new TaskDescriptionColumn(),
@@ -733,6 +742,28 @@ public class Program
                     extensionStats[ext] = stats;
 
                     var romRecord = BuildRomRecord(file, scanTimestamp);
+
+                    // Enhanced detection for PSX
+                    if (psxParser != null && (romRecord.SystemId == "PSX" || IsPsxExtension(file)))
+                    {
+                        try 
+                        {
+                            var discInfo = psxParser.Parse(file);
+                            romRecord = romRecord with 
+                            { 
+                                Title = discInfo.Title ?? romRecord.Title,
+                                Region = discInfo.Region ?? romRecord.Region,
+                                Serial = discInfo.Serial,
+                                DiscNumber = discInfo.DiscNumber,
+                                DiscCount = discInfo.DiscCount
+                            };
+                        }
+                        catch
+                        {
+                            // Fallback to basic record if parsing fails
+                        }
+                    }
+
                     await romRepository.UpsertRomAsync(romRecord);
 
                     task.Description = $"Indexing {TruncateLabel(Path.GetFileName(file))}";
@@ -780,6 +811,14 @@ public class Program
 
         return (int)ExitCode.OK;
     }
+
+    private static bool IsPsxExtension(string path)
+    {
+        var ext = Path.GetExtension(path);
+        return new[] { ".bin", ".cue", ".iso", ".pbp", ".chd", ".cso" }
+            .Contains(ext, StringComparer.OrdinalIgnoreCase);
+    }
+
 
     private static async Task<int> RunVerifyAsync(string[] args)
     {
@@ -1019,7 +1058,7 @@ public class Program
                 choice = PromptWithCancel(
                     () => AnsiConsole.Prompt(
                         new SelectionPrompt<string>()
-                            .Title("[bold cyan]ROM Cache & Hashing[/] [grey](ESC to return)[/]")
+                            .Title("[bold cyan]ROM Cache & Hashing[/]")
                             .AddChoices(
                                 "Scan directories",
                                 "Verify hashes",
@@ -1048,6 +1087,12 @@ public class Program
 
     private static async Task ShowPsxOperationsMenuAsync()
     {
+        if (!string.IsNullOrWhiteSpace(_rememberedRomRoot))
+        {
+            var args = new[] { "scan", "--root", _rememberedRomRoot, "--recursive" };
+            await RunWithOperationScope("Auto-Scan", () => RunScanAsync(args), watchForEscape: true);
+        }
+
         while (true)
         {
             AnsiConsole.Clear();
@@ -1058,12 +1103,14 @@ public class Program
                 choice = PromptWithCancel(
                     () => AnsiConsole.Prompt(
                         new SelectionPrompt<string>()
-                            .Title($"[bold cyan]{_currentSystem.Name} Toolkit[/] [grey](ESC to return)[/]")
+                            .Title($"[bold cyan]{_currentSystem.Name} Toolkit[/]")
                             .AddChoices(
+                                "Clean library",
                                 "Rename library",
                                 "Convert images",
                                 "Merge multi-track BINs",
-                                "Clean library",
+                                "Manage Playlists",
+                                "Manage CUE sheets",
                                 "Find duplicates",
                                 "Back")),
                     $"{_currentSystem.Name} toolkit",
@@ -1076,6 +1123,9 @@ public class Program
 
             switch (choice)
             {
+                case "Clean library":
+                    await ExecuteMenuAction("Clean", RunMenuCleanPsxAsync);
+                    break;
                 case "Rename library":
                     await ExecuteMenuAction("Rename", RunMenuRenamePsxAsync, watchForEscape: !_menuDryRun);
                     break;
@@ -1085,8 +1135,11 @@ public class Program
                 case "Merge multi-track BINs":
                     await ExecuteMenuAction("Merge", RunMenuMergePsxAsync, watchForEscape: !_menuDryRun);
                     break;
-                case "Clean library":
-                    await ExecuteMenuAction("Clean", RunMenuCleanPsxAsync, watchForEscape: !_menuDryRun);
+                case "Manage Playlists":
+                    await ExecuteMenuAction("Playlist", RunMenuPlaylistPsxAsync, watchForEscape: !_menuDryRun);
+                    break;
+                case "Manage CUE sheets":
+                    await ExecuteMenuAction("CUE Tool", RunMenuCuePsxAsync, watchForEscape: !_menuDryRun);
                     break;
                 case "Find duplicates":
                     await ExecuteMenuAction("Duplicates", RunMenuDuplicatesPsxAsync);
@@ -1109,7 +1162,7 @@ public class Program
                 choice = PromptWithCancel(
                     () => AnsiConsole.Prompt(
                         new SelectionPrompt<string>()
-                            .Title("[bold cyan]Settings[/] [grey](ESC to return)[/]")
+                            .Title("[bold cyan]Settings[/]")
                             .AddChoices(
                                 "Set ROM root",
                                 "Set active system",
@@ -1245,16 +1298,14 @@ public class Program
                     : $"[yellow]Exit code {(ExitCode)exitCode}[/]";
                 var safeLabel = Markup.Escape(label);
                 AnsiConsole.MarkupLine($"\n[bold]{safeLabel}[/]: {status}");
+                Pause();
                 break;
             }
             catch (OperationCanceledException)
             {
-                var decision = ShowPromptCancelledOptions($"{label} action");
-                if (decision == PromptCancelAction.Return)
-                {
-                    AnsiConsole.MarkupLine("\n[yellow]Operation cancelled.[/]");
-                    break;
-                }
+                // If cancelled, just break the loop to return to menu without pausing
+                AnsiConsole.MarkupLine("\n[yellow]Operation cancelled.[/]");
+                break;
             }
             catch (Exception ex)
             {
@@ -1262,11 +1313,10 @@ public class Program
                 var component = Markup.Escape(label.ToLowerInvariant());
                 var context = Markup.Escape(ex.Message);
                 AnsiConsole.MarkupLine($"\n[red][[IMPACT]] | Component: {component} | Context: {context}[/]");
+                Pause(); // Only pause on error
                 break;
             }
         }
-
-        Pause();
     }
 
     private static async Task<int> RunWithOperationScope(string label, Func<Task<int>> action, bool watchForEscape = false)
@@ -1328,7 +1378,7 @@ public class Program
             args.Add("--recursive");
         }
 
-        return await RunScanAsync(args.ToArray());
+        return await RunWithOperationScope("Scan", () => RunScanAsync(args.ToArray()), watchForEscape: true);
     }
 
     private static async Task<int> RunMenuVerifyAsync()
@@ -1346,7 +1396,7 @@ public class Program
             args.Add("--recursive");
         }
 
-        return await RunVerifyAsync(args.ToArray());
+        return await RunWithOperationScope("Verify", () => RunVerifyAsync(args.ToArray()), watchForEscape: true);
     }
 
     private static async Task<int> RunMenuRenamePsxAsync()
@@ -1357,10 +1407,80 @@ public class Program
             return (int)ExitCode.InvalidArgs;
         }
 
-        var recursive = PromptYesNo("Scan recursively?", true);
-        var apply = !_menuDryRun;
-        var playlistMode = PromptForPlaylistMode();
-        var restoreArticles = PromptYesNo("Restore trailing articles (\", The\") to the front?", false);
+        var defaults = SessionStateManager.State.RenamePsx;
+        
+        var choiceMap = new Dictionary<string, string>
+        {
+            { "Recursive", "Recursive Scan" },
+            { "Version", "Include Version/Revision in filename" },
+            { "Articles", "Restore Articles (e.g. ', The' -> 'The ')" },
+            { "Playlists", "Manage Playlists (.m3u)" },
+            { "MultiDisc", "Detect Multi-Disc Sets (Assign Disc Numbers)" },
+            { "MultiTrack", "Scan CUE files (Handle multi-track BINs)" }
+        };
+
+        var prompt = new MultiSelectionPrompt<string>()
+            .Title("Select [green]rename options[/]:")
+            .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
+            .AddChoices(choiceMap.Values);
+        
+        if (defaults.Recursive)
+        {
+            prompt.Select(choiceMap["Recursive"]);
+        }
+        if (defaults.IncludeVersion)
+        {
+            prompt.Select(choiceMap["Version"]);
+        }
+        if (defaults.RestoreArticles)
+        {
+            prompt.Select(choiceMap["Articles"]);
+        }
+        if (defaults.PlaylistMode != "off")
+        {
+            prompt.Select(choiceMap["Playlists"]);
+        }
+        if (defaults.MultiDisc)
+        {
+            prompt.Select(choiceMap["MultiDisc"]);
+        }
+        if (defaults.MultiTrack)
+        {
+            prompt.Select(choiceMap["MultiTrack"]);
+        }
+
+        var selections = AnsiConsole.Prompt(prompt);
+        
+        var recursive = selections.Contains(choiceMap["Recursive"]);
+        var includeVersion = selections.Contains(choiceMap["Version"]);
+        var restoreArticles = selections.Contains(choiceMap["Articles"]);
+        var managePlaylists = selections.Contains(choiceMap["Playlists"]);
+        var multiDisc = selections.Contains(choiceMap["MultiDisc"]);
+        var multiTrack = selections.Contains(choiceMap["MultiTrack"]);
+        
+        var playlistMode = "off";
+        if (managePlaylists)
+        {
+             var modePrompt = new SelectionPrompt<string>()
+                .Title("Playlist Mode")
+                .AddChoices("Create (New only)", "Update (Create & Sync existing)");
+             
+             var modeSel = AnsiConsole.Prompt(modePrompt);
+             playlistMode = modeSel.StartsWith("Update") ? "update" : "create";
+        }
+
+        SessionStateManager.Update(s => s with {
+            RenamePsx = new RenamePsxOptions {
+                Recursive = recursive,
+                IncludeVersion = includeVersion,
+                PlaylistMode = playlistMode,
+                RestoreArticles = restoreArticles,
+                MultiDisc = multiDisc,
+                MultiTrack = multiTrack
+            }
+        });
+
+        var apply = !_menuDryRun && PromptYesNo("Apply changes?", true);
 
         var args = new List<string> { "rename", "psx", "--root", root };
         if (recursive)
@@ -1371,10 +1491,26 @@ public class Program
         {
             args.Add("--apply");
         }
-        if (!string.IsNullOrWhiteSpace(playlistMode) && !playlistMode.Equals("create", StringComparison.OrdinalIgnoreCase))
+        if (includeVersion)
+        {
+            args.Add("--include-version");
+        }
+        if (restoreArticles)
+        {
+            args.Add("--restore-articles");
+        }
+        if (playlistMode != "off")
         {
             args.Add("--playlists");
             args.Add(playlistMode);
+        }
+        if (!multiDisc)
+        {
+            args.Add("--no-multi-disc");
+        }
+        if (!multiTrack)
+        {
+            args.Add("--no-multi-track");
         }
 
         if (!apply)
@@ -1554,12 +1690,30 @@ public class Program
             .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
             .AddChoices(choiceMap.Values);
 
-        if (defaults.Recursive) prompt.Select(choiceMap["Recursive"]);
-        if (defaults.MultiTrack) prompt.Select(choiceMap["MultiTrack"]);
-        if (defaults.MultiDisc) prompt.Select(choiceMap["MultiDisc"]);
-        if (defaults.GenerateCues) prompt.Select(choiceMap["Cues"]);
-        if (defaults.Flatten) prompt.Select(choiceMap["Flatten"]);
-        if (defaults.Ingest) prompt.Select(choiceMap["Ingest"]);
+        if (defaults.Recursive)
+        {
+            prompt.Select(choiceMap["Recursive"]);
+        }
+        if (defaults.MultiTrack)
+        {
+            prompt.Select(choiceMap["MultiTrack"]);
+        }
+        if (defaults.MultiDisc)
+        {
+            prompt.Select(choiceMap["MultiDisc"]);
+        }
+        if (defaults.GenerateCues)
+        {
+            prompt.Select(choiceMap["Cues"]);
+        }
+        if (defaults.Flatten)
+        {
+            prompt.Select(choiceMap["Flatten"]);
+        }
+        if (defaults.Ingest)
+        {
+            prompt.Select(choiceMap["Ingest"]);
+        }
 
         var selections = AnsiConsole.Prompt(prompt);
         
@@ -1656,7 +1810,7 @@ public class Program
             AnsiConsole.MarkupLine("[yellow]Global dry-run mode: cleaner will preview without moving files.[/]");
         }
 
-        return await CleanPsxCommand.RunAsync(args.ToArray());
+        return await RunWithOperationScope("Clean PSX", () => CleanPsxCommand.RunAsync(args.ToArray()), watchForEscape: true);
     }
 
     private static async Task<int> RunMenuExtractArchivesAsync()
@@ -2157,6 +2311,101 @@ public class Program
         }
 
         args = filtered.ToArray();
+    }
+
+    private static async Task<int> RunMenuCuePsxAsync()
+    {
+        var root = EnsureRomRoot("Enter PSX root folder");
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var recursive = PromptYesNo("Scan recursively?", true);
+        var apply = !_menuDryRun;
+        
+        var modes = AnsiConsole.Prompt(
+            new MultiSelectionPrompt<string>()
+                .Title("Select CUE operations")
+                .AddChoices("Create missing CUEs", "Update invalid CUEs", "Scrape from Redump (Not Implemented)")
+        );
+
+        var create = modes.Contains("Create missing CUEs");
+        var update = modes.Contains("Update invalid CUEs");
+        var scrape = modes.Contains("Scrape from Redump (Not Implemented)");
+        var force = create && PromptYesNo("Force overwrite existing CUEs?", false);
+
+        var args = new List<string> { "cue", "psx", "--root", root };
+        if (recursive)
+        {
+            args.Add("--recursive");
+        }
+        if (apply)
+        {
+            args.Add("--apply");
+        }
+        if (create)
+        {
+            args.Add("--create");
+        }
+        if (update)
+        {
+            args.Add("--update");
+        }
+        if (scrape)
+        {
+            args.Add("--scrape");
+        }
+        if (force)
+        {
+            args.Add("--force");
+        }
+
+        if (!apply)
+        {
+            AnsiConsole.MarkupLine("[yellow]Global dry-run mode: CUE tool will preview changes only.[/]");
+        }
+
+        return await CuePsxCommand.RunAsync(args.ToArray());
+    }
+
+    private static async Task<int> RunMenuPlaylistPsxAsync()
+    {
+        var root = EnsureRomRoot("Enter PSX root folder");
+        if (string.IsNullOrWhiteSpace(root))
+        {
+            return (int)ExitCode.InvalidArgs;
+        }
+
+        var recursive = PromptYesNo("Scan recursively?", true);
+        var createNew = PromptYesNo("Create new playlists?", true);
+        var updateExisting = PromptYesNo("Update existing playlists?", true);
+        var apply = !_menuDryRun && PromptYesNo("Apply changes?", true);
+
+        var args = new List<string> { "playlist", "psx", "--root", root };
+        if (recursive)
+        {
+            args.Add("--recursive");
+        }
+        if (apply)
+        {
+            args.Add("--apply");
+        }
+        if (!createNew)
+        {
+            args.Add("--no-create");
+        }
+        if (!updateExisting)
+        {
+            args.Add("--no-update");
+        }
+
+        if (!apply)
+        {
+            AnsiConsole.MarkupLine("[yellow]Global dry-run mode: playlist tool will preview changes only.[/]");
+        }
+
+        return await PlaylistPsxCommand.RunAsync(args.ToArray());
     }
 }
 

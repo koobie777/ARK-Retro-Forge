@@ -31,6 +31,7 @@ public static class ConvertPsxCommand
         var apply = args.Contains("--apply");
         var deleteSource = args.Contains("--delete-source");
         var rebuild = args.Contains("--rebuild");
+        var flatten = args.Contains("--flatten");
         var targetArg = GetArgValue(args, "--to") ?? "chd";
 
         if (deleteSource && !apply)
@@ -54,11 +55,12 @@ public static class ConvertPsxCommand
             new ConsoleDecorations.HeaderMetadata("Target", target.ToString().ToUpperInvariant()),
             new ConsoleDecorations.HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
             new ConsoleDecorations.HeaderMetadata("Rebuild", rebuild ? "Yes" : "No"),
+            new ConsoleDecorations.HeaderMetadata("Flatten", flatten ? "Yes" : "No"),
             new ConsoleDecorations.HeaderMetadata("Delete source", deleteSource ? "[red]Yes[/]" : "No", IsMarkup: deleteSource));
         AnsiConsole.WriteLine();
 
         var planner = new PsxConvertPlanner();
-        var operations = planner.PlanConversions(root, recursive, rebuild, target);
+        var operations = planner.PlanConversions(root, recursive, rebuild, target, flatten);
 
         if (operations.Count == 0)
         {

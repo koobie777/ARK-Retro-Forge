@@ -81,6 +81,11 @@ public record PsxDiscInfo
     public bool IsMultiTrack => TrackNumber.HasValue;
     
     /// <summary>
+    /// Version or revision string (e.g., "Rev 1", "v1.1"), or null if unknown
+    /// </summary>
+    public string? Version { get; init; }
+    
+    /// <summary>
     /// Referenced CUE file path for this BIN (if applicable)
     /// </summary>
     public string? CueFilePath { get; init; }

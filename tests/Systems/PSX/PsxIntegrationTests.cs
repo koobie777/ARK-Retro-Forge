@@ -5,7 +5,7 @@ namespace ARK.Tests.Systems.PSX;
 public class PsxIntegrationTests
 {
     [Fact]
-    public void AloneInTheDark_MultiDiscRename_CorrectlyNormalizesDiscSuffixes()
+    public async Task AloneInTheDark_MultiDiscRename_CorrectlyNormalizesDiscSuffixes()
     {
         // Arrange - simulate the user's scenario
         var testDir = Path.Combine(Path.GetTempPath(), "ark-test-aitd-" + Guid.NewGuid());
@@ -27,7 +27,7 @@ public class PsxIntegrationTests
             var planner = new PsxRenamePlanner();
 
             // Act
-            var operations = planner.PlanRenames(testDir, recursive: false);
+            var operations = await planner.PlanRenamesAsync(testDir, recursive: false);
 
             // Assert
             Assert.Equal(4, operations.Count);
@@ -117,7 +117,7 @@ public class PsxIntegrationTests
     }
 
     [Fact]
-    public void CheatAndEducationalDiscs_ProperlyClassified()
+    public async Task CheatAndEducationalDiscs_ProperlyClassified()
     {
         // Arrange
         var testDir = Path.Combine(Path.GetTempPath(), "ark-test-classify-" + Guid.NewGuid());
@@ -137,7 +137,7 @@ public class PsxIntegrationTests
             var planner = new PsxRenamePlanner();
 
             // Act
-            var operations = planner.PlanRenames(testDir, recursive: false);
+            var operations = await planner.PlanRenamesAsync(testDir, recursive: false);
 
             // Assert
             var cheatOp = operations.First(o => o.SourcePath == cheatFile);

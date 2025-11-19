@@ -1,4 +1,5 @@
 using ARK.Cli.Infrastructure;
+using ARK.Core.Database;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
 
@@ -29,6 +30,9 @@ public static class RenamePsxCommand
         var verbose = args.Contains("--verbose");
         var debug = args.Contains("--debug");
         var keepLanguageTags = args.Contains("--keep-language-tags");
+        var includeVersion = args.Contains("--include-version");
+        var noMultiDisc = args.Contains("--no-multi-disc");
+        var noMultiTrack = args.Contains("--no-multi-track");
         
         // Parse --playlists flag (create|update|off, default: create)
         var playlistMode = GetArgValue(args, "--playlists") ?? "create";
@@ -48,7 +52,15 @@ public static class RenamePsxCommand
             new ConsoleDecorations.HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
             new ConsoleDecorations.HeaderMetadata("Playlists", Markup.Escape(playlistLabel)),
             new ConsoleDecorations.HeaderMetadata("Articles", restoreArticles ? "Restore" : "Default"),
-            new ConsoleDecorations.HeaderMetadata("Lang tags", Markup.Escape(languageTagLabel)));
+            new ConsoleDecorations.HeaderMetadata("Lang tags", Markup.Escape(languageTagLabel)),
+            new ConsoleDecorations.HeaderMetadata("Multi-Disc", noMultiDisc ? "Off" : "On"),
+            new ConsoleDecorations.HeaderMetadata("Multi-Track", noMultiTrack ? "Off" : "On"));
+
+        // Initialize DB for cache lookups
+        var dbPath = Path.Combine(InstancePathResolver.GetInstanceRoot(), "db");
+        await using var dbManager = new DatabaseManager(dbPath);
+        await dbManager.InitializeAsync();
+        var romRepository = new RomRepository(dbManager.GetConnection());
 
         var planner = new PsxRenamePlanner();
         var playlistPlanner = new PsxPlaylistPlanner();
@@ -59,17 +71,29 @@ public static class RenamePsxCommand
             .Spinner(Spinner.Known.Dots12)
             .StartAsync("Scanning PSX library...", async ctx =>
             {
-                operations = await Task.Run(() => planner.PlanRenames(root, recursive, restoreArticles, stripLanguageTags: !keepLanguageTags));
+                operations = await planner.PlanRenamesAsync(
+                    root, 
+                    recursive, 
+                    restoreArticles, 
+                    stripLanguageTags: !keepLanguageTags, 
+                    includeVersion: includeVersion,
+                    handleMultiDisc: !noMultiDisc,
+                    handleMultiTrack: !noMultiTrack,
+                    romRepository: romRepository);
 
                 ctx.Status("Planning playlists...");
-                playlistOperations = createPlaylists
-                    ? await Task.Run(() => playlistPlanner.PlanPlaylists(
-                        root,
-                        recursive,
-                        preferredExtension: ".cue",
+                if (createPlaylists)
+                {
+                    // Use the rename operations to plan playlists so we see the future state
+                    playlistOperations = playlistPlanner.PlanPlaylistsFromRenames(
+                        operations,
                         createNew: playlistMode.Equals("create", StringComparison.OrdinalIgnoreCase),
-                        updateExisting: updatePlaylists))
-                    : new List<PsxPlaylistOperation>();
+                        updateExisting: updatePlaylists);
+                }
+                else
+                {
+                    playlistOperations = new List<PsxPlaylistOperation>();
+                }
             });
 
         // Statistics
@@ -212,7 +236,7 @@ public static class RenamePsxCommand
 
         if (apply && (toRename > 0 || playlistOperations.Any()))
         {
-            await ApplyRenamesAsync(operations, playlistOperations, playlistPlanner, restoreArticles);
+            await ApplyRenamesAsync(operations, playlistOperations, playlistPlanner, restoreArticles, includeVersion);
         }
         else if (!apply && (toRename > 0 || playlistOperations.Any()))
         {
@@ -252,9 +276,11 @@ public static class RenamePsxCommand
         IReadOnlyList<PsxRenameOperation> operations,
         IReadOnlyList<PsxPlaylistOperation> playlistOperations,
         PsxPlaylistPlanner playlistPlanner,
-        bool restoreArticles)
+        bool restoreArticles,
+        bool includeVersion)
     {
-        var renameTargets = operations.Where(o => !o.IsAlreadyNamed).ToList();
+        // Include operations that need renaming OR have new content (e.g. updated CUE)
+        var renameTargets = operations.Where(o => !o.IsAlreadyNamed || o.NewContent != null).ToList();
         var playlistTargets = playlistOperations.ToList();
         var renamed = 0;
         var skipped = 0;
@@ -270,73 +296,102 @@ public static class RenamePsxCommand
             new SpinnerColumn()
         };
 
-        await Task.Run(() =>
-        {
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(progressColumns)
-                .Start(ctx =>
+        await AnsiConsole.Progress()
+            .AutoClear(false)
+            .Columns(progressColumns)
+            .StartAsync(async ctx =>
+            {
+                if (renameTargets.Count > 0)
                 {
-                    if (renameTargets.Count > 0)
+                    var renameTask = ctx.AddTask("Renaming files", maxValue: renameTargets.Count);
+                    foreach (var op in renameTargets)
                     {
-                        var renameTask = ctx.AddTask("Renaming files", maxValue: renameTargets.Count);
-                        foreach (var op in renameTargets)
+                        OperationContextScope.ThrowIfCancellationRequested();
+                        renameTask.Description = $"Renaming {FormatTaskLabel(op.SourcePath)}";
+
+                        if (!TryResolveAmbiguousOperation(op, out var resolvedInfo))
                         {
-                            OperationContextScope.ThrowIfCancellationRequested();
-                            renameTask.Description = $"Renaming {FormatTaskLabel(op.SourcePath)}";
+                            skipped++;
+                            renameTask.Increment(1);
+                            continue;
+                        }
 
-                            if (!TryResolveAmbiguousOperation(op, out var resolvedInfo))
+                        var destinationDir = Path.GetDirectoryName(op.DestinationPath) ?? Path.GetDirectoryName(op.SourcePath) ?? string.Empty;
+                        // We need to pass includeVersion here too, but ApplyRenamesAsync signature doesn't have it.
+                        // Actually, op.DestinationPath is already calculated with includeVersion in PlanRenamesAsync.
+                        // But here we are recalculating finalDestination using PsxNameFormatter.Format(resolvedInfo, restoreArticles).
+                        // We should pass includeVersion here too.
+                        // Wait, ApplyRenamesAsync needs to know includeVersion.
+                        // Or we can just trust op.DestinationPath if resolvedInfo hasn't changed.
+                        // But if resolvedInfo changed (ambiguous resolution), we re-format.
+                        
+                        // Let's update ApplyRenamesAsync signature to accept includeVersion.
+                        var finalDestination = Path.Combine(destinationDir, PsxNameFormatter.Format(resolvedInfo, restoreArticles, includeVersion));
+                        
+                        // Debug logging
+                        // AnsiConsole.WriteLine($"DEBUG: Source={op.SourcePath}, Dest={finalDestination}, NewContent={(op.NewContent != null)}");
+
+                        try
+                        {
+                            if (op.NewContent != null)
                             {
-                                skipped++;
-                                renameTask.Increment(1);
-                                continue;
-                            }
+                                // Write updated content (e.g. CUE file with new BIN references)
+                                Directory.CreateDirectory(Path.GetDirectoryName(finalDestination)!);
+                                await File.WriteAllTextAsync(finalDestination, op.NewContent);
+                                
+                                // Debug check
+                                // if (!File.Exists(finalDestination)) AnsiConsole.WriteLine($"ERROR: File not found after write: {finalDestination}");
 
-                            var destinationDir = Path.GetDirectoryName(op.DestinationPath) ?? Path.GetDirectoryName(op.SourcePath) ?? string.Empty;
-                        var finalDestination = Path.Combine(destinationDir, PsxNameFormatter.Format(resolvedInfo, restoreArticles));
-
-                            try
-                            {
-                                if (!string.Equals(op.SourcePath, finalDestination, StringComparison.OrdinalIgnoreCase))
+                                // If we wrote to a new location, delete the old one
+                                var sourceFull = Path.GetFullPath(op.SourcePath);
+                                var destFull = Path.GetFullPath(finalDestination);
+                                if (!string.Equals(sourceFull, destFull, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    Directory.CreateDirectory(Path.GetDirectoryName(finalDestination)!);
-                                    File.Move(op.SourcePath, finalDestination);
+                                    File.Delete(op.SourcePath);
                                 }
                                 renamed++;
                             }
-                            catch (Exception ex)
+                            else if (!string.Equals(Path.GetFullPath(op.SourcePath), Path.GetFullPath(finalDestination), StringComparison.OrdinalIgnoreCase))
                             {
-                                failures.Add($"{Path.GetFileName(op.SourcePath)}: {ex.Message}");
+                                Directory.CreateDirectory(Path.GetDirectoryName(finalDestination)!);
+                                File.Move(op.SourcePath, finalDestination);
+                                renamed++;
                             }
-
-                            renameTask.Increment(1);
+                            else
+                            {
+                                // Already named correctly
+                            }
                         }
-                    }
-
-                    if (playlistTargets.Count > 0)
-                    {
-                        var playlistTask = ctx.AddTask("Updating playlists", maxValue: playlistTargets.Count);
-                        foreach (var plOp in playlistTargets)
+                        catch (Exception ex)
                         {
-                            OperationContextScope.ThrowIfCancellationRequested();
-                            playlistTask.Description = $"Playlist {FormatTaskLabel(plOp.Title, treatAsPath: false)}";
-                            try
-                            {
-                                playlistPlanner.ApplyOperation(plOp, createBackup: true);
-                                playlistsApplied++;
-                            }
-                            catch (Exception ex)
-                            {
-                                failures.Add($"{Path.GetFileName(plOp.PlaylistPath)}: {ex.Message}");
-                            }
-
-                            playlistTask.Increment(1);
+                            failures.Add($"{Path.GetFileName(op.SourcePath)}: {ex.Message}");
                         }
-                    }
-                });
-        });
 
-        AnsiConsole.MarkupLine($"[green]✨ [[DOCKED]] Renamed {renamed} file(s)[/]");
+                        renameTask.Increment(1);
+                    }
+                }
+
+                if (playlistTargets.Count > 0)
+                {
+                    var playlistTask = ctx.AddTask("Updating playlists", maxValue: playlistTargets.Count);
+                    foreach (var plOp in playlistTargets)
+                    {
+                        OperationContextScope.ThrowIfCancellationRequested();
+                        playlistTask.Description = $"Playlist {FormatTaskLabel(plOp.Title, treatAsPath: false)}";
+                        try
+                        {
+                            playlistPlanner.ApplyOperation(plOp, createBackup: true);
+                            playlistsApplied++;
+                        }
+                        catch (Exception ex)
+                        {
+                            failures.Add($"{Path.GetFileName(plOp.PlaylistPath)}: {ex.Message}");
+                        }
+
+                        playlistTask.Increment(1);
+                    }
+                }
+            });        AnsiConsole.MarkupLine($"[green]✨ [[DOCKED]] Renamed {renamed} file(s)[/]");
         if (skipped > 0)
         {
             AnsiConsole.MarkupLine($"[yellow]Skipped {skipped} file(s) at user request.[/]");

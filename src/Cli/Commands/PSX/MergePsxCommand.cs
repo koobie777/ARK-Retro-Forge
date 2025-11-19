@@ -1,4 +1,5 @@
 using ARK.Cli.Infrastructure;
+using ARK.Core.Database;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
 using HeaderMetadata = ARK.Cli.Infrastructure.ConsoleDecorations.HeaderMetadata;
@@ -25,6 +26,7 @@ public static class MergePsxCommand
         var recursive = args.Contains("--recursive");
         var apply = args.Contains("--apply");
         var deleteFlag = args.Contains("--delete-source");
+        var flatten = args.Contains("--flatten");
 
         if (deleteFlag && !apply)
         {
@@ -37,18 +39,23 @@ public static class MergePsxCommand
             new HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
             new HeaderMetadata("Root", root),
             new HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
+            new HeaderMetadata("Flatten", flatten ? "Yes" : "No"),
             new HeaderMetadata("Delete source", deleteFlag ? "[red]Yes[/]" : "No", IsMarkup: deleteFlag));
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX merge");
 
-        var operations = AnsiConsole.Status()
+        var operations = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .SpinnerStyle(Style.Parse("yellow"))
-            .Start("Scanning for multi-track CUE files...", ctx =>
+            .StartAsync("Scanning for multi-track CUE files...", async ctx =>
             {
+                await using var dbManager = new DatabaseManager(Path.Combine(InstancePathResolver.GetInstanceRoot(), "db"));
+                await dbManager.InitializeAsync();
+                var repo = new RomRepository(dbManager.GetConnection());
+
                 var planner = new PsxBinMergePlanner();
-                var ops = planner.PlanMerges(root, recursive, outputDirectory: root);
+                var ops = await planner.PlanMergesAsync(root, recursive, outputDirectory: flatten ? root : null, romRepository: repo, flatten: flatten);
                 ctx.Status($"Found {ops.Count} multi-track layout(s)");
-                Thread.Sleep(500); // Brief pause to show result
+                await Task.Delay(500); // Brief pause to show result
                 return ops;
             });
 
@@ -121,15 +128,14 @@ public static class MergePsxCommand
 
         var progressColumns = new ProgressColumn[]
         {
-            new TaskDescriptionColumn(),
-            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new TaskDescriptionColumn { Alignment = Justify.Left },
+            new ProgressBarColumn { Width = 40, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
             new PercentageColumn(),
-            new RemainingTimeColumn(),
             new SpinnerColumn()
         };
 
         await AnsiConsole.Progress()
-            .AutoClear(false)
+            .AutoClear(true)
             .Columns(progressColumns)
             .StartAsync(async ctx =>
             {
@@ -137,7 +143,10 @@ public static class MergePsxCommand
                 foreach (var op in eligibleOperations)
                 {
                     token.ThrowIfCancellationRequested();
-                    task.Description = $"Merging {TruncateLabel(op.Title ?? Path.GetFileNameWithoutExtension(op.CuePath))}";
+                    // Pad the description to a fixed width to prevent jitter
+                    var label = TruncateLabel(op.Title ?? Path.GetFileNameWithoutExtension(op.CuePath), 35);
+                    task.Description = $"Merging {label.PadRight(35)}";
+                    
                     try
                     {
                         await service.MergeAsync(op, deleteSources, token);

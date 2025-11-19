@@ -2,9 +2,74 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
-# Update Notes
+## v1.1.0 (2025-11-20)
 
-This file contains release notes for ARK-Retro-Forge releases.
+### Core Architecture
+- **ArkStaging**: Introduced a centralized `ArkStaging` engine to handle file operations (Move, Copy, Delete, Write) with built-in rollback capabilities and dry-run safety. This lays the groundwork for transactional file operations across all tools.
+
+### PSX Tooling
+- **Merge Resilience**: `merge psx` now intelligently handles "Track 1" vs "Track 01" mismatches in CUE sheets, using fuzzy matching to locate track files even when zero-padding differs.
+- **Rename Safety**: Fixed a critical bug in `rename psx` where CUE files could be accidentally deleted on Windows due to case-insensitive path normalization issues. The tool now correctly identifies in-place updates versus moves.
+- **Playlist Logic**: Refined `playlist psx` to ensure single-disc games are strictly excluded from playlist generation, adhering to the "multi-disc only" rule.
+
+## v1.0.9 (2025-11-20)
+
+### PSX Tooling
+- **Smart Version Detection**: `PsxNameParser` now correctly identifies version tags like `(Rev 1)` or `(v1.0)` and prevents them from being misidentified as Regions.
+- **Optional Versioning**: Added `--include-version` flag to `rename psx` (and menu option) to append the detected version to the filename.
+- **Playlist Refinement**: Playlists are now only generated for multi-disc titles (2+ discs), skipping single-disc games.
+- **Playlist Tool**: Added `playlist psx` command (and "Manage Playlists" menu option) to create or update `.m3u` playlists independently of the rename process.
+- **Cache Fixes**: Fixed a bug where cached ROMs lost their `Version` and `ContentType` metadata, causing "Rev 1" detection issues and missing Cheat/Edu disc counts in subsequent runs.
+- **Rename Options**: Added `--no-multi-disc` and `--no-multi-track` flags (and menu toggles) to optionally disable multi-disc grouping and CUE scanning during rename operations.
+- **Region Detection**: Improved `PsxNameParser` to strictly differentiate between Region codes and Version tags (e.g., `(Rev 1)`), preventing false positives.
+
+### CLI / UX
+- **Menu Reordering**: "Clean library" is now the first option in the PSX menu for better workflow visibility.
+- **Rename Options Persistence**: The interactive menu now remembers your choices for Recursive, Version, Articles, and Playlist modes between runs.
+
+## v1.0.8 (2025-11-20)
+
+### PSX Tooling
+- **Cleaner Optimization**: `clean psx` now skips the staging process for files that are already in the correct location and have the correct name, significantly reducing disk I/O and execution time for libraries that are already partially organized.
+- **Collision Safety**: The cleaner intelligently falls back to the staging directory strategy only when a direct move would cause a collision, ensuring safe handling of duplicates without sacrificing performance for the happy path.
+- **Orphan Rescue**: `clean psx` now detects and rescues "orphaned" multi-track files (e.g., `Game (Track 1).bin`, `Game (Track 2).bin`) that are sitting in the root directory without a CUE file. It will correctly identify them as a set and move them into a proper `Title (Region)` folder, fixing the issue where previous runs might have flattened them and left them stranded.
+
+## v1.0.7 (2025-11-20)
+
+### PSX Tooling
+- **CUE Generation Fix**: `clean psx` now correctly tracks file movements during execution, ensuring that generated CUE sheets are written to the correct destination folder (alongside the moved BIN files) and reference the correct filenames even if they were renamed to avoid collisions. This fixes the `DirectoryNotFoundException` that occurred when CUE generation attempted to write to a source directory that had already been cleaned up.
+- **Robust Cleanup**: The final empty-directory cleanup step now runs even if errors occur during the main execution loop, ensuring the library is left in a tidy state.
+
+## v1.0.6 (2025-11-20)
+
+### PSX Tooling
+- **Cleaner Stability**: Fixed a crash in `clean psx` where moving files could fail if the file was already moved by a previous operation or an overlapping plan. The cleaner now safely checks for file existence before attempting moves, preventing `FileNotFoundException` during large batch operations.
+
+## v1.0.5 (2025-11-20)
+
+### PSX Tooling
+- **Unified Cache Strategy**: `rename psx` and `merge psx` now use the same `RomRepository` cache as the cleaner, speeding up operations by avoiding redundant disk I/O and header parsing.
+- **Robust Multi-Disc Detection**: All PSX planners (Clean, Rename, Merge) now use a "Cache -> Filename Fallback" strategy. If the cache has a record but is missing disc metadata (e.g., from an old scan), the tools will check the filename for `(Disc N)` patterns to fill in the gaps, ensuring multi-disc sets are handled correctly even with imperfect metadata.
+- **Cleaner UX**: `clean psx` now clears the plan summary before execution in interactive mode, prompts for confirmation with "Press ENTER to execute", and shows a live progress bar during file moves.
+- **Flat Multi-Disc Structure**: `clean psx` now organizes multi-disc sets into `Root/Title (Region)/` instead of creating nested `Title (Region) (Disc N)` subfolders, keeping the directory structure cleaner.
+- **Empty Directory Cleanup**: The cleaner now automatically removes empty source directories after moving files.
+- **Region Duplication Fix**: Fixed a bug where folder names could end up as `Title (Region) (Region)` if the region was already part of the title string.
+
+## v1.0.4 (2025-11-19)
+
+### PSX Tooling
+- **Cleaner Optimization**: `clean psx` now utilizes the `RomRepository` cache to avoid re-scanning files that are already indexed, significantly speeding up operations on large libraries.
+- **Smart Fallback**: `PsxNameParser` now attempts to resolve serials from filenames against the DAT index if probing fails, ensuring official titles are used even when headers are obscure.
+
+### CLI / UX
+- **Menu Experience**: Added auto-pause after menu actions so users can read the output before the screen clears. Removed redundant "(ESC to return)" text from headers.
+
+## v1.0.3 (2025-11-19)
+
+### PSX Smart Detection
+- **Reversed Detection Priority**: Now prioritizes **Probe -> DAT -> Filename** for more accurate identification. The scanner inspects the binary header first to find the Serial (e.g., SLUS-00000), then looks it up in the DAT index. Filename parsing is now a fallback.
+- **DAT Index**: Added serial-based reverse lookup to `DatMetadataIndex` to support the new detection flow.
+- **Auto-Scan**: PSX menu now automatically scans for games on entry.
 
 ## v1.0.2 (2025-11-18)
 
@@ -76,7 +141,7 @@ This file contains release notes for ARK-Retro-Forge releases.
 
 ### CLI / UX
 - `scan`, `verify`, `dat sync`, and `clean psx` share a unified Spectre header that calls out scope, instance, and DRY-RUN/APPLY mode at the top of every run.
-- Medical Bay, Medical Bay menu entry, and docs all remind you to sync DAT catalogs first so downstream planners stop failing due to stale or missing metadata, and every menu/prompt now calls out that ESC cancels the operation.
+- Medical Bay, Medical Bay menu, and docs all remind you to sync DAT catalogs first so downstream planners stop failing due to stale or missing metadata, and every menu/prompt now calls out that ESC cancels the operation.
 - DAT downloads now stream to a temporary file and replace the `.dat` atomically, eliminating the â€œfile in useâ€ errors that antivirus or file indexers caused mid-sync.
 - ESC cancellation is now universal: every Selection/Text prompt routes through a common handler that offers Retry/Return options, and the menu action runner replays commands when you choose â€œRetryâ€ so accidental ESC presses never eject you from the CLI.
 - Long-running operations (convert, rename, clean, extract) now honor cancellations without corrupting output: CHDMAN processes get killed + temp outputs cleaned, renames/playlist writes stop between files, and archive extractions link to the global cancellation token instead of a bespoke keyboard hook.
@@ -308,4 +373,6 @@ This file contains release notes for ARK-Retro-Forge releases.
 - Deterministic builds
 - SBOM included
 - MIT License
+
+
 

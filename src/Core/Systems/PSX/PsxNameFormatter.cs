@@ -12,13 +12,15 @@ public class PsxNameFormatter
     /// </summary>
     /// <param name="discInfo">The disc metadata</param>
     /// <param name="restoreArticles">Whether trailing articles (", The") should be restored to the front of the title.</param>
+    /// <param name="includeVersion">Whether to include version/revision information in the filename.</param>
     /// <returns>Formatted filename with extension</returns>
-    public static string Format(PsxDiscInfo discInfo, bool restoreArticles = false)
+    public static string Format(PsxDiscInfo discInfo, bool restoreArticles = false, bool includeVersion = false)
     {
         var builder = new StringBuilder();
         var title = discInfo.Title?.Trim();
         if (!string.IsNullOrWhiteSpace(title))
         {
+            title = CleanTitle(title, discInfo);
             builder.Append(restoreArticles ? RestoreArticle(title) : title);
         }
 
@@ -29,6 +31,11 @@ public class PsxNameFormatter
                 builder.Append(' ');
             }
             builder.Append($"({discInfo.Region.Trim()})");
+        }
+
+        if (includeVersion && !string.IsNullOrWhiteSpace(discInfo.Version))
+        {
+            builder.Append($" ({discInfo.Version.Trim()})");
         }
 
         if (discInfo.IsMultiDisc && discInfo.DiscNumber.HasValue)
@@ -54,6 +61,30 @@ public class PsxNameFormatter
         }
 
         return SanitizeFileName(baseName);
+    }
+
+    private static string CleanTitle(string title, PsxDiscInfo info)
+    {
+        // Remove (Region) if it matches info.Region
+        if (!string.IsNullOrWhiteSpace(info.Region))
+        {
+            var regionSuffix = $"({info.Region.Trim()})";
+            if (title.EndsWith(regionSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                title = title[..^regionSuffix.Length].Trim();
+            }
+        }
+
+        // Remove (Disc N)
+        title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\(Disc \d+(?: of \d+)?\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        
+        // Remove (Track N)
+        title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\(Track \d+\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        // Remove (Version)
+        title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\((?:Rev|v|Ver\.?)\s*[\d.]+\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        return title.Trim();
     }
     
     /// <summary>

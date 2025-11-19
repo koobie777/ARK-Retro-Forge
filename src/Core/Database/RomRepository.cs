@@ -18,15 +18,19 @@ public class RomRepository
     public Task UpsertRomAsync(RomRecord record)
     {
         const string sql = @"
-INSERT INTO rom_cache (file_path, file_size, last_verified, system_id, title, region, rom_id)
-VALUES (@FilePath, @FileSize, @LastSeen, @SystemId, @Title, @Region, @RomId)
+INSERT INTO rom_cache (file_path, file_size, last_verified, system_id, title, region, rom_id, serial, disc_number, disc_count, version)
+VALUES (@FilePath, @FileSize, @LastSeen, @SystemId, @Title, @Region, @RomId, @Serial, @DiscNumber, @DiscCount, @Version)
 ON CONFLICT(file_path) DO UPDATE SET
     file_size = excluded.file_size,
     last_verified = CASE WHEN excluded.last_verified IS NOT NULL THEN excluded.last_verified ELSE rom_cache.last_verified END,
     system_id = CASE WHEN excluded.system_id IS NOT NULL THEN excluded.system_id ELSE rom_cache.system_id END,
     title = CASE WHEN excluded.title IS NOT NULL THEN excluded.title ELSE rom_cache.title END,
     region = CASE WHEN excluded.region IS NOT NULL THEN excluded.region ELSE rom_cache.region END,
-    rom_id = CASE WHEN excluded.rom_id IS NOT NULL THEN excluded.rom_id ELSE rom_cache.rom_id END;
+    rom_id = CASE WHEN excluded.rom_id IS NOT NULL THEN excluded.rom_id ELSE rom_cache.rom_id END,
+    serial = CASE WHEN excluded.serial IS NOT NULL THEN excluded.serial ELSE rom_cache.serial END,
+    disc_number = CASE WHEN excluded.disc_number IS NOT NULL THEN excluded.disc_number ELSE rom_cache.disc_number END,
+    disc_count = CASE WHEN excluded.disc_count IS NOT NULL THEN excluded.disc_count ELSE rom_cache.disc_count END,
+    version = CASE WHEN excluded.version IS NOT NULL THEN excluded.version ELSE rom_cache.version END;
 ";
 
         return _connection.ExecuteAsync(sql, new
@@ -37,7 +41,11 @@ ON CONFLICT(file_path) DO UPDATE SET
             record.SystemId,
             record.Title,
             record.Region,
-            record.RomId
+            record.RomId,
+            record.Serial,
+            record.DiscNumber,
+            record.DiscCount,
+            record.Version
         });
     }
 
@@ -72,7 +80,7 @@ WHERE file_path = @FilePath;
 
     public async Task<IReadOnlyList<RomSummary>> GetRomsAsync(string? systemId = null)
     {
-        var sql = "SELECT file_path AS FilePath, rom_id AS RomId, title AS Title, region AS Region FROM rom_cache";
+        var sql = "SELECT file_path AS FilePath, rom_id AS RomId, title AS Title, region AS Region, serial AS Serial, disc_number AS DiscNumber, disc_count AS DiscCount FROM rom_cache";
         if (!string.IsNullOrWhiteSpace(systemId))
         {
             sql += " WHERE system_id = @SystemId";
@@ -90,7 +98,11 @@ public record RomRecord(
     string? SystemId,
     string? Title,
     string? Region,
-    string? RomId);
+    string? RomId,
+    string? Serial = null,
+    int? DiscNumber = null,
+    int? DiscCount = null,
+    string? Version = null);
 
 public record RomHashUpdate(
     string FilePath,
@@ -113,6 +125,10 @@ public record RomCacheEntry
     public string? Title { get; init; }
     public string? Region { get; init; }
     public string? Rom_Id { get; init; }
+    public string? Serial { get; init; }
+    public int? Disc_Number { get; init; }
+    public int? Disc_Count { get; init; }
+    public string? Version { get; init; }
 }
 
-public record RomSummary(string FilePath, string? RomId, string? Title, string? Region);
+public record RomSummary(string FilePath, string? RomId, string? Title, string? Region, string? Serial, int? DiscNumber, int? DiscCount);

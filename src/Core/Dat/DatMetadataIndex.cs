@@ -16,6 +16,7 @@ public sealed class DatMetadataIndex
     internal static readonly Regex SerialPattern = new(@"(?<serial>[A-Z]{4}-\d{5})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private readonly ConcurrentDictionary<string, DatTitleMetadata> _entries = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, DatTitleMetadata> _serialMap = new(StringComparer.OrdinalIgnoreCase);
 
     private DatMetadataIndex()
     {
@@ -28,6 +29,7 @@ public sealed class DatMetadataIndex
         {
             index.ProcessFile(file);
         }
+        index.RebuildSerialIndex();
 
         return index;
     }
@@ -42,6 +44,16 @@ public sealed class DatMetadataIndex
         }
 
         return _entries.TryGetValue(key, out metadata);
+    }
+
+    public bool TryGetBySerial(string serial, [NotNullWhen(true)] out DatTitleMetadata? metadata)
+    {
+        if (string.IsNullOrWhiteSpace(serial))
+        {
+            metadata = null;
+            return false;
+        }
+        return _serialMap.TryGetValue(serial.Trim(), out metadata);
     }
 
     public static string BuildKey(string? title, string? region)
@@ -133,6 +145,17 @@ public sealed class DatMetadataIndex
         catch (FormatException)
         {
             // Ignore format errors; operations will continue with partial data.
+        }
+    }
+
+    private void RebuildSerialIndex()
+    {
+        foreach (var entry in _entries.Values)
+        {
+            foreach (var serial in entry.Serials)
+            {
+                _serialMap.TryAdd(serial, entry);
+            }
         }
     }
 

@@ -9,6 +9,7 @@ internal sealed record SessionState
     public bool MenuDryRun { get; init; } = true;
     public bool PreventSleep { get; init; }
     public CleanPsxOptions CleanPsx { get; init; } = new();
+    public RenamePsxOptions RenamePsx { get; init; } = new();
 }
 
 internal sealed record CleanPsxOptions
@@ -19,6 +20,16 @@ internal sealed record CleanPsxOptions
     public bool GenerateCues { get; init; } = true;
     public bool Flatten { get; init; } = true;
     public bool Ingest { get; init; } = false;
+}
+
+internal sealed record RenamePsxOptions
+{
+    public bool Recursive { get; init; } = true;
+    public bool IncludeVersion { get; init; } = false;
+    public string PlaylistMode { get; init; } = "create";
+    public bool RestoreArticles { get; init; } = false;
+    public bool MultiDisc { get; init; } = true;
+    public bool MultiTrack { get; init; } = true;
 }
 
 internal static class SessionStateManager

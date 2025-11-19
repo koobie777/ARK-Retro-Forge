@@ -135,6 +135,19 @@ See also `.github/instructions.md` for Copilot-specific reminders (branch rules,
 
 * DAT intelligence lives under `config/dat` + `DatMetadataIndex`; PSX flows (rename/merge/clean) rely on it, so never regress multi-disc detection or serial recovery without tests.
 
+* `PsxNameParser` uses a fallback strategy: Probe -> Filename Serial -> DAT Lookup. If probing fails, it attempts to resolve the serial from the filename against the DAT index.
+
+* The Cleaner (`clean psx`) leverages the `RomRepository` cache to avoid re-scanning files that are already indexed. Ensure `RomRepository` is injected into cleaner commands.
+
+* The interactive menu (`Program.cs`) must pause after executing an action so users can read the output before the screen clears/refreshes.
+
 * Archive Extract, Scan, Verify, and PSX operations share a unified quit handler (ESC/Ctrl+C) ⎋ keep behavior consistent.
 
 * RC builds are produced from tags; releases rely on `.github/workflows/release-candidate.yml` (beware reserved env variables like `VERSION`).
+
+### Testing & Verification
+
+*   **Workspace Integration Tests**: When verifying complex file operations (renaming, merging, playlists), create a temporary directory (`test_workspace`) with dummy files.
+    *   Use `dotnet run` against this workspace to validate logic without risking real data.
+    *   Clean up the workspace after verification.
+    *   This is preferred over unit tests for file-system heavy CLI commands.
