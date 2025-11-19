@@ -1540,7 +1540,7 @@ public class Program
         string? multiTrackDirName = null;
         if (moveMultiTrack)
         {
-            multiTrackDirName = PromptForOptional("Multi-track container folder (blank keeps sets in ROM root using Title (Region))");
+            multiTrackDirName = PromptForOptional("Multi-track container folder (blank = organize into 'Title (Region)' folders in ROM root)");
         }
         var moveMultiDisc = PromptYesNo("Move multi-disc sets (Disc 1/Disc 2) into Title (Region) folders?", true);
         var generateCues = PromptYesNo("Generate missing CUE files when detected?", true);
