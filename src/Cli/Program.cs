@@ -1535,24 +1535,86 @@ public class Program
             return (int)ExitCode.InvalidArgs;
         }
 
-        var recursive = PromptYesNo("Scan recursively?", true);
-        var moveMultiTrack = PromptYesNo("Organize multi-track BIN/CUE sets into per-title folders?", true);
+        var defaults = SessionStateManager.State.CleanPsx;
+        var prompt = new MultiSelectionPrompt<string>()
+            .Title("Select [green]cleaning operations[/] to perform:")
+            .PageSize(10)
+            .InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]")
+            .AddChoices(
+                "Scan recursively",
+                "Organize multi-track sets",
+                "Organize multi-disc sets",
+                "Generate missing CUEs",
+                "Flatten single-disc folders",
+                "Ingest imports");
+
+        if (defaults.Recursive)
+        {
+            prompt.Select("Scan recursively");
+        }
+        if (defaults.MultiTrack)
+        {
+            prompt.Select("Organize multi-track sets");
+        }
+        if (defaults.MultiDisc)
+        {
+            prompt.Select("Organize multi-disc sets");
+        }
+        if (defaults.GenerateCues)
+        {
+            prompt.Select("Generate missing CUEs");
+        }
+        if (defaults.Flatten)
+        {
+            prompt.Select("Flatten single-disc folders");
+        }
+        if (defaults.Ingest)
+        {
+            prompt.Select("Ingest imports");
+        }
+
+        var selections = AnsiConsole.Prompt(prompt);
+        var recursive = selections.Contains("Scan recursively");
+        var moveMultiTrack = selections.Contains("Organize multi-track sets");
+        var moveMultiDisc = selections.Contains("Organize multi-disc sets");
+        var generateCues = selections.Contains("Generate missing CUEs");
+        var flattenSingles = selections.Contains("Flatten single-disc folders");
+        var doIngest = selections.Contains("Ingest imports");
+
+        // Save preferences
+        SessionStateManager.Update(s => s with
+        {
+            CleanPsx = new CleanPsxOptions
+            {
+                Recursive = recursive,
+                MultiTrack = moveMultiTrack,
+                MultiDisc = moveMultiDisc,
+                GenerateCues = generateCues,
+                Flatten = flattenSingles,
+                Ingest = doIngest
+            }
+        });
+
         string? multiTrackDirName = null;
         if (moveMultiTrack)
         {
             multiTrackDirName = PromptForOptional("Multi-track container folder (blank = organize into 'Title (Region)' folders in ROM root)");
         }
-        var moveMultiDisc = PromptYesNo("Move multi-disc sets (Disc 1/Disc 2) into Title (Region) folders?", true);
-        var generateCues = PromptYesNo("Generate missing CUE files when detected?", true);
-        var flattenSingles = PromptYesNo("Flatten single-disc folders back into the root?", true);
-        var ingestRoot = PromptForOptional("Optional import directory to ingest (blank to skip)");
+
+        string? ingestRoot = null;
         string? importDirName = null;
         var ingestMove = false;
-        if (!string.IsNullOrWhiteSpace(ingestRoot))
+
+        if (doIngest)
         {
-            importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
-            ingestMove = PromptYesNo("Move imported ROMs into the PSX root?", true);
+            ingestRoot = PromptForOptional("Import directory path");
+            if (!string.IsNullOrWhiteSpace(ingestRoot))
+            {
+                importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
+                ingestMove = PromptYesNo("Move imported ROMs into the PSX root?", true);
+            }
         }
+
         var apply = !_menuDryRun && PromptYesNo("Apply changes (moves/writes)?", true);
 
         var args = new List<string> { "clean", "psx", "--root", root };

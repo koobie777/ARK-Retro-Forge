@@ -77,33 +77,37 @@ public static class CleanPsxCommand
         List<FlattenMovePlan> flattenPlans = new();
         List<DuplicateGroup> duplicateGroups = new();
 
-        var planningSteps = new List<(string Label, Func<Task> Work)>
+        var planningSteps = new List<(string Label, Func<ProgressTask, Task> Work)>
         {
-            ("Planning multi-track sets", () =>
+            ("Planning multi-track sets", _ =>
             {
                 multiTrackPlans = PlanMultiTrackMoves(root, recursive, multiTrackDirName);
                 return Task.CompletedTask;
             }),
-            ("Planning multi-disc sets", () =>
+            ("Planning multi-disc sets", task =>
             {
-                multiDiscPlans = PlanMultiDiscMoves(root, recursive);
+                multiDiscPlans = PlanMultiDiscMoves(root, recursive, dir => 
+                {
+                    task.Description = $"Scanning: [grey]{Truncate(Path.GetFileName(dir), 40)}[/]";
+                });
+                task.Description = "Planning multi-disc sets"; // Reset description
                 return Task.CompletedTask;
             }),
-            ("Scanning for missing CUE files", () =>
+            ("Scanning for missing CUE files", _ =>
             {
                 cuePlans = PlanMissingCueCreations(root, recursive);
                 return Task.CompletedTask;
             }),
-            ("Evaluating ingest directory", async () =>
+            ("Evaluating ingest directory", async _ =>
             {
                 ingestPlans = await PlanIngestMovesAsync(root, ingestRoot, importDirName);
             }),
-            ("Checking folders safe to flatten", () =>
+            ("Checking folders safe to flatten", _ =>
             {
                 flattenPlans = PlanFlattenMoves(root, recursive);
                 return Task.CompletedTask;
             }),
-            ("Scanning for duplicates", () =>
+            ("Scanning for duplicates", _ =>
             {
                 if (removeDuplicates)
                 {
@@ -133,7 +137,7 @@ public static class CleanPsxCommand
                 {
                     ThrowIfCancelled();
                     task.Description = label;
-                    await work();
+                    await work(task);
                     task.Increment(1);
                 }
             });
@@ -238,7 +242,7 @@ public static class CleanPsxCommand
         return plans;
     }
 
-    private static List<MultiDiscMovePlan> PlanMultiDiscMoves(string root, bool recursive)
+    private static List<MultiDiscMovePlan> PlanMultiDiscMoves(string root, bool recursive, Action<string>? onProgress = null)
     {
         var parser = new PsxNameParser();
         var plans = new List<MultiDiscMovePlan>();
@@ -252,6 +256,7 @@ public static class CleanPsxCommand
         foreach (var directory in directories)
         {
             ThrowIfCancelled();
+            onProgress?.Invoke(directory);
             var files = Directory.EnumerateFiles(directory, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(file => PsxExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
                 .ToList();

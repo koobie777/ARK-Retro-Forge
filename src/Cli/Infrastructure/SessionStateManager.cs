@@ -8,6 +8,17 @@ internal sealed record SessionState
     public string SystemCode { get; init; } = "psx";
     public bool MenuDryRun { get; init; } = true;
     public bool PreventSleep { get; init; }
+    public CleanPsxOptions CleanPsx { get; init; } = new();
+}
+
+internal sealed record CleanPsxOptions
+{
+    public bool Recursive { get; init; } = true;
+    public bool MultiTrack { get; init; } = true;
+    public bool MultiDisc { get; init; } = true;
+    public bool GenerateCues { get; init; } = true;
+    public bool Flatten { get; init; } = true;
+    public bool Ingest { get; init; } = false;
 }
 
 internal static class SessionStateManager
