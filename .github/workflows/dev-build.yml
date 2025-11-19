@@ -48,11 +48,16 @@ jobs:
     - name: Run tests
       run: dotnet test --no-build --configuration Release --verbosity normal
 
-    - name: Get version from MinVer
+    - name: Get version from Program.cs
       id: version
       shell: pwsh
       run: |
-        $version = dotnet minver -t v
+        $programCs = Get-Content -Path "src/Cli/Program.cs" -Raw
+        if ($programCs -match 'return "(\d+\.\d+\.\d+)"') {
+          $version = $matches[1]
+        } else {
+          $version = "0.0.0"
+        }
         $devVersion = "$version-dev.${{ github.run_number }}"
         echo "VERSION=$devVersion" >> $env:GITHUB_OUTPUT
         echo "Dev version: $devVersion"
