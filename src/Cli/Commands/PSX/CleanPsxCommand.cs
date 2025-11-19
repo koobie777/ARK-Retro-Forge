@@ -215,10 +215,11 @@ public static class CleanPsxCommand
             var baseFolder = BuildTitleRegionFolder(op.DiscInfo.Title, op.DiscInfo.Region);
             var discFolder = BuildDiscFolderName(baseFolder, op.DiscInfo.DiscNumber, op.DiscInfo.DiscCount);
             
-            // Always create container inside subdirectory, never beside root
+            // If multiTrackDirName is blank, we want root/Title (Region)
+            // If provided, we want root/MultiTrack/Title (Region)
             var containerDir = string.IsNullOrWhiteSpace(multiTrackDirName)
-                ? Path.Combine(root, baseFolder)
-                : Path.Combine(root, SanitizePathSegment(multiTrackDirName), baseFolder);
+                ? root
+                : Path.Combine(root, SanitizePathSegment(multiTrackDirName));
             
             var destDir = Path.Combine(containerDir, discFolder);
 
