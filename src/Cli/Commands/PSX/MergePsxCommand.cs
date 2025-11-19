@@ -12,13 +12,13 @@ public static class MergePsxCommand
         var root = GetArgValue(args, "--root");
         if (string.IsNullOrWhiteSpace(root))
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: merge psx | Context: Missing --root argument | Fix: Specify --root <path>[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red][[IMPACT]] | Component: merge psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -28,7 +28,7 @@ public static class MergePsxCommand
 
         if (deleteFlag && !apply)
         {
-            AnsiConsole.MarkupLine("[red]�~,�,? [[IMPACT]] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
+            AnsiConsole.MarkupLine("[red][[IMPACT]] | Component: merge psx | Context: --delete-source requires --apply | Fix: Add --apply[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -57,7 +57,7 @@ public static class MergePsxCommand
 
         if (operations.Count == 0)
         {
-            AnsiConsole.MarkupLine("[yellow]�s��,?  No multi-track BIN layouts found[/]");
+            AnsiConsole.MarkupLine("[yellow]No multi-track BIN layouts found[/]");
             return (int)ExitCode.OK;
         }
 
@@ -108,7 +108,7 @@ public static class MergePsxCommand
 
         if (!apply || !eligibleOperations.Any())
         {
-            AnsiConsole.MarkupLine("[yellow]dY'� Next step: Add --apply to execute merges[/]");
+            AnsiConsole.MarkupLine("[yellow]Next step: Add --apply to execute merges[/]");
             return (int)ExitCode.OK;
         }
 
@@ -157,7 +157,7 @@ public static class MergePsxCommand
                 }
             });
 
-        AnsiConsole.MarkupLine($"[green]�o\" [[DOCKED]] Merged {merged} multi-track set(s)[/]");
+        AnsiConsole.MarkupLine($"[green][[DOCKED]] Merged {merged} multi-track set(s)[/]");
         if (deleteSources)
         {
             AnsiConsole.MarkupLine("[dim]  Source BIN/CUE files deleted after merge[/]");
