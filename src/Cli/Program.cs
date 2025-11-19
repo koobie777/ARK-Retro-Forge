@@ -1536,7 +1536,6 @@ public class Program
         }
 
         var recursive = PromptYesNo("Scan recursively?", true);
-        var moveMultiTrack = PromptYesNo("Move multi-track BIN/CUE sets into per-title folders?", true);
         var moveMultiDisc = PromptYesNo("Move multi-disc sets (Disc 1/Disc 2) into Title (Region) folders?", true);
         var generateCues = PromptYesNo("Generate missing CUE files when detected?", true);
         var flattenSingles = PromptYesNo("Flatten single-disc folders back into the root?", true);
@@ -1548,7 +1547,6 @@ public class Program
             importDirName = PromptForOptional("Import folder name (blank for 'PSX Imports')");
             ingestMove = PromptYesNo("Move imported ROMs into the PSX root?", true);
         }
-        var multiDirName = PromptForOptional("Multi-track container folder (blank keeps sets beside the ROM root using Title (Region))");
         var apply = !_menuDryRun && PromptYesNo("Apply changes (moves/writes)?", true);
 
         var args = new List<string> { "clean", "psx", "--root", root };
@@ -1559,10 +1557,6 @@ public class Program
         if (apply)
         {
             args.Add("--apply");
-        }
-        if (moveMultiTrack)
-        {
-            args.Add("--move-multitrack");
         }
         if (moveMultiDisc)
         {
@@ -1589,11 +1583,6 @@ public class Program
                 args.Add("--import-dir");
                 args.Add(importDirName);
             }
-        }
-        if (!string.IsNullOrWhiteSpace(multiDirName))
-        {
-            args.Add("--multitrack-dir");
-            args.Add(multiDirName);
         }
 
         if (!apply)
