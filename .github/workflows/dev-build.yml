@@ -1,0 +1,143 @@
+name: Dev Build
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  CLI_PROJECT: "src/Cli/ARK.Cli.csproj"
+  CLI_RUNTIME: "win-x64"
+  PUBLISH_DIR: "publish/cli-win-x64"
+
+jobs:
+  dev-build:
+    name: Dev Build and Package
+    runs-on: windows-latest
+    permissions:
+      contents: read
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Full history for MinVer
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Cache NuGet packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.nuget/packages
+        key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+        restore-keys: |
+          ${{ runner.os }}-nuget-
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Build
+      run: dotnet build --no-restore --configuration Release
+
+    - name: Run tests
+      run: dotnet test --no-build --configuration Release --verbosity normal
+
+    - name: Get version from MinVer
+      id: version
+      shell: pwsh
+      run: |
+        $version = dotnet minver -t v
+        $devVersion = "$version-dev.${{ github.run_number }}"
+        echo "VERSION=$devVersion" >> $env:GITHUB_OUTPUT
+        echo "Dev version: $devVersion"
+
+    - name: Publish CLI
+      run: |
+        dotnet publish ${{ env.CLI_PROJECT }} `
+          --configuration Release `
+          --runtime ${{ env.CLI_RUNTIME }} `
+          --self-contained true `
+          --output ${{ env.PUBLISH_DIR }} `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true
+
+    - name: Package dev build
+      shell: pwsh
+      run: |
+        $packageRoot = "ark-retro-forge-dev-${{ github.run_number }}"
+        New-Item -ItemType Directory -Path $packageRoot -Force
+
+        # Copy CLI executable
+        Copy-Item -Path "${{ env.PUBLISH_DIR }}/ark-retro-forge.exe" -Destination "$packageRoot/"
+
+        # Copy supporting directories
+        Copy-Item -Path "config" -Destination "$packageRoot/config" -Recurse -Force
+        Copy-Item -Path "plugins" -Destination "$packageRoot/plugins" -Recurse -Force
+        Copy-Item -Path "tools" -Destination "$packageRoot/tools" -Recurse -Force
+
+        # Copy documentation
+        Copy-Item -Path "README.md" -Destination "$packageRoot/"
+        Copy-Item -Path "LICENSE" -Destination "$packageRoot/"
+
+        # Create version file
+        @"
+        ARK Retro Forge - Dev Build
+        Version: ${{ steps.version.outputs.VERSION }}
+        Build: ${{ github.run_number }}
+        Commit: ${{ github.sha }}
+        Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss UTC')
+        
+        This is a development build for testing purposes only.
+        Not intended for production use.
+        "@ | Out-File -FilePath "$packageRoot/VERSION.txt" -Encoding utf8
+
+        # Create ZIP archive
+        Compress-Archive -Path "$packageRoot/*" -DestinationPath "ark-retro-forge-dev-build-${{ github.run_number }}.zip"
+
+    - name: Generate checksum
+      shell: pwsh
+      run: |
+        $zipFile = "ark-retro-forge-dev-build-${{ github.run_number }}.zip"
+        $hash = (Get-FileHash -Path $zipFile -Algorithm SHA256).Hash.ToLower()
+        "$hash  $zipFile" | Out-File -FilePath "$zipFile.sha256" -Encoding ascii
+
+    - name: Upload dev build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: dev-build-${{ github.run_number }}
+        path: |
+          ark-retro-forge-dev-build-${{ github.run_number }}.zip
+          ark-retro-forge-dev-build-${{ github.run_number }}.zip.sha256
+        retention-days: 30
+
+    - name: Create build summary
+      shell: pwsh
+      run: |
+        $zipFile = "ark-retro-forge-dev-build-${{ github.run_number }}.zip"
+        $size = (Get-Item $zipFile).Length / 1MB
+        
+        echo "## Dev Build Summary" >> $env:GITHUB_STEP_SUMMARY
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.version.outputs.VERSION }}" >> $env:GITHUB_STEP_SUMMARY
+        echo "- **Build**: #${{ github.run_number }}" >> $env:GITHUB_STEP_SUMMARY
+        echo "- **Commit**: ${{ github.sha }}" >> $env:GITHUB_STEP_SUMMARY
+        echo "- **Package Size**: $([math]::Round($size, 2)) MB" >> $env:GITHUB_STEP_SUMMARY
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "### ⚠️ Development Build" >> $env:GITHUB_STEP_SUMMARY
+        echo "This is a private development build for testing purposes only." >> $env:GITHUB_STEP_SUMMARY
+        echo "Download from the **Artifacts** section above (available for 30 days)." >> $env:GITHUB_STEP_SUMMARY
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "### Package Contents" >> $env:GITHUB_STEP_SUMMARY
+        echo "- CLI executable (win-x64, single-file)" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Config templates and DAT sources" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Plugin system directory" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Tools directory (user-supplied binaries)" >> $env:GITHUB_STEP_SUMMARY
+        echo "- Documentation (README, LICENSE)" >> $env:GITHUB_STEP_SUMMARY
+        echo "- VERSION.txt with build metadata" >> $env:GITHUB_STEP_SUMMARY

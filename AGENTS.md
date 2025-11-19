@@ -70,9 +70,15 @@
 
 * **Conventional Commits** (e.g., `feat(core): add CHD planner (#123)`).
 
-* Work lands on feature branches -> `rc`. Open PRs targeting `main`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
+* **Branch Flow**: `dev` (testing/features) -> `rc` (release candidates) -> `main` (stable releases)
 
-* Tag RCs `vX.Y.Z-rc.N` to trigger the release-candidate workflow; stable releases use `vX.Y.Z`.
+* Work lands on feature branches -> `dev` for testing, then -> `rc` for release prep. Open PRs targeting `main` from `rc`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
+
+* **Dev builds** (`dev` branch) - Automatic builds on push, artifacts retained 30 days, versioned as `vX.Y.Z-dev.N` (private, testing only)
+
+* **RC builds** (`vX.Y.Z-rc.N` tags from `rc` branch) - Trigger release-candidate workflow, create pre-releases on GitHub
+
+* **Stable releases** (`vX.Y.Z` tags from `main` branch) - Trigger stable-release workflow, create public releases on GitHub
 
 * Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc` for RCs, `main` for stable). Example: `git checkout rc && git pull && git tag v1.0.2-rc.1 && git push origin v1.0.2-rc.1`.
 

@@ -160,8 +160,11 @@ instances/<profile>/
 
 ## Release Flow
 
-- **RC builds** (`vX.Y.Z-rc.N`) – tag from `rc` to trigger the Release Candidate workflow.
-- **Stable builds** (`vX.Y.Z`) – after RC sign-off, tag from `main` to push a stable release.
+- **Dev builds** (`dev` branch) – Automatic builds on push, private artifacts retained 30 days, versioned as `vX.Y.Z-dev.N` for testing
+- **RC builds** (`vX.Y.Z-rc.N` tags) – Tag from `rc` branch to trigger Release Candidate workflow, creates pre-releases on GitHub
+- **Stable builds** (`vX.Y.Z` tags) – After RC sign-off, tag from `main` branch to push a public stable release
+
+**Branch Flow**: `dev` → `rc` → `main`
 
 ---
 
