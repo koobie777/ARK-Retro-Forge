@@ -116,7 +116,7 @@ jobs:
     - name: Upload dev build artifact
       uses: actions/upload-artifact@v4
       with:
-        name: dev-build-${{ github.run_number }}
+        name: ark-retro-forge-${{ steps.version.outputs.VERSION }}
         path: |
           ark-retro-forge-dev-build-${{ github.run_number }}.zip
           ark-retro-forge-dev-build-${{ github.run_number }}.zip.sha256
