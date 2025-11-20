@@ -48,7 +48,25 @@
 *   **Tagging**: Agents must manually push tags to trigger release workflows.
     *   `git tag v1.1.0 && git push origin v1.1.0`
 
-## 5. Agent Instructions (How to Help)
+## 5. Coding Standards
+
+*   **Language**: C# 12, .NET 8.
+*   **Style**:
+    *   **Async**: All I/O bound methods must be `async` and end with `Async`.
+    *   **Nullable**: Enabled project-wide. Handle `null` explicitly.
+    *   **Formatting**: Run `dotnet format` before committing.
+*   **Output (Spectre.Console)**:
+    *   Use `AnsiConsole.MarkupLine` for user-facing messages.
+    *   **Colors**: `[green]` (Success), `[red]` (Error), `[yellow]` (Warning), `[grey]` (Debug/Verbose).
+    *   **Progress**: Use `AnsiConsole.Status()` for indeterminate tasks, `AnsiConsole.Progress()` for measurable ones.
+
+## 6. Troubleshooting & Debugging
+
+*   **Logs**: Stored in `instances/<profile>/logs/`. Check these for full stack traces.
+*   **Database**: If `RomRepository` state is invalid, delete `instances/<profile>/db/ark.db` to force a fresh scan.
+*   **External Tools**: Ensure `chdman`, `maxcso`, etc., are in `tools/` or PATH. Run `medical-bay` to verify.
+
+## 7. Agent Instructions (How to Help)
 
 1.  **Context First**: Check `Medical Bay` status and `UPDATE.md` history before suggesting fixes.
 2.  **Safety First**: Always assume **DRY-RUN** is the default. Use `ArkStaging` for everything.
