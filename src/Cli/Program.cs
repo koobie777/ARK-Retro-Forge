@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
@@ -2263,8 +2264,21 @@ public class Program
 
     private static string GetVersion()
     {
-        // Keep in sync with the next planned release tag
-        return "1.0.3";
+        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+        var infoVersion = assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        
+        // MinVer appends build metadata (e.g., +commitsha), which we might want to strip for the menu
+        if (infoVersion != null)
+        {
+            var plusIndex = infoVersion.IndexOf('+');
+            if (plusIndex > 0)
+            {
+                return infoVersion[..plusIndex];
+            }
+            return infoVersion;
+        }
+
+        return assembly.GetName().Version?.ToString() ?? "1.0.0";
     }
 
     private static bool HasInteractiveConsole()
