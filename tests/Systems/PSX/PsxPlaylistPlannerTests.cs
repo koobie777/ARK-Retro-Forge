@@ -99,9 +99,11 @@ public class PsxPlaylistPlannerTests : IDisposable
         // Arrange - Multi-disc with outdated playlist
         File.WriteAllText(Path.Combine(_testRoot, "Legend of Dragoon, The (USA) [SCUS-94491] (Disc 1).cue"), "");
         File.WriteAllText(Path.Combine(_testRoot, "Legend of Dragoon, The (USA) [SCUS-94491] (Disc 1).chd"), "");
+        File.WriteAllText(Path.Combine(_testRoot, "Legend of Dragoon, The (USA) [SCUS-94492] (Disc 2).cue"), "");
+        File.WriteAllText(Path.Combine(_testRoot, "Legend of Dragoon, The (USA) [SCUS-94492] (Disc 2).chd"), "");
         
         var playlistPath = Path.Combine(_testRoot, "Legend of Dragoon, The (USA).m3u");
-        File.WriteAllText(playlistPath, "Legend of Dragoon, The (USA) [SCUS-94491] (Disc 1).cue");
+        File.WriteAllText(playlistPath, "Legend of Dragoon, The (USA) [SCUS-94491] (Disc 1).cue\nLegend of Dragoon, The (USA) [SCUS-94492] (Disc 2).cue");
         
         // Act - Plan with CHD preference
         var operations = _planner.PlanPlaylists(_testRoot, recursive: false, preferredExtension: ".chd", updateExisting: true);
@@ -111,6 +113,7 @@ public class PsxPlaylistPlannerTests : IDisposable
         var op = operations[0];
         Assert.Equal(PlaylistOperationType.Update, op.OperationType);
         Assert.Contains(".chd", op.DiscFilenames[0]);
+        Assert.Contains(".chd", op.DiscFilenames[1]);
     }
     
     [Fact]
