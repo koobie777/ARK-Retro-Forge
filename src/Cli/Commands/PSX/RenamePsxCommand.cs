@@ -34,12 +34,21 @@ public static class RenamePsxCommand
         var noMultiDisc = args.Contains("--no-multi-disc");
         var noMultiTrack = args.Contains("--no-multi-track");
         
-        // Parse --playlists flag (create|update|off, default: create)
-        var playlistMode = GetArgValue(args, "--playlists") ?? "create";
+        // Parse --playlists flag (off|create|update, default: off)
+        var rawPlaylistMode = GetArgValue(args, "--playlists");
+        var playlistMode = string.IsNullOrWhiteSpace(rawPlaylistMode)
+            ? "off"
+            : rawPlaylistMode.Trim().ToLowerInvariant();
+
+        if (playlistMode is not ("off" or "create" or "update"))
+        {
+            AnsiConsole.MarkupLine(
+                $"[yellow][[WARN]] | Component: rename psx | Context: Unknown playlist mode '{playlistMode}' | Fix: Use off, create, or update (defaulting to off)[/]");
+            playlistMode = "off";
+        }
         var restoreArticles = args.Contains("--restore-articles");
-        var createPlaylists = playlistMode.Equals("create", StringComparison.OrdinalIgnoreCase) || 
-                             playlistMode.Equals("update", StringComparison.OrdinalIgnoreCase);
-        var updatePlaylists = playlistMode.Equals("update", StringComparison.OrdinalIgnoreCase);
+        var createPlaylists = playlistMode is "create" or "update";
+        var updatePlaylists = playlistMode == "update";
 
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX rename");
 

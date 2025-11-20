@@ -2,6 +2,15 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v1.1.1 (2025-11-20)
+
+### PSX Tooling
+- **Non-Interactive Merge Defaults**: `merge psx` now automatically keeps source BIN/CUE files when `--apply` is used in a non-interactive shell, avoiding stuck prompts and clearly explaining how to opt into `--delete-source` cleanup.
+- **Single-Disc Cleanup**: After merging multi-track single-disc layouts, `merge psx` auto-prunes the redundant track BIN/CUE files while leaving true multi-disc inputs untouched, eliminating manual cleanup sweeps.
+
+### CLI / UX
+- **Accurate Help Text**: `ark-retro-forge --help` documents the current PSX flags again (`convert psx --to/--flatten`, full `clean psx` switches, and the merge flatten toggles), keeping the CLI guidance in sync with the implemented options.
+
 ## v1.1.0 (2025-11-20)
 
 ### Core Architecture
@@ -11,6 +20,8 @@ This file contains release notes for ARK-Retro-Forge releases.
 - **Merge Resilience**: `merge psx` now intelligently handles "Track 1" vs "Track 01" mismatches in CUE sheets, using fuzzy matching to locate track files even when zero-padding differs.
 - **Rename Safety**: Fixed a critical bug in `rename psx` where CUE files could be accidentally deleted on Windows due to case-insensitive path normalization issues. The tool now correctly identifies in-place updates versus moves.
 - **Playlist Logic**: Refined `playlist psx` to ensure single-disc games are strictly excluded from playlist generation, adhering to the "multi-disc only" rule.
+
+### CLI / UX
 
 ## v1.0.9 (2025-11-20)
 

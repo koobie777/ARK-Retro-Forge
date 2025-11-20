@@ -26,7 +26,7 @@ public static class MergePsxCommand
         var recursive = args.Contains("--recursive");
         var apply = args.Contains("--apply");
         var deleteFlag = args.Contains("--delete-source");
-        var flatten = args.Contains("--flatten");
+        var flatten = args.Contains("--flatten") || !(args.Contains("--no-flatten") || args.Contains("--preserve-layout"));
 
         if (deleteFlag && !apply)
         {
@@ -120,9 +120,21 @@ public static class MergePsxCommand
         }
 
         OperationContextScope.ThrowIfCancellationRequested();
-        var deleteSources = deleteFlag || PromptDeleteSources();
+        var deleteSources = deleteFlag;
+        if (!deleteSources)
+        {
+            if (AnsiConsole.Profile.Capabilities.Interactive)
+            {
+                deleteSources = PromptDeleteSources();
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("[yellow]Skipping source deletion (non-interactive shell). Re-run with --delete-source to prune BIN/CUE inputs automatically.[/]");
+            }
+        }
         var service = new PsxBinMergeService();
         var merged = 0;
+        var singleDiscAutoDeleted = 0;
         var failures = new List<string>();
         var token = OperationContextScope.CurrentToken;
 
@@ -147,9 +159,14 @@ public static class MergePsxCommand
                     var label = TruncateLabel(op.Title ?? Path.GetFileNameWithoutExtension(op.CuePath), 35);
                     task.Description = $"Merging {label.PadRight(35)}";
                     
+                    var shouldDeleteSources = deleteSources || ShouldAutoDeleteSingleDiscSources(op);
                     try
                     {
-                        await service.MergeAsync(op, deleteSources, token);
+                        await service.MergeAsync(op, shouldDeleteSources, token);
+                        if (!deleteSources && shouldDeleteSources)
+                        {
+                            singleDiscAutoDeleted++;
+                        }
                         merged++;
                     }
                     catch (OperationCanceledException)
@@ -170,6 +187,19 @@ public static class MergePsxCommand
         if (deleteSources)
         {
             AnsiConsole.MarkupLine("[dim]  Source BIN/CUE files deleted after merge[/]");
+        }
+        else if (singleDiscAutoDeleted > 0)
+        {
+            var plural = singleDiscAutoDeleted == 1 ? "merge" : "merges";
+            AnsiConsole.MarkupLine($"[green]Auto-pruned multi-track source BIN/CUE files for {singleDiscAutoDeleted} single-disc {plural}.[/]");
+            if (merged > singleDiscAutoDeleted)
+            {
+                AnsiConsole.MarkupLine("[yellow]Multi-disc inputs were kept. Re-run with --delete-source to prune those as well.[/]");
+            }
+        }
+        else if (merged > 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]Source BIN/CUE files were kept. Run again with --delete-source to reclaim space and prune empty folders.[/]");
         }
 
         if (failures.Count > 0)
@@ -208,6 +238,27 @@ public static class MergePsxCommand
 
         var choice = AnsiConsole.Prompt(prompt);
         return choice.Equals("Yes", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ShouldAutoDeleteSingleDiscSources(PsxBinMergeOperation operation)
+    {
+        if (operation.TrackSources.Count <= 1)
+        {
+            return false;
+        }
+
+        var discCount = operation.DiscInfo.DiscCount;
+        if (discCount.HasValue && discCount.Value > 1)
+        {
+            return false;
+        }
+
+        if (operation.DiscInfo.DiscNumber.HasValue && operation.DiscInfo.DiscNumber.Value > 1)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static string TruncateLabel(string? value, int maxLength = 48)

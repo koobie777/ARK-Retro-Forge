@@ -92,7 +92,7 @@ All verbs now open with a Spectre header that highlights the current instance, s
 
 ## Quick Start Checklist
 
-1. **Download** the v1.1.0 stable release (or the newest RC if you're testing upcoming changes).
+1. **Download** the v1.1.1 stable release (or the newest RC if you're testing upcoming changes).
 2. **Provision tools** (`chdman`, `maxcso`, etc.) under `./tools/`.
 3. **Run `medical-bay`** to confirm diagnostics.
 4. **Set ROM root** (menu or CLI) and save for reuse.

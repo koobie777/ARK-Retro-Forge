@@ -1409,6 +1409,11 @@ public class Program
         }
 
         var defaults = SessionStateManager.State.RenamePsx;
+        var rememberedPlaylistMode = (defaults.PlaylistMode ?? "off").Trim().ToLowerInvariant();
+        if (rememberedPlaylistMode is not ("create" or "update"))
+        {
+            rememberedPlaylistMode = "off";
+        }
         
         var choiceMap = new Dictionary<string, string>
         {
@@ -1437,7 +1442,7 @@ public class Program
         {
             prompt.Select(choiceMap["Articles"]);
         }
-        if (defaults.PlaylistMode != "off")
+        if (rememberedPlaylistMode != "off")
         {
             prompt.Select(choiceMap["Playlists"]);
         }
@@ -1459,7 +1464,7 @@ public class Program
         var multiDisc = selections.Contains(choiceMap["MultiDisc"]);
         var multiTrack = selections.Contains(choiceMap["MultiTrack"]);
         
-        var playlistMode = "off";
+          var playlistMode = "off";
         if (managePlaylists)
         {
              var modePrompt = new SelectionPrompt<string>()
@@ -2214,7 +2219,7 @@ public class Program
         Console.WriteLine("    --apply           Apply rename operations (default is dry-run)");
         Console.WriteLine("    --verbose         Show full paths");
         Console.WriteLine("    --debug           Show debug information");
-        Console.WriteLine("    --playlists <mode> Playlist handling: create (default), update, or off");
+        Console.WriteLine("    --playlists <mode> Playlist handling: off (default), create, or update");
         Console.WriteLine();
         Console.WriteLine("  convert psx         Convert PSX CUE files to CHD format");
         Console.WriteLine("    --root <path>     Root directory (required)");
@@ -2222,7 +2227,17 @@ public class Program
         Console.WriteLine("    --apply           Apply conversions (default is dry-run)");
         Console.WriteLine("    --delete-source   Delete source files after conversion (requires --apply)");
         Console.WriteLine("    --rebuild         Force reconversion even if CHD exists");
-        Console.WriteLine("    --playlist-mode <mode> Playlist handling: chd (default), bin, or off");
+        Console.WriteLine("    --to <chd|bin|iso> Select conversion target (default chd)");
+        Console.WriteLine("    --flatten          Write outputs to the root folder instead of per-disc directories");
+        Console.WriteLine();
+        Console.WriteLine("  merge psx           Merge multi-track BIN layouts");
+        Console.WriteLine("    --root <path>     Root directory (required)");
+        Console.WriteLine("    --recursive       Scan subdirectories");
+        Console.WriteLine("    --apply           Apply merge operations (default is preview)");
+        Console.WriteLine("    --delete-source   Delete source BIN/CUE files after merge");
+        Console.WriteLine("    --flatten         Flatten merged output into --root (default behavior)");
+        Console.WriteLine("    --no-flatten      Keep merged output beside each source CUE");
+        Console.WriteLine("    --preserve-layout Alias for --no-flatten");
         Console.WriteLine();
         Console.WriteLine("  clean psx          Organize PSX ROM directories");
         Console.WriteLine("    --root <path>     Root directory (required)");
@@ -2232,9 +2247,13 @@ public class Program
         Console.WriteLine("    --ingest-root <path>    Optional import directory to ingest");
         Console.WriteLine("    --import-dir <name>     Target folder for ingested ROMs");
         Console.WriteLine("    --move-multitrack  Move detected multi-track BIN/CUE sets");
+        Console.WriteLine("    --move-multidisc   Move detected multi-disc folders into Title (Region)");
         Console.WriteLine("    --generate-cues    Generate missing CUE files");
         Console.WriteLine("    --ingest-move      Move imported ROMs into the root");
         Console.WriteLine("    --flatten          Flatten single-disc folders back into the root");
+        Console.WriteLine("    --flatten-multitrack Flatten multi-track staging folders alongside single-disc sets");
+        Console.WriteLine("    --remove-duplicates Delete duplicate discs detected via hashes");
+        Console.WriteLine("    --yes              Auto-confirm prompts when running non-interactively");
         Console.WriteLine();
         Console.WriteLine("  dat sync            Download DAT catalogs from known sources");
         Console.WriteLine("    --system <id>     Filter to a specific system (psx, ps2, gba, etc.)");

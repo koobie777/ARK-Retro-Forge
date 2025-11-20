@@ -56,16 +56,32 @@ jobs:
 
         $packageRoot = "$($env:RELEASE_DIR)/ARK-Retro-Forge-$releaseTag"
 
+        $releaseSemVer = ""
+        if ($releaseTag -match '^(?:v)?(?<semver>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z\.-]+)?)$') {
+          $releaseSemVer = $matches['semver']
+        }
+
+        $minVerOverride = ""
+        if (-not [string]::IsNullOrWhiteSpace($releaseSemVer)) {
+          $minVerOverride = "-p:MinVerVersionOverride=$releaseSemVer"
+        }
+
         "CHECKOUT_REF=$sourceRef" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         "RELEASE_TAG=$releaseTag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "RELEASE_SEMVER=$releaseSemVer" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "MINVER_OVERRIDE=$minVerOverride" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         "PACKAGE_ROOT=$packageRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
         "checkout_ref=$sourceRef" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         "release_tag=$releaseTag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        "release_semver=$releaseSemVer" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
         "package_root=$packageRoot" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
         Write-Host "Checkout ref: $sourceRef"
         Write-Host "Release tag: $releaseTag"
+        if (-not [string]::IsNullOrWhiteSpace($releaseSemVer)) {
+          Write-Host "Version override: $releaseSemVer"
+        }
 
     - name: Checkout source
       uses: actions/checkout@v4
@@ -90,10 +106,10 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build --no-restore --configuration Release
+      run: dotnet build --no-restore --configuration Release $env:MINVER_OVERRIDE
 
     - name: Test
-      run: dotnet test --no-build --configuration Release --verbosity normal
+      run: dotnet test --no-build --configuration Release --verbosity normal $env:MINVER_OVERRIDE
 
     - name: Publish CLI (win-x64)
       run: |
@@ -105,7 +121,27 @@ jobs:
           -p:PublishSingleFile=true `
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true `
-          -p:DebugType=embedded
+          -p:DebugType=embedded `
+          $env:MINVER_OVERRIDE
+
+    - name: Verify CLI version
+      if: ${{ steps.metadata.outputs.release_semver != '' }}
+      shell: pwsh
+      run: |
+        $expected = "v${{ steps.metadata.outputs.release_semver }}"
+        $exe = "./${{ env.PUBLISH_DIR }}/ark-retro-forge.exe"
+        $output = & $exe --version
+        if ($LASTEXITCODE -ne 0) {
+          throw "ark-retro-forge.exe --version failed with exit code $LASTEXITCODE"
+        }
+        if ($output -notmatch [regex]::Escape($expected)) {
+          Write-Error "Expected $expected in CLI output but saw:`n$output"
+          exit 1
+        }
+        $line = ($output -split "`r?`n" | Where-Object { $_ -like 'ARK-Retro-Forge v*' } | Select-Object -First 1)
+        if ($line) {
+          "CLI reports $line" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+        }
 
     - name: Prepare artifact layout
       shell: pwsh

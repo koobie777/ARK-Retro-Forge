@@ -26,7 +26,7 @@ internal sealed record RenamePsxOptions
 {
     public bool Recursive { get; init; } = true;
     public bool IncludeVersion { get; init; } = false;
-    public string PlaylistMode { get; init; } = "create";
+    public string PlaylistMode { get; init; } = "off";
     public bool RestoreArticles { get; init; } = false;
     public bool MultiDisc { get; init; } = true;
     public bool MultiTrack { get; init; } = true;

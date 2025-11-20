@@ -38,15 +38,15 @@
 ## 4. Release Protocol
 
 *   **Versioning**: Managed by `MinVer`.
-    *   **Dev**: `v1.1.0-alpha.0.1` (Automatic on `dev` push).
-    *   **RC**: `v1.1.0-rc.1` (Tag from `dev` or `rc` branch).
-    *   **Stable**: `v1.1.0` (Tag from `main` branch).
+    *   **Dev**: `v1.1.1-alpha.0.1` (Automatic on `dev` push).
+    *   **RC**: `v1.1.1-rc.1` (Tag from `dev` or `rc` branch).
+    *   **Stable**: `v1.1.1` (Tag from `main` branch).
 *   **Branch Flow**:
     *   `dev`: Main development branch.
     *   `main`: Stable release branch.
     *   **Merge Flow**: `dev` -> `main` (via PR or direct merge for admins).
 *   **Tagging**: Agents must manually push tags to trigger release workflows.
-    *   `git tag v1.1.0 && git push origin v1.1.0`
+    *   `git tag v1.1.1 && git push origin v1.1.1`
 
 ## 5. Coding Standards
 
