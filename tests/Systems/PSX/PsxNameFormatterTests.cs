@@ -214,4 +214,38 @@ public class PsxNameFormatterTests
 
         Assert.Equal("The Legend of Dragoon (USA) [SCUS-94491].bin", result);
     }
+
+    [Fact]
+    public void Format_DuplicateRegionSuffix_StripsExtras()
+    {
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "BrainDead 13 (USA) (USA)",
+            Region = "USA",
+            Extension = ".bin"
+        };
+
+        var result = PsxNameFormatter.Format(discInfo);
+
+        Assert.Equal("BrainDead 13 (USA).bin", result);
+    }
+
+    [Fact]
+    public void Format_TitleWithDiscsRange_NormalizesLegacySuffix()
+    {
+        var discInfo = new PsxDiscInfo
+        {
+            FilePath = "test.bin",
+            Title = "BrainDead 13 (USA) (Discs 1-2)",
+            Region = "USA",
+            Extension = ".bin",
+            DiscNumber = 2,
+            DiscCount = 2
+        };
+
+        var result = PsxNameFormatter.Format(discInfo);
+
+        Assert.Equal("BrainDead 13 (USA) (Disc 2).bin", result);
+    }
 }

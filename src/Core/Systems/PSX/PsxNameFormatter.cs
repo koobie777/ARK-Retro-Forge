@@ -65,18 +65,22 @@ public class PsxNameFormatter
 
     private static string CleanTitle(string title, PsxDiscInfo info)
     {
-        // Remove (Region) if it matches info.Region
+        title = title.Trim();
+
+        // Remove repeated (Region) suffixes that match metadata
+        string? regionSuffix = null;
         if (!string.IsNullOrWhiteSpace(info.Region))
         {
-            var regionSuffix = $"({info.Region.Trim()})";
-            if (title.EndsWith(regionSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                title = title[..^regionSuffix.Length].Trim();
-            }
+            regionSuffix = $"({info.Region.Trim()})";
+            title = StripRepeatedSuffix(title, regionSuffix);
         }
 
-        // Remove (Disc N)
-        title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\(Disc \d+(?: of \d+)?\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        // Remove lingering Disc/Discs annotations from legacy filenames
+        title = System.Text.RegularExpressions.Regex.Replace(
+            title,
+            @"\s*\(Discs?\s+\d+(?:\s*(?:of|-|\u2013)\s*\d+)?\)",
+            string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
         
         // Remove (Track N)
         title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\(Track \d+\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -84,7 +88,30 @@ public class PsxNameFormatter
         // Remove (Version)
         title = System.Text.RegularExpressions.Regex.Replace(title, @"\s*\((?:Rev|v|Ver\.?)\s*[\d.]+\)", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
+        if (!string.IsNullOrWhiteSpace(regionSuffix))
+        {
+            title = StripRepeatedSuffix(title, regionSuffix!);
+        }
+
         return title.Trim();
+    }
+
+    private static string StripRepeatedSuffix(string value, string suffix)
+    {
+        if (string.IsNullOrWhiteSpace(value) || string.IsNullOrWhiteSpace(suffix))
+        {
+            return value;
+        }
+
+        var trimmedSuffix = suffix.Trim();
+        var comparison = StringComparison.OrdinalIgnoreCase;
+
+        while (value.Length >= trimmedSuffix.Length && value.EndsWith(trimmedSuffix, comparison))
+        {
+            value = value[..^trimmedSuffix.Length].TrimEnd();
+        }
+
+        return value;
     }
     
     /// <summary>
