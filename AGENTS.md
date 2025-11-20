@@ -1,153 +1,62 @@
-# Repository Guidelines
-
-
-
-## Project Structure & Module Organization
-
-
-
-* **Repository**: ARK-Retro-Forge
-
-* **`src/Core`** – hashing, DAT metadata index, planners (scan/verify/rename/convert/merge/clean/extract).
-
-* **`src/Cli`** – Spectre.Console verbs + interactive menu (Medical Bay, scan/verify, PSX ops, DAT sync, archive extract).
-
-* **`plugins/`** experimental feature packs; **`config/`** profiles/templates/DAT catalog; **`tools/`** user-supplied binaries (chdman, maxcso, wit, ffmpeg, etc.).
-
-* **`instances/<profile>/`** – per-instance `db/`, `dat/`, `logs/`, `session.json` storing remembered ROM root/system and DRY-RUN state.
-
-* **`tests/`** (`ARK.Tests`) – xUnit coverage for planners/detectors.
-
-
-
-## Build, Test, and Development Commands
-
-
-
-* Restore: `dotnet restore`
-
-* Build (Release): `dotnet build -c Release`
-
-* Run CLI: `dotnet run --project src/Cli/ARK.Cli.csproj -- scan --root F:\ROMs --json`
-
-* Publish portable CLI: `dotnet publish src/Cli/ARK.Cli.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true`
-
-* Format/lint: `dotnet format`
-
-* Test + coverage: `dotnet test /p:CollectCoverage=true /p:CoverletOutput=TestResults/coverage.xml`
-
-
-
-## Coding Style & Naming Conventions
-
-
-
-* C# 12, .NET 8, nullable enabled, **treat warnings as errors**.
-
-* Names: PascalCase (types/methods), camelCase (locals/params), `_camelCase` (private fields), UPPER_SNAKE (const).
-
-* File-scoped namespaces, explicit access modifiers.
-
-* Tools: EditorConfig + .NET analyzers (optional: StyleCop.Analyzers).
-
-
-
-## Testing Guidelines
-
-
-
-* Framework: **xUnit**; one test project per module.
-
-* Test names: `Method_Scenario_Expected()` using AAA (Arrange-Act-Assert).
-
-* Fixtures under `tests/Fixtures/`. Aim >=70% line coverage for Core; justify exceptions in PR.
-
-
-
-## Commit, Branch & Release Guidelines
-
-
-
-* **Conventional Commits** (e.g., `feat(core): add CHD planner (#123)`).
-
-* **Branch Flow**: `dev` (testing/features) -> `rc` (release candidates) -> `main` (stable releases)
-
-* Work lands on feature branches -> `dev` for testing, then -> `rc` for release prep. Open PRs targeting `main` from `rc`; branch protections require green `Build and Test`, `CodeQL`, `Release Candidate` checks.
-
-* **Dev builds** (`dev` branch) - Automatic builds on push, artifacts retained 30 days, versioned as `vX.Y.Z-dev.N` (private, testing only)
-
-* **RC builds** (`vX.Y.Z-rc.N` tags from `rc` branch) - Trigger release-candidate workflow, create pre-releases on GitHub
-
-* **Stable releases** (`vX.Y.Z` tags from `main` branch) - Trigger stable-release workflow, create public releases on GitHub
-
-* Agents preparing an RC or stable release build must create and push the tag themselves from the correct branch (`rc` for RCs, `main` for stable). Example: `git checkout rc && git pull && git tag v1.0.2-rc.1 && git push origin v1.0.2-rc.1`.
-
-* One logical change per PR with description, linked issue, CLI screenshots for UX shifts, test plan, and rollback notes.
-
-* CI must pass; behavior changes demand README/UPDATE.md edits plus any necessary diagrams.
-
-
-
-## Security & Configuration Tips
-
-
-
-* **No ROMs/keys/firmware.** Portable only; do not write outside the repo folder.
-
-* Verify checksums for downloaded tools; keep `tools/` quarantined. Redact personal paths in logs.
-
-
-
-## Agent-Specific Instructions (for AI/Copilot)
-
-
-
-Provide **in this order**:
-
-
-
-1. Complete file(s) or minimal working diff.
-
-2. One-liner patch.
-
-3. Paths & exact apply steps.
-
-4. `UPDATE.md` entry (semver + bullets).
-
-5. Brief reasoning + rollback.
-
-
-
-Default to dry-run for destructive ops; keep outputs deterministic and reversible.
-
-
-See also `.github/instructions.md` for Copilot-specific reminders (branch rules, Medical Bay, DAT intel).
-
-
-
-### Project-Specific Knowledge
-
-
-
-* **Medical Bay** replaces the old doctor verb; always mention it first in docs and Quick Start steps.
-
-* The CLI menu remembers ROM root/system/dry-run via `session.json`; respect this when touching Program.cs.
-
-* DAT intelligence lives under `config/dat` + `DatMetadataIndex`; PSX flows (rename/merge/clean) rely on it, so never regress multi-disc detection or serial recovery without tests.
-
-* `PsxNameParser` uses a fallback strategy: Probe -> Filename Serial -> DAT Lookup. If probing fails, it attempts to resolve the serial from the filename against the DAT index.
-
-* The Cleaner (`clean psx`) leverages the `RomRepository` cache to avoid re-scanning files that are already indexed. Ensure `RomRepository` is injected into cleaner commands.
-
-* The interactive menu (`Program.cs`) must pause after executing an action so users can read the output before the screen clears/refreshes.
-
-* Archive Extract, Scan, Verify, and PSX operations share a unified quit handler (ESC/Ctrl+C) ⎋ keep behavior consistent.
-
-* RC builds are produced from tags; releases rely on `.github/workflows/release-candidate.yml` (beware reserved env variables like `VERSION`).
-
-### Testing & Verification
-
-*   **Workspace Integration Tests**: When verifying complex file operations (renaming, merging, playlists), create a temporary directory (`test_workspace`) with dummy files.
-    *   Use `dotnet run` against this workspace to validate logic without risking real data.
-    *   Clean up the workspace after verification.
-    *   This is preferred over unit tests for file-system heavy CLI commands.
+# Repository Guidelines & Agent Protocols
+
+## 1. Project Architecture
+
+### Core Components (`src/Core`)
+*   **`IO/ArkStaging`**: **CRITICAL**. All file operations (Move, Copy, Delete, Write) MUST go through `ArkStaging`. This ensures DRY-RUN safety, rollback capabilities, and operation tracking. Never use `File.*` or `Directory.*` directly for modifying user data.
+*   **`Dat/`**: Handles Redump/No-Intro DAT parsing and metadata lookups. `DatMetadataIndex` is the source of truth for serials and disc counts.
+*   **`Database/RomRepository`**: SQLite cache for scanned files. Used by Cleaner and other tools to avoid re-scanning disk.
+*   **`Systems/PSX`**: Domain logic for PlayStation operations (Rename, Merge, Convert, Playlist, Clean).
+
+### CLI Layer (`src/Cli`)
+*   **`Spectre.Console`**: UI library for all commands. Use `AnsiConsole` for output.
+*   **`Medical Bay`**: The diagnostic tool. Always the first step in debugging user environment issues.
+*   **`Infrastructure`**: `SessionStateManager` (persists root/system/dry-run), `CancellationMonitor` (global ESC handler).
+
+## 2. Development Workflow
+
+*   **Build**: `dotnet build` (Treats warnings as errors).
+*   **Test**: `dotnet test` (xUnit).
+*   **Run**: `dotnet run --project src/Cli/ARK.Cli.csproj -- <command> <args>`
+*   **Format**: `dotnet format`
+
+## 3. Testing Strategy
+
+### Unit Tests (`tests/`)
+*   Focus on logic (Parsers, Planners, Formatters).
+*   Mock `IArkStaging` or file system abstractions where possible.
+
+### Workspace Integration Tests (Agent-Driven)
+*   **Mandatory for File Operations**: When verifying CLI commands (Rename, Merge, Clean), DO NOT run against real user data.
+*   **Procedure**:
+    1.  Create a temporary directory: `mkdir test_workspace`
+    2.  Populate with dummy files: `New-Item ...`
+    3.  Run the CLI command against this workspace.
+    4.  Verify results (file existence, content).
+    5.  Clean up: `Remove-Item test_workspace -Recurse`
+
+## 4. Release Protocol
+
+*   **Versioning**: Managed by `MinVer`.
+    *   **Dev**: `v1.1.0-alpha.0.1` (Automatic on `dev` push).
+    *   **RC**: `v1.1.0-rc.1` (Tag from `dev` or `rc` branch).
+    *   **Stable**: `v1.1.0` (Tag from `main` branch).
+*   **Branch Flow**:
+    *   `dev`: Main development branch.
+    *   `main`: Stable release branch.
+    *   **Merge Flow**: `dev` -> `main` (via PR or direct merge for admins).
+*   **Tagging**: Agents must manually push tags to trigger release workflows.
+    *   `git tag v1.1.0 && git push origin v1.1.0`
+
+## 5. Agent Instructions (How to Help)
+
+1.  **Context First**: Check `Medical Bay` status and `UPDATE.md` history before suggesting fixes.
+2.  **Safety First**: Always assume **DRY-RUN** is the default. Use `ArkStaging` for everything.
+3.  **Verification**: Use the "Workspace Integration Test" pattern to prove your fix works.
+4.  **Documentation**: Update `UPDATE.md` with every user-facing change.
+
+### Specific Knowledge
+*   **PSX Merge**: Handles "Track 1" vs "Track 01" fuzzy matching.
+*   **PSX Rename**: Normalizes paths to prevent case-insensitive deletion bugs on Windows.
+*   **PSX Playlist**: Only generates `.m3u` for multi-disc games (2+ discs).
+*   **Cancellation**: All long-running loops must check `context.CancellationToken`.
