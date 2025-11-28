@@ -55,6 +55,8 @@ public class PsxRenamePlanner
         
         var items = new List<DiscoveredItem>();
         var handledFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var effectiveInfos = new Dictionary<string, PsxDiscInfo>(StringComparer.OrdinalIgnoreCase);
+        var plannedDestinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         // 1. Scan CUE files first to identify sets (if enabled)
         if (handleMultiTrack)
@@ -103,38 +105,68 @@ public class PsxRenamePlanner
 
                 var info = await GetDiscInfoAsync(file, romRepository);
                 
-                // Skip audio track BINs that are loose (orphan tracks?) 
-                // or maybe we should rename them if they are truly orphans?
-                // For now, keep existing logic: skip if it looks like a track but isn't in a CUE
-                // Only if multi-track handling is enabled (otherwise treat as regular file)
-                if (handleMultiTrack && info.IsAudioTrack)
-                {
-                    continue;
-                }
-
                 items.Add(new DiscoveredItem { Info = info, IsCue = ext.Equals(".cue", StringComparison.OrdinalIgnoreCase) });
             }
         }
+
+        // Demote numbered single-disc files (often multi-track) to track sets to avoid false multi-disc grouping
+        DemoteSingleDiscNumbersToTracks(items);
+        ClearFalseTrackMarkers(items);
         
         // 3. Group by normalized title/region/extension to detect multi-disc sets (if enabled)
         var discAssignments = new Dictionary<string, (int DiscNumber, int DiscCount)>(StringComparer.OrdinalIgnoreCase);
-        
+
         if (handleMultiDisc)
         {
+            // Only use disc-level candidates (track 1 or non-track files) when inferring disc counts
             var multiDiscGroups = items
                 .Where(i => !string.IsNullOrWhiteSpace(i.Info.Title))
+                .Where(i => (i.Info.TrackNumber is null or 1) && i.Info.TrackCount.GetValueOrDefault() <= 1 && !i.Info.IsAudioTrack)
                 .GroupBy(i => BuildGroupKey(i.Info))
-                .Where(g => g.Count() > 1 || g.Any(i => i.Info.DiscNumber.HasValue))
                 .Select(g => g.OrderBy(i => i.Info.FilePath, StringComparer.OrdinalIgnoreCase).ToList())
                 .ToList();
 
             foreach (var group in multiDiscGroups)
             {
-                var count = group.Count;
-                for (var i = 0; i < count; i++)
+                var serials = group.Select(x => x.Info.Serial).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                var maxDiscCount = group.Max(x => x.Info.DiscCount ?? 0);
+                var inferredDiscNumbers = group.Where(g => g.Info.DiscNumber.HasValue).Select(g => g.Info.DiscNumber!.Value).Distinct().ToList();
+
+                // If metadata says single-disc AND serials match AND no real multi-disc metadata, treat as track set
+                if (maxDiscCount <= 1 && serials.Count <= 1 && inferredDiscNumbers.Count <= 1 && group.All(g => (g.Info.DiscCount ?? 0) <= 1))
                 {
-                    var discNumber = group[i].Info.DiscNumber ?? (i + 1);
-                    discAssignments[group[i].Info.FilePath] = (discNumber, count);
+                    continue;
+                }
+
+                if (group.Count <= 1 && group.All(g => !g.Info.DiscNumber.HasValue))
+                {
+                    continue;
+                }
+
+                var count = group.Count;
+
+                // If serials are distinct but disc numbers are missing/duplicated, assign disc numbers deterministically by serial
+                var hasSerialConflict = serials.Count > 1 && inferredDiscNumbers.Count <= 1;
+                if (hasSerialConflict)
+                {
+                    var ordered = group
+                        .OrderBy(g => g.Info.Serial ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(g => g.Info.FilePath, StringComparer.OrdinalIgnoreCase)
+                        .Select((g, idx) => (g, Disc: idx + 1))
+                        .ToList();
+
+                    foreach (var entry in ordered)
+                    {
+                        discAssignments[entry.g.Info.FilePath] = (entry.Disc, count);
+                    }
+                }
+                else
+                {
+                    for (var i = 0; i < count; i++)
+                    {
+                        var discNumber = group[i].Info.DiscNumber ?? (i + 1);
+                        discAssignments[group[i].Info.FilePath] = (discNumber, count);
+                    }
                 }
             }
         }
@@ -153,10 +185,17 @@ public class PsxRenamePlanner
                     DiscCount = discInfo.DiscCount ?? assignment.DiscCount
                 };
             }
+
+            // If this is a known multi-disc title, treat "Track 01" tokens as the data disc (no track suffix)
+            if (discInfo.TrackNumber == 1 && discInfo.DiscCount.GetValueOrDefault() > 1)
+            {
+                discInfo = discInfo with { TrackNumber = null, TrackCount = null, IsAudioTrack = false };
+            }
             
             var effectiveDiscInfo = stripLanguageTags
                 ? discInfo with { Title = StripLanguageTags(discInfo.Title) }
                 : discInfo;
+            effectiveInfos[discInfo.FilePath] = effectiveDiscInfo;
 
             // Calculate canonical base name (without extension)
             var baseName = PsxNameFormatter.Format(effectiveDiscInfo with { Extension = null }, restoreArticles, includeVersion);
@@ -177,6 +216,7 @@ public class PsxRenamePlanner
                 try 
                 {
                     var cueSheet = CueSheetParser.Parse(discInfo.FilePath);
+                    var trackCount = cueSheet.Files.Count;
                     foreach (var fileEntry in cueSheet.Files)
                     {
                         var oldBinPath = Path.Combine(directory, fileEntry.FileName);
@@ -187,7 +227,12 @@ public class PsxRenamePlanner
 
                         string newBinName;
                         var firstTrack = fileEntry.Tracks.FirstOrDefault()?.Number ?? 1;
-                        var trackInfo = effectiveDiscInfo with { TrackNumber = firstTrack, Extension = Path.GetExtension(fileEntry.FileName) };
+                        var trackInfo = effectiveDiscInfo with 
+                        { 
+                            TrackNumber = trackCount > 1 ? firstTrack : (int?)null, 
+                            TrackCount = trackCount > 1 ? trackCount : null,
+                            Extension = Path.GetExtension(fileEntry.FileName) 
+                        };
                         
                         if (cueSheet.Files.Count == 1)
                         {
@@ -209,6 +254,7 @@ public class PsxRenamePlanner
                         binRenames[fileEntry.FileName] = newBinName;
                         
                         trackOps.Add(CreateOp(oldBinPath, destBinPath, trackInfo, null));
+                        plannedDestinations[oldBinPath] = destBinPath;
                     }
 
                     // Generate new CUE content
@@ -217,6 +263,7 @@ public class PsxRenamePlanner
                     
                     operations.Add(cueOp);
                     operations.AddRange(trackOps);
+                    plannedDestinations[discInfo.FilePath] = destCue;
                 }
                 catch
                 {
@@ -229,6 +276,66 @@ public class PsxRenamePlanner
                 // Plan single file rename
                 var destPath = Path.Combine(directory, baseName + discInfo.Extension);
                 operations.Add(CreateOp(discInfo.FilePath, destPath, effectiveDiscInfo, discInfo.Warning));
+                plannedDestinations[discInfo.FilePath] = destPath;
+            }
+        }
+
+        // 5. Create minimal CUE files for detected multi-track BIN sets that lack cues
+        if (handleMultiTrack)
+        {
+            var groupedTracks = items
+                .Where(i => !i.IsCue && effectiveInfos.TryGetValue(i.Info.FilePath, out var info) && info.TrackNumber.HasValue)
+                .GroupBy(i => BuildTrackGroupKey(effectiveInfos[i.Info.FilePath], stripLanguageTags))
+                .Where(g => g.Count() > 1);
+
+            foreach (var group in groupedTracks)
+            {
+                var sampleInfo = effectiveInfos[group.First().Info.FilePath];
+                var directory = Path.GetDirectoryName(sampleInfo.FilePath) ?? string.Empty;
+
+                // Skip if a CUE already exists in this directory (leave it alone)
+                if (Directory.GetFiles(directory, "*.cue").Any())
+                {
+                    continue;
+                }
+
+                var cueInfo = sampleInfo with
+                {
+                    TrackNumber = null,
+                    TrackCount = group.Count(),
+                    Extension = ".cue",
+                    FilePath = Path.Combine(directory, "placeholder.cue") // temp path to satisfy record
+                };
+
+                var cueBaseName = PsxNameFormatter.Format(cueInfo with { Extension = null, DiscNumber = sampleInfo.DiscNumber }, restoreArticles, includeVersion);
+                var cuePath = Path.Combine(directory, cueBaseName + ".cue");
+
+                if (File.Exists(cuePath))
+                {
+                    continue;
+                }
+
+                var trackEntries = group
+                    .Select(item =>
+                    {
+                        var info = effectiveInfos[item.Info.FilePath];
+                        var dest = plannedDestinations.TryGetValue(info.FilePath, out var mapped) ? mapped : info.FilePath;
+                        return (info, dest);
+                    })
+                    .OrderBy(x => x.info.TrackNumber ?? int.MaxValue)
+                    .ThenBy(x => x.dest, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                var cueContent = BuildCueContent(trackEntries);
+
+                operations.Add(new PsxRenameOperation
+                {
+                    SourcePath = cuePath,
+                    DestinationPath = cuePath,
+                    DiscInfo = cueInfo with { FilePath = cuePath },
+                    IsAlreadyNamed = false,
+                    NewContent = cueContent
+                });
             }
         }
         
@@ -237,6 +344,7 @@ public class PsxRenamePlanner
 
     private PsxRenameOperation CreateOp(string source, string dest, PsxDiscInfo info, string? warning)
     {
+        dest = SanitizeFormattedPath(dest);
         var isAlreadyNamed = string.Equals(Path.GetFileName(source), Path.GetFileName(dest), StringComparison.OrdinalIgnoreCase); // Case-insensitive check for Windows
         
         // Check for conflicts (unless renaming case only)
@@ -257,42 +365,46 @@ public class PsxRenamePlanner
 
     private async Task<PsxDiscInfo> GetDiscInfoAsync(string file, RomRepository? romRepository)
     {
-        if (romRepository != null)
-        {
-            var cached = await romRepository.GetByPathAsync(file);
-            if (cached != null && !string.IsNullOrWhiteSpace(cached.Title))
-            {
-                var discNumber = cached.Disc_Number;
-                var discCount = cached.Disc_Count;
-                
-                if (!discNumber.HasValue)
-                {
-                    var discMatch = Regex.Match(Path.GetFileNameWithoutExtension(file), @"\(Disc (\d+)(?: of (\d+))?\)", RegexOptions.IgnoreCase);
-                    if (discMatch.Success)
-                    {
-                        discNumber = int.Parse(discMatch.Groups[1].Value);
-                        if (discMatch.Groups[2].Success)
-                        {
-                            discCount = int.Parse(discMatch.Groups[2].Value);
-                        }
-                    }
-                }
+        // Always run through the parser so BIN/CHD -> DAT -> filename precedence and warning plumbing stay consistent,
+        // then hydrate any missing metadata from the cache to avoid losing disc counts from previous scans.
+        var parsed = _parser.Parse(file);
 
-                return new PsxDiscInfo
+        if (romRepository == null)
+        {
+            return parsed;
+        }
+
+        var cached = await romRepository.GetByPathAsync(file);
+        if (cached == null)
+        {
+            return parsed;
+        }
+
+        var discNumber = parsed.DiscNumber ?? cached.Disc_Number;
+        var discCount = parsed.DiscCount ?? cached.Disc_Count;
+
+        if (!discNumber.HasValue)
+        {
+            var discMatch = Regex.Match(Path.GetFileNameWithoutExtension(file), @"\(Disc (\d+)(?: of (\d+))?\)", RegexOptions.IgnoreCase);
+            if (discMatch.Success)
+            {
+                discNumber = int.Parse(discMatch.Groups[1].Value);
+                if (discMatch.Groups[2].Success)
                 {
-                    FilePath = file,
-                    Title = cached.Title,
-                    Region = cached.Region,
-                    Serial = cached.Serial,
-                    DiscNumber = discNumber,
-                    DiscCount = discCount,
-                    Extension = Path.GetExtension(file),
-                    Version = cached.Version,
-                    ContentType = _parser.Classify(file, cached.Serial)
-                };
+                    discCount = discCount ?? int.Parse(discMatch.Groups[2].Value);
+                }
             }
         }
-        return _parser.Parse(file);
+
+        return parsed with
+        {
+            Title = parsed.Title ?? cached.Title,
+            Region = parsed.Region ?? cached.Region,
+            Serial = parsed.Serial ?? cached.Serial,
+            Version = parsed.Version ?? cached.Version,
+            DiscNumber = discNumber,
+            DiscCount = discCount
+        };
     }
 
     private string UpdateCueContent(string cuePath, Dictionary<string, string> binRenames)
@@ -324,6 +436,68 @@ public class PsxRenamePlanner
         public required PsxDiscInfo Info { get; init; }
         public List<string> RelatedFiles { get; init; } = new();
         public bool IsCue { get; init; }
+    }
+
+    private static void DemoteSingleDiscNumbersToTracks(List<DiscoveredItem> items)
+    {
+        var indexed = items
+            .Select((item, idx) => (item, idx))
+            .Where(x => x.item.Info.DiscNumber.HasValue && (x.item.Info.DiscCount ?? 1) <= 1 && !string.IsNullOrWhiteSpace(x.item.Info.Title))
+            .GroupBy(x => (
+                Title: CleanTitleForGrouping(x.item.Info.Title ?? string.Empty),
+                Region: x.item.Info.Region ?? string.Empty,
+                Serial: x.item.Info.Serial ?? string.Empty),
+                new GroupKeyComparer())
+            .Where(g => g.Count() > 1);
+
+        foreach (var group in indexed)
+        {
+            var distinctDiscNumbers = group.Select(g => g.item.Info.DiscNumber!.Value).Distinct().ToList();
+            if (distinctDiscNumbers.Count > 1)
+            {
+                // Disc numbers disagree; treat as true multi-disc instead of demoting to tracks.
+                continue;
+            }
+
+            var ordered = group.OrderBy(g => g.item.Info.FilePath, StringComparer.OrdinalIgnoreCase).ToList();
+            var trackCount = ordered.Count;
+            for (var i = 0; i < trackCount; i++)
+            {
+                var entry = ordered[i];
+                var info = entry.item.Info with
+                {
+                    DiscNumber = null,
+                    TrackNumber = i + 1,
+                    TrackCount = trackCount,
+                    IsAudioTrack = i > 0,
+                    DiscCount = 1
+                };
+
+                items[entry.idx] = new DiscoveredItem
+                {
+                    Info = info,
+                    RelatedFiles = entry.item.RelatedFiles,
+                    IsCue = entry.item.IsCue
+                };
+            }
+        }
+    }
+
+    private static string CleanTitleForGrouping(string title)
+        => title.Trim().ToUpperInvariant();
+
+    private sealed class GroupKeyComparer : IEqualityComparer<(string Title, string Region, string Serial)>
+    {
+        public bool Equals((string Title, string Region, string Serial) x, (string Title, string Region, string Serial) y) =>
+            string.Equals(x.Title, y.Title, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Region, y.Region, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(x.Serial, y.Serial, StringComparison.OrdinalIgnoreCase);
+
+        public int GetHashCode((string Title, string Region, string Serial) obj) =>
+            HashCode.Combine(
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Title),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Region),
+                StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Serial));
     }
 
     private static string BuildGroupKey(PsxDiscInfo disc)
@@ -383,5 +557,107 @@ public class PsxRenamePlanner
             var normalized = token.Trim().Replace("-", string.Empty).Replace(" ", string.Empty).ToUpperInvariant();
             return LanguageTokens.Contains(normalized);
         });
+    }
+
+    private static string BuildTrackGroupKey(PsxDiscInfo info, bool stripLanguageTags)
+    {
+        var cleanTitle = stripLanguageTags ? StripLanguageTags(info.Title) : info.Title;
+        return string.Join('|',
+            (Path.GetDirectoryName(info.FilePath) ?? string.Empty).ToUpperInvariant(),
+            (cleanTitle ?? string.Empty).Trim().ToUpperInvariant(),
+            (info.Region ?? string.Empty).Trim().ToUpperInvariant(),
+            (info.Serial ?? string.Empty).Trim().ToUpperInvariant(),
+            (info.DiscNumber ?? 0).ToString());
+    }
+
+    private static void ClearFalseTrackMarkers(List<DiscoveredItem> items)
+    {
+        var indexed = items.Select((item, idx) => (item, idx))
+            .Where(x => !x.item.IsCue && x.item.Info.TrackNumber.HasValue)
+            .ToList();
+
+        var groups = indexed
+            .GroupBy(x => (
+                Title: x.item.Info.Title?.Trim().ToUpperInvariant() ?? string.Empty,
+                Region: x.item.Info.Region?.Trim().ToUpperInvariant() ?? string.Empty,
+                Serial: x.item.Info.Serial?.Trim().ToUpperInvariant() ?? string.Empty,
+                Disc: x.item.Info.DiscNumber ?? 1));
+
+        foreach (var group in groups)
+        {
+            var nonCueCount = group.Count();
+            if (nonCueCount == 1)
+            {
+                // Only one BIN/IMG for this disc/title/region/serial: treat as single-track data disc
+                var entry = group.First();
+                var cleaned = entry.item.Info with { TrackNumber = null, TrackCount = null, IsAudioTrack = false };
+                items[entry.idx] = new DiscoveredItem
+                {
+                    Info = cleaned,
+                    RelatedFiles = entry.item.RelatedFiles,
+                    IsCue = entry.item.IsCue
+                };
+                continue;
+            }
+
+            // Multiple files for same disc/serial: pick the largest as data track and clear its track markers
+            var orderedBySize = group
+                .Select(g =>
+                {
+                    long size = 0;
+                    try { size = new FileInfo(g.item.Info.FilePath).Length; } catch { }
+                    return (g, size);
+                })
+                .OrderByDescending(x => x.size)
+                .ThenBy(x => x.g.item.Info.TrackNumber ?? int.MaxValue)
+                .ToList();
+
+            if (orderedBySize.Count > 0)
+            {
+                var dataEntry = orderedBySize.First().g;
+                var cleaned = dataEntry.item.Info with { TrackNumber = null, TrackCount = null, IsAudioTrack = false };
+                items[dataEntry.idx] = new DiscoveredItem
+                {
+                    Info = cleaned,
+                    RelatedFiles = dataEntry.item.RelatedFiles,
+                    IsCue = dataEntry.item.IsCue
+                };
+            }
+        }
+    }
+
+    private static string BuildCueContent(IEnumerable<(PsxDiscInfo info, string dest)> tracks)
+    {
+        var sb = new StringBuilder();
+        foreach (var entry in tracks)
+        {
+            var trackNumber = entry.info.TrackNumber ?? 1;
+            var trackType = trackNumber == 1 ? "MODE2/2352" : "AUDIO";
+            sb.AppendLine($"FILE \"{Path.GetFileName(entry.dest)}\" BINARY");
+            sb.AppendLine($"  TRACK {trackNumber:D2} {trackType}");
+            sb.AppendLine("    INDEX 01 00:00:00");
+        }
+        return sb.ToString();
+    }
+
+    private static string SanitizeFormattedPath(string path)
+    {
+        var directory = Path.GetDirectoryName(path) ?? string.Empty;
+        var fileName = Path.GetFileName(path);
+        var ext = Path.GetExtension(fileName);
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+
+        // Normalize DISC -> Disc and collapse duplicates
+        stem = Regex.Replace(stem, @"\((?:DISC|Disc)\s*(\d+)\)", "(Disc $1)", RegexOptions.IgnoreCase);
+        stem = Regex.Replace(stem, @"\s*\(Disc (\d+)\)\s*\(Disc \1\)", " (Disc $1)", RegexOptions.IgnoreCase);
+
+        // Normalize TRACK -> Track and collapse duplicates
+        stem = Regex.Replace(stem, @"\((?:TRACK|Track)\s*(\d+)\)", "(Track $1)", RegexOptions.IgnoreCase);
+        stem = Regex.Replace(stem, @"\s*\(Track (\d+)\)\s*\(Track \1\)", " (Track $1)", RegexOptions.IgnoreCase);
+
+        // Trim extra whitespace
+        stem = Regex.Replace(stem, @"\s{2,}", " ").Trim();
+
+        return Path.Combine(directory, stem + ext);
     }
 }

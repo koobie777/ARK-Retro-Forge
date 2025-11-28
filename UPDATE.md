@@ -2,11 +2,37 @@
 
 This file contains release notes for ARK-Retro-Forge releases.
 
+## v1.1.2-rc.2 (2025-11-28)
+
+### PSX Tooling
+- **Single Flow**: `clean psx` now owns rename/normalize behavior via a menu toggle; the old `rename psx` entry is retired.
+- **Disc/Track Hygiene**: Parser and formatter strip embedded `(DISC N)/(TRACK NN)` tokens from titles and re-apply canonical `(Disc N)` / `(Track NN)` only when appropriate; “Track 01” on true multi-disc sets no longer masquerades as multi-track.
+- **Orphan Cleanup**: CUE-only “Track 01” folders are detected and removed; stray track-like CUEs without BIN/CHD siblings are pruned.
+- **Region-Normalized Folders**: Folder names now normalize composite regions and remove stacked `(Region)` tags to eliminate `(USA) (USA)` / `(USA, Canada) (USA, Canada)` directories.
+- **Disc Suffix Enforcement**: True multi-disc titles keep `(Disc N)` even when filenames were missing or mislabeled, using serials to disambiguate conflicting disc numbers.
+- **Region De-dupe**: Rename/clean now strip stacked region tags (including composite regions like "(USA, Canada)") from titles and folders before reapplying the canonical region, preventing `(USA) (USA)`/`(USA, Canada) (USA, Canada)` paths.
+- **Playlist Hygiene**: `.m3u` planner now strips stacked region tags from playlist names and removes legacy double-region playlists after writing the canonical version; disc selection still prefers CHD > CUE > BIN.
+- **Rename/CUE Parity**: Multi-track sets get deterministic `Title (Region) (Disc N) (Track NN) [Serial]` filenames, updated CUE contents, and generated CUEs when missing so multi-disc + multi-track rips stay aligned.
+- **Dupes Cleanup**: Duplicate detection now considers metadata (serial/title+region + disc) in addition to hashes; cleaner keeps the largest file in each duplicate set to preserve merged images and prune leftover track BINs.
+
+### CLI / UX
+- **Menu Simplification**: PSX menu now offers `Clean library` with a Rename/Normalize toggle; rename-specific menu entry removed.
+- **Playlist Modes**: Interactive rename prompt adds Skip, Create, Sync, and Clean playlist modes to mirror the `--playlists` CLI flag options.
+- **Cancel Keys**: Menu prompts honor `B` as well as `ESC` for cancel/return, matching the on-screen guidance.
+- **Playlist Cleanup Mode**: `rename psx --playlists clean` lets you delete stray/stale `.m3u` files without forcing create/update.
+- **Plan Logs**: `clean psx` now writes a full text plan log to `logs/psx-clean-*.txt` in the working directory so you can review every planned move/rename outside of the Spectre tables.
+
 ## v1.1.1 (2025-11-20)
 
 ### PSX Tooling
 - **Non-Interactive Merge Defaults**: `merge psx` now automatically keeps source BIN/CUE files when `--apply` is used in a non-interactive shell, avoiding stuck prompts and clearly explaining how to opt into `--delete-source` cleanup.
 - **Single-Disc Cleanup**: After merging multi-track single-disc layouts, `merge psx` auto-prunes the redundant track BIN/CUE files while leaving true multi-disc inputs untouched, eliminating manual cleanup sweeps.
+- **Cleaner Merge Fallout Fixes**: `clean psx` now re-hydrates disc metadata directly from each BIN/CHD before relying on the ROM cache and auto-flags redundant track BINs for deletion when a merged image already exists, preventing botched merge leftovers from being mis-identified as multi-disc sets.
+- **Rename Fidelity**: `rename psx` now formats every file as `Title (Region) (Disc N) (Track NN) [Serial]`, properly suffixes multi-track rips (data and audio), and will generate fresh CUE sheets for track sets missing one so merged or orphaned track layouts still end up with correct filenames and cues.
+- **Metadata Priority Enforcement**: Core PSX stack now enforces a strict BIN/CHD -> DAT -> filename precedence order, emitting warnings whenever filenames disagree with canonical metadata so bad names never trump real serial intelligence.
+- **CUE As Hints**: `PsxBinMergePlanner` treats CUE sheets as layout hints only, cross-checking every referenced BIN via `PsxNameParser` and blocking merges with conflicting serials to prevent fake multi-disc groupings or unsafe cleanups.
+- **Formatter Hygiene**: `PsxNameFormatter` strips stacked/mixed region tags and legacy disc/track/version suffixes, preventing `(USA) (USA)` duplicates and noisy `(Discs 1-5)` style labels across rename and playlist flows.
+- **Playlist Guardrails**: `rename psx` playlist modes (`off|create|update`) now only emit `.m3u` files for true multi-disc titles; pure multi-track single-disc games are explicitly ignored so playlist noise disappears.
 
 ### CLI / UX
 - **Accurate Help Text**: `ark-retro-forge --help` documents the current PSX flags again (`convert psx --to/--flatten`, full `clean psx` switches, and the merge flatten toggles), keeping the CLI guidance in sync with the implemented options.
