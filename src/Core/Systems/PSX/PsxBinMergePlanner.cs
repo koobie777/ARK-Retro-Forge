@@ -19,6 +19,11 @@ public record PsxBinMergeOperation
     public bool IsBlocked { get; init; }
     public string? BlockReason { get; init; }
     public IReadOnlyList<string> Notes { get; init; } = Array.Empty<string>();
+    /// <summary>
+    /// Track BIN files that became redundant once the merge completes.
+    /// This is informational; safe deletion should be handled by higher-level cleanup tools.
+    /// </summary>
+    public IReadOnlyList<string> RedundantTrackPaths { get; init; } = Array.Empty<string>();
 }
 
 /// <summary>
@@ -159,6 +164,45 @@ public record PsxBinTrackSource
 
             var alreadyMerged = File.Exists(destinationBinPath) && trackSources.Count == 1;
 
+            // Cross-check CUE membership against BIN metadata to avoid acting on bad CUEs.
+            // We only care about data tracks here; audio-only tracks are irrelevant for merge identity.
+            var dataTrackInfos = new List<PsxDiscInfo>();
+            foreach (var ts in trackSources.Where(t => string.Equals(t.TrackType, "MODE1/2352", StringComparison.OrdinalIgnoreCase) || string.Equals(t.TrackType, "MODE2/2352", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!File.Exists(ts.AbsolutePath))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var info = _parser.Parse(ts.AbsolutePath);
+                    dataTrackInfos.Add(info);
+                }
+                catch
+                {
+                    // If parsing a particular BIN fails, treat it as suspicious but don't crash the whole scan.
+                }
+            }
+
+            if (dataTrackInfos.Count > 1)
+            {
+                var canonicalSerial = dataTrackInfos.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.Serial))?.Serial;
+                if (!string.IsNullOrWhiteSpace(canonicalSerial))
+                {
+                    var mismatched = dataTrackInfos
+                        .Where(i => !string.IsNullOrWhiteSpace(i.Serial) && !string.Equals(i.Serial, canonicalSerial, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+                    if (mismatched.Count > 0)
+                    {
+                        blocked = true;
+                        blockReason = "CUE references BINs with conflicting serials; treating layout as suspicious.";
+                        notes.Add(blockReason);
+                    }
+                }
+            }
+
             if (discInfo.DiscCount.HasValue && discInfo.DiscCount.Value > 1)
             {
                 notes.Add($"Multi-disc set (Disc {discInfo.DiscNumber ?? 1}/{discInfo.DiscCount})");
@@ -175,6 +219,13 @@ public record PsxBinTrackSource
             //     notes.Add(discInfo.Warning);
             // }
 
+            var redundantTracks = alreadyMerged || !blocked
+                ? trackSources
+                    .Where(t => File.Exists(t.AbsolutePath))
+                    .Select(t => t.AbsolutePath)
+                    .ToList()
+                : new List<string>();
+
             operations.Add(new PsxBinMergeOperation
             {
                 CuePath = cueFile,
@@ -186,7 +237,8 @@ public record PsxBinTrackSource
                 DiscInfo = discInfo,
                 IsBlocked = blocked,
                 BlockReason = blockReason,
-                Notes = notes
+                Notes = notes,
+                RedundantTrackPaths = redundantTracks
             });
         }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace ARK.Core.Systems.PSX;
 
@@ -13,6 +14,10 @@ public record DuplicateGroup
     public string? Title { get; init; }
     public string? Serial { get; init; }
     public int? DiscNumber { get; init; }
+    /// <summary>How this group was matched (Hash or Metadata).</summary>
+    public string MatchType { get; init; } = "Hash";
+    public string? Reason { get; init; }
+    public long TotalBytes => Files.Sum(f => f.FileSize);
 }
 
 /// <summary>
@@ -52,11 +57,13 @@ public class PsxDuplicateDetector
     /// <param name="recursive">Whether to scan recursively</param>
     /// <param name="hashAlgorithm">Hash algorithm to use (SHA1, MD5, CRC32)</param>
     /// <param name="progress">Optional progress reporter invoked for each hashed file</param>
+    /// <param name="hashCachePath">Optional cache file path to store hashes keyed by path/size/timestamp.</param>
     public List<DuplicateGroup> ScanForDuplicates(
         string rootPath, 
         bool recursive = false,
         string hashAlgorithm = "SHA1",
-        IProgress<DuplicateScanProgress>? progress = null)
+        IProgress<DuplicateScanProgress>? progress = null,
+        string? hashCachePath = null)
     {
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
         var psxExtensions = new[] { ".bin", ".cue", ".chd", ".pbp", ".iso" };
@@ -64,6 +71,10 @@ public class PsxDuplicateDetector
         var allFiles = Directory.EnumerateFiles(rootPath, "*.*", searchOption)
             .Where(file => psxExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
             .ToList();
+
+        var cache = LoadHashCache(hashCachePath);
+        var cacheDirty = false;
+
         var totalFiles = allFiles.Count;
         long totalBytes = 0;
         var fileSizes = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
@@ -76,6 +87,7 @@ public class PsxDuplicateDetector
 
         // Hash files and group by hash
         var filesByHash = new Dictionary<string, List<(string filePath, long fileSize, PsxDiscInfo discInfo)>>();
+        var allEntries = new List<(string filePath, long fileSize, PsxDiscInfo discInfo, string hash)>();
         var stopwatch = Stopwatch.StartNew();
         int processedFiles = 0;
         long processedBytes = 0;
@@ -94,9 +106,30 @@ public class PsxDuplicateDetector
                 continue;
             }
 
-            // For CUE files, we might want to hash the referenced BIN instead
-            // For now, just hash the file itself
-            var hash = ComputeHash(file, hashAlgorithm);
+            // Try cached hash first
+            var cacheKey = file;
+            var fileTimestamp = File.GetLastWriteTimeUtc(file);
+            string hash;
+            if (cache.TryGetValue(cacheKey, out var cached) &&
+                cached.Algorithm.Equals(hashAlgorithm, StringComparison.OrdinalIgnoreCase) &&
+                cached.FileSize == fileSize &&
+                cached.LastWriteUtc == fileTimestamp)
+            {
+                hash = cached.Hash;
+            }
+            else
+            {
+                // Hash now and cache
+                hash = ComputeHash(file, hashAlgorithm);
+                cache[cacheKey] = new HashCacheEntry
+                {
+                    Hash = hash,
+                    FileSize = fileSize,
+                    LastWriteUtc = fileTimestamp,
+                    Algorithm = hashAlgorithm
+                };
+                cacheDirty = true;
+            }
 
             if (!filesByHash.ContainsKey(hash))
             {
@@ -104,15 +137,23 @@ public class PsxDuplicateDetector
             }
 
             filesByHash[hash].Add((file, fileSize, discInfo));
+            allEntries.Add((file, fileSize, discInfo, hash));
 
             processedFiles++;
             processedBytes += fileSize;
             progress?.Report(new DuplicateScanProgress(processedFiles, totalFiles, processedBytes, totalBytes, file, stopwatch.Elapsed));
         }
 
+        if (cacheDirty)
+        {
+            SaveHashCache(hashCachePath, cache);
+        }
+
         // Filter to only groups with duplicates
         var duplicateGroups = new List<DuplicateGroup>();
         
+        var alreadyGrouped = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var (hash, files) in filesByHash.Where(kvp => kvp.Value.Count > 1))
         {
             var firstDisc = files.First().discInfo;
@@ -128,13 +169,58 @@ public class PsxDuplicateDetector
                 }).ToList(),
                 Title = firstDisc.Title,
                 Serial = firstDisc.Serial,
-                DiscNumber = firstDisc.DiscNumber
+                DiscNumber = firstDisc.DiscNumber,
+                MatchType = "Hash",
+                Reason = "Identical hash"
+            });
+
+            foreach (var f in files)
+            {
+                alreadyGrouped.Add(f.filePath);
+            }
+        }
+
+        // Secondary pass: metadata-based duplicates (same serial/title+region and disc number) even if hashes differ
+        var metadataGroups = allEntries
+            .Where(entry => !alreadyGrouped.Contains(entry.filePath))
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.discInfo.Serial) || (!string.IsNullOrWhiteSpace(entry.discInfo.Title) && !string.IsNullOrWhiteSpace(entry.discInfo.Region)))
+            .Where(entry => entry.discInfo.DiscNumber.HasValue)
+            .GroupBy(entry =>
+            {
+                if (!string.IsNullOrWhiteSpace(entry.discInfo.Serial))
+                {
+                    return $"SERIAL:{entry.discInfo.Serial!.Trim().ToUpperInvariant()}|DISC:{entry.discInfo.DiscNumber!.Value}";
+                }
+
+                return $"TITLE:{entry.discInfo.Title!.Trim().ToUpperInvariant()}|REGION:{entry.discInfo.Region!.Trim().ToUpperInvariant()}|DISC:{entry.discInfo.DiscNumber!.Value}";
+            })
+            .Where(g => g.Count() > 1);
+
+        foreach (var group in metadataGroups)
+        {
+            var files = group.ToList();
+            var firstDisc = files.First().discInfo;
+
+            duplicateGroups.Add(new DuplicateGroup
+            {
+                Hash = $"metadata:{group.Key}",
+                Files = files.Select(f => new DuplicateFileInfo
+                {
+                    FilePath = f.filePath,
+                    FileSize = f.fileSize,
+                    DiscInfo = f.discInfo
+                }).ToList(),
+                Title = firstDisc.Title,
+                Serial = firstDisc.Serial,
+                DiscNumber = firstDisc.DiscNumber,
+                MatchType = "Metadata",
+                Reason = "Matching serial/title+region and disc number"
             });
         }
         
         return duplicateGroups.OrderBy(g => g.Title).ThenBy(g => g.DiscNumber).ToList();
     }
-    
+
     /// <summary>
     /// Compute hash for a file
     /// </summary>
@@ -150,5 +236,56 @@ public class PsxDuplicateDetector
         };
         
         return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+    }
+
+    private static Dictionary<string, HashCacheEntry> LoadHashCache(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return new Dictionary<string, HashCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            var cache = JsonSerializer.Deserialize<Dictionary<string, HashCacheEntry>>(json);
+            return cache ?? new Dictionary<string, HashCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return new Dictionary<string, HashCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+    }
+
+    private static void SaveHashCache(string? path, Dictionary<string, HashCacheEntry> cache)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var json = JsonSerializer.Serialize(cache, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
+        }
+        catch
+        {
+            // Best-effort caching; ignore persistence errors
+        }
+    }
+
+    private sealed class HashCacheEntry
+    {
+        public required string Hash { get; init; }
+        public required long FileSize { get; init; }
+        public required DateTime LastWriteUtc { get; init; }
+        public required string Algorithm { get; init; }
     }
 }
