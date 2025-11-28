@@ -38,15 +38,16 @@
 ## 4. Release Protocol
 
 *   **Versioning**: Managed by `MinVer`.
-    *   **Dev**: `v1.1.1-alpha.0.1` (Automatic on `dev` push).
-    *   **RC**: `v1.1.1-rc.1` (Tag from `dev` or `rc` branch).
-    *   **Stable**: `v1.1.1` (Tag from `main` branch).
+    *   **Dev**: `v1.1.2-alpha.0.1` (Automatic on `dev` push).
+    *   **RC**: `v1.1.2-rc.1` (Tag from `dev` or `rc` branch).
+    *   **Stable**: `v1.1.2` (Tag from `main` branch).
+*   **Current Status**: Latest tag `v1.1.2-rc.2` is published for validation; not final.
 *   **Branch Flow**:
     *   `dev`: Main development branch.
     *   `main`: Stable release branch.
     *   **Merge Flow**: `dev` -> `main` (via PR or direct merge for admins).
 *   **Tagging**: Agents must manually push tags to trigger release workflows.
-    *   `git tag v1.1.1 && git push origin v1.1.1`
+    *   `git tag v1.1.2 && git push origin v1.1.2`
 
 ## 5. Coding Standards
 
@@ -68,13 +69,43 @@
 
 ## 7. Agent Instructions (How to Help)
 
-1.  **Context First**: Check `Medical Bay` status and `UPDATE.md` history before suggesting fixes.
-2.  **Safety First**: Always assume **DRY-RUN** is the default. Use `ArkStaging` for everything.
-3.  **Verification**: Use the "Workspace Integration Test" pattern to prove your fix works.
-4.  **Documentation**: Update `UPDATE.md` with every user-facing change.
+1.  **Act First, Ask Rarely**
+    * Treat user intent as explicit permission to proceed.
+    * Only ask follow-up questions when you are genuinely blocked by missing information that cannot be inferred from the codebase or prior context.
+    * Avoid "Should I do X?" and "Do you want me to…?" when X is an obvious next step directly implied by the last request.
+
+2.  **Context First**
+    * Check `Medical Bay` status and `UPDATE.md` history before suggesting fixes or large-scale operations.
+    * Prefer reading existing PSX system docs in `src/Core/Systems/PSX/README.md` before adding new behavior.
+
+3.  **Safety First**
+    * Always assume **DRY-RUN** is the default.
+    * All file mutations that touch user ROMs must go through `ArkStaging`.
+    * Never introduce direct `File.*` / `Directory.*` calls in CLI or core operations that act on user libraries.
+
+4.  **Verification**
+    * Use the "Workspace Integration Test" pattern to prove your fix works.
+    * For PSX features, prefer adding or updating tests under `tests/Systems/PSX` before changing public behavior.
+
+5.  **Playlist & Multi-Disc Rules (PSX)**
+    * Treat **BIN/CHD → DAT → filename** as the authority order for identity (serial, title, region, disc count).
+    * Treat CUE sheets as **layout hints only**; always cross-check CUE-referenced BINs with `PsxNameParser` before acting.
+    * Only create PSX `.m3u` playlists for **true multi-disc titles** (2+ logical discs). Pure multi-track single-disc games must not get playlists.
+    * When in doubt about multi-disc vs multi-track, prefer "no playlist" and surface a warning instead of guessing.
+
+6.  **Documentation**
+    * Update `UPDATE.md` with every user-facing change with appropriate versioning.
+    * When you adjust PSX behavior (rename, merge, cleaner, playlists), briefly note the change and any new flags or defaults.
 
 ### Specific Knowledge
 *   **PSX Merge**: Handles "Track 1" vs "Track 01" fuzzy matching.
 *   **PSX Rename**: Normalizes paths to prevent case-insensitive deletion bugs on Windows.
 *   **PSX Playlist**: Only generates `.m3u` for multi-disc games (2+ discs).
 *   **Cancellation**: All long-running loops must check `context.CancellationToken`.
+
+### Cross-System Guidance
+* Prefer a single “clean” operation per system with feature toggles (rename, playlists, cue/companion repair, flatten, ingest) instead of separate rename commands.
+* Apply the same safeguards to every system: DRY-RUN by default, ArkStaging for all mutations, consistent Spectre output, and DB/cache reuse.
+* Normalize titles/regions before formatting paths: strip embedded DISC/TRACK tokens, dedupe regions (including composites), and then reapply canonical `(Disc N)` / `(Track NN)` only when appropriate.
+* Repair companion artifacts when renaming/moving (CUEs, playlists, m3u/other formats), delete orphans, and ensure files/folders stay co-located.
+* Use platform metadata (serials/DAT-equivalent) to disambiguate disc numbering and avoid false multi-disc/multi-track classification.
