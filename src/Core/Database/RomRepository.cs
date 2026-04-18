@@ -89,6 +89,31 @@ WHERE file_path = @FilePath;
         var rows = await _connection.QueryAsync<RomSummary>(sql, new { SystemId = systemId });
         return rows.ToList();
     }
+
+    /// <summary>
+    /// Returns the number of cached ROM entries whose file path starts with <paramref name="rootPath"/>.
+    /// Use this to detect an empty/unscanned directory before running cache-dependent commands.
+    /// </summary>
+    public Task<int> CountByRootAsync(string rootPath)
+    {
+        // Normalise to forward-slash so the LIKE pattern is platform-consistent in SQLite.
+        var prefix = rootPath.Replace('\\', '/').TrimEnd('/') + '/';
+        return _connection.ExecuteScalarAsync<int>(
+            "SELECT COUNT(*) FROM rom_cache WHERE REPLACE(file_path, '\\', '/') LIKE @Prefix || '%';",
+            new { Prefix = prefix });
+    }
+
+    /// <summary>
+    /// Deletes all cache entries whose file path starts with <paramref name="rootPath"/>.
+    /// Used by --rescan to force a full re-index of a directory.
+    /// </summary>
+    public Task DeleteByRootPathAsync(string rootPath)
+    {
+        var prefix = rootPath.Replace('\\', '/').TrimEnd('/') + '/';
+        return _connection.ExecuteAsync(
+            "DELETE FROM rom_cache WHERE REPLACE(file_path, '\\', '/') LIKE @Prefix || '%';",
+            new { Prefix = prefix });
+    }
 }
 
 public record RomRecord(

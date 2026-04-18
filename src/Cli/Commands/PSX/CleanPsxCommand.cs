@@ -77,6 +77,14 @@ public static class CleanPsxCommand
         await dbManager.InitializeAsync();
         var romRepository = new RomRepository(dbManager.GetConnection());
 
+        if (await romRepository.CountByRootAsync(root) == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠ ROM cache is empty for this root.[/]");
+            AnsiConsole.MarkupLine("[grey]Run 'ROM Scan & Verify' first to populate the index.[/]");
+            AnsiConsole.MarkupLine("[grey]Continuing with cache-independent operations only (multi-track, collision cleanup).[/]");
+            AnsiConsole.WriteLine();
+        }
+
         List<MultiTrackMovePlan> multiTrackPlans = new();
         List<MultiDiscMovePlan> multiDiscPlans = new();
         List<CueCreationPlan> cuePlans = new();
@@ -692,9 +700,11 @@ public static class CleanPsxCommand
         }
 
         var roms = await romRepository.GetRomsAsync("PSX");
-        if (roms.Count == 0 && await TryHydrateRomCacheAsync(root))
+        if (roms.Count == 0)
         {
-            roms = await romRepository.GetRomsAsync("PSX");
+            // Cache is empty — skip ingest rather than auto-scanning.
+            // User should run 'scan' first to populate the index.
+            return plans;
         }
 
         var keySet = new HashSet<string>(
@@ -1814,23 +1824,6 @@ public static class CleanPsxCommand
         return false;
     }
 
-    private static async Task<bool> TryHydrateRomCacheAsync(string root)
-    {
-        if (!AnsiConsole.Profile.Capabilities.Interactive)
-        {
-            AnsiConsole.MarkupLine("[yellow]ROM cache is empty. Run 'scan --root <path>' to hydrate metadata before importing.[/]");
-            return false;
-        }
-
-        var confirmed = AnsiConsole.Confirm($"ROM cache is empty. Scan {root.EscapeMarkup()} now?");
-        if (!confirmed)
-        {
-            return false;
-        }
-
-        await global::ARK.Cli.Program.RunScanAsync(new[] { "scan", "--root", root, "--recursive" });
-        return true;
-    }
 
     private static string[] GetDatFiles(string system)
     {

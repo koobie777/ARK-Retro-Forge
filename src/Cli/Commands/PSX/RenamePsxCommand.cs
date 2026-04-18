@@ -71,6 +71,13 @@ public static class RenamePsxCommand
         await dbManager.InitializeAsync();
         var romRepository = new RomRepository(dbManager.GetConnection());
 
+        if (await romRepository.CountByRootAsync(root) == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠ ROM cache is empty for this root.[/]");
+            AnsiConsole.MarkupLine("[grey]Run 'ROM Scan & Verify' first to populate the index.[/]");
+            return (int)ExitCode.OK;
+        }
+
         var planner = new PsxRenamePlanner();
         var playlistPlanner = new PsxPlaylistPlanner();
         List<PsxRenameOperation> operations = new();

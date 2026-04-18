@@ -679,12 +679,14 @@ public class Program
         }
 
         var recursive = HasFlag(args, "--recursive");
+        var rescan   = HasFlag(args, "--rescan");
 
         ConsoleDecorations.RenderOperationHeader(
             "ROM Scan",
             new HeaderMetadata("Root", root),
             new HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
             new HeaderMetadata("Instance", InstancePathResolver.CurrentInstance),
+            new HeaderMetadata("Mode", rescan ? "[yellow]Rescan (wipe + reindex)[/]" : "Incremental", IsMarkup: rescan),
             new HeaderMetadata("Indexed Extensions", ScanExtensions.Count.ToString("N0")));
 
         var searchOption = recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
@@ -703,6 +705,13 @@ public class Program
         await using var dbManager = new DatabaseManager(dbPath);
         await dbManager.InitializeAsync();
         var romRepository = new RomRepository(dbManager.GetConnection());
+
+        if (rescan)
+        {
+            AnsiConsole.MarkupLine($"[yellow]⚠ Rescan: clearing existing cache entries under {root.EscapeMarkup()}...[/]");
+            await romRepository.DeleteByRootPathAsync(root);
+        }
+
         var scanTimestamp = DateTime.UtcNow;
         var extensionStats = new Dictionary<string, (int Count, long Bytes)>(StringComparer.OrdinalIgnoreCase);
         long totalBytes = 0;

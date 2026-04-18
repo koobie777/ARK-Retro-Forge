@@ -67,48 +67,41 @@ public class PsxIntegrationTests
     }
 
     [Fact]
-    public void AloneInTheDark_MultiDiscConvert_ShowsCorrectDiscNumbers()
+    public void AloneInTheDark_MultiDiscConvert_PreservesSourceStemExactly()
     {
-        // Arrange
+        // Convert is pure format conversion — filenames are preserved verbatim.
+        // Disc number normalization and metadata enrichment is rename's job.
         var testDir = Path.Combine(Path.GetTempPath(), "ark-test-aitd-convert-" + Guid.NewGuid());
         Directory.CreateDirectory(testDir);
 
         try
         {
-            // Create test CUE files with proper multi-disc format
             var disc1Cue = Path.Combine(testDir, "Alone in the Dark - The New Nightmare (USA) [SLUS-01201] (Disc 1 of 2).cue");
             var disc2Cue = Path.Combine(testDir, "Alone in the Dark - The New Nightmare (USA) [SLUS-01377] (Disc 2 of 2).cue");
-            
+
             File.WriteAllText(disc1Cue, "FILE \"disc1.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00");
             File.WriteAllText(disc2Cue, "FILE \"disc2.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00");
 
             var planner = new PsxConvertPlanner();
-
-            // Act
             var operations = planner.PlanConversions(testDir, recursive: false);
 
-            // Assert
             Assert.Equal(2, operations.Count);
 
+            // Destination must be stem + .chd — no reformatting, no normalization
             var disc1Op = operations.First(o => o.SourcePath == disc1Cue);
-            Assert.Equal(1, disc1Op.DiscInfo.DiscNumber);
-            Assert.Equal(2, disc1Op.DiscInfo.DiscCount);
-            Assert.True(disc1Op.DiscInfo.IsMultiDisc);
-            Assert.Contains("(Disc 1)", disc1Op.DestinationPath);
             Assert.EndsWith(".chd", disc1Op.DestinationPath, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("of 2", disc1Op.DestinationPath);
+            Assert.Equal(
+                "Alone in the Dark - The New Nightmare (USA) [SLUS-01201] (Disc 1 of 2).chd",
+                Path.GetFileName(disc1Op.DestinationPath));
 
             var disc2Op = operations.First(o => o.SourcePath == disc2Cue);
-            Assert.Equal(2, disc2Op.DiscInfo.DiscNumber);
-            Assert.Equal(2, disc2Op.DiscInfo.DiscCount);
-            Assert.True(disc2Op.DiscInfo.IsMultiDisc);
-            Assert.Contains("(Disc 2)", disc2Op.DestinationPath);
             Assert.EndsWith(".chd", disc2Op.DestinationPath, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("of 2", disc2Op.DestinationPath);
+            Assert.Equal(
+                "Alone in the Dark - The New Nightmare (USA) [SLUS-01377] (Disc 2 of 2).chd",
+                Path.GetFileName(disc2Op.DestinationPath));
         }
         finally
         {
-            // Cleanup
             if (Directory.Exists(testDir))
             {
                 Directory.Delete(testDir, recursive: true);

@@ -20,7 +20,8 @@ public enum PsxConversionTarget
 }
 
 /// <summary>
-/// Represents a PSX convert operation (multi-target)
+/// Represents a PSX convert operation (multi-target).
+/// Contains only routing/path data — no parser-derived metadata.
 /// </summary>
 public record PsxConvertOperation
 {
@@ -28,7 +29,6 @@ public record PsxConvertOperation
     public string? DestinationPath { get; init; }
     public string? DestinationCuePath { get; init; }
     public string? DestinationBinPath { get; init; }
-    public required PsxDiscInfo DiscInfo { get; init; }
     public required PsxConversionTarget Target { get; init; }
     public required ChdMediaType MediaType { get; init; }
     public bool AlreadyConverted { get; init; }
@@ -37,16 +37,11 @@ public record PsxConvertOperation
 }
 
 /// <summary>
-/// Plans convert operations for PSX CUE files to CHD format
+/// Plans convert operations for PSX files.
+/// Pure format conversion — no parser, no DAT, no serial probing.
 /// </summary>
 public class PsxConvertPlanner
 {
-    private readonly PsxNameParser _parser;
-    
-    public PsxConvertPlanner(PsxNameParser? parser = null)
-    {
-        _parser = parser ?? new PsxNameParser();
-    }
     
     /// <summary>
     /// Plan convert operations for CUE files in a directory
@@ -68,7 +63,7 @@ public class PsxConvertPlanner
         };
     }
 
-    private List<PsxConvertOperation> PlanCueToChd(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
+    private static List<PsxConvertOperation> PlanCueToChd(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var cueFiles = Directory.GetFiles(rootPath, "*.cue", searchOption);
@@ -76,28 +71,25 @@ public class PsxConvertPlanner
         foreach (var cueFile in cueFiles)
         {
             var directory = flatten ? rootPath : (Path.GetDirectoryName(cueFile) ?? string.Empty);
-            var discInfo = _parser.Parse(cueFile);
+            var baseName = Path.GetFileNameWithoutExtension(cueFile);
+            var destinationPath = Path.Combine(directory, baseName + ".chd");
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(cueFile, "PSX");
-            var chdDiscInfo = discInfo with { Extension = ".chd" };
-            var destinationPath = Path.Combine(directory, PsxNameFormatter.Format(chdDiscInfo));
             var alreadyConverted = !rebuild && File.Exists(destinationPath);
 
             operations.Add(new PsxConvertOperation
             {
                 SourcePath = cueFile,
                 DestinationPath = destinationPath,
-                DiscInfo = discInfo,
                 Target = PsxConversionTarget.Chd,
                 MediaType = mediaType,
-                AlreadyConverted = alreadyConverted,
-                Warning = null
+                AlreadyConverted = alreadyConverted
             });
         }
 
         return operations;
     }
 
-    private List<PsxConvertOperation> PlanChdToBinCue(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
+    private static List<PsxConvertOperation> PlanChdToBinCue(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var chdFiles = Directory.GetFiles(rootPath, "*.chd", searchOption);
@@ -105,12 +97,10 @@ public class PsxConvertPlanner
         foreach (var chdFile in chdFiles)
         {
             var directory = flatten ? rootPath : (Path.GetDirectoryName(chdFile) ?? string.Empty);
-            var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
-
             var baseName = Path.GetFileNameWithoutExtension(chdFile);
             var destinationBin = Path.Combine(directory, baseName + ".bin");
             var destinationCue = Path.Combine(directory, baseName + ".cue");
-            var discInfo = _parser.Parse(chdFile);
+            var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
             var alreadyConverted = !rebuild && File.Exists(destinationCue) && File.Exists(destinationBin);
             var generatedCueContent = GenerateSingleTrackCue(baseName + ".bin");
 
@@ -123,7 +113,6 @@ public class PsxConvertPlanner
                 SourcePath = chdFile,
                 DestinationCuePath = destinationCue,
                 DestinationBinPath = destinationBin,
-                DiscInfo = discInfo,
                 Target = PsxConversionTarget.BinCue,
                 MediaType = mediaType,
                 AlreadyConverted = alreadyConverted,
@@ -250,7 +239,7 @@ public class PsxConvertPlanner
         return $"FILE \"{binFileName}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n";
     }
 
-    private List<PsxConvertOperation> PlanChdToIso(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
+    private static List<PsxConvertOperation> PlanChdToIso(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
     {
         var operations = new List<PsxConvertOperation>();
         var chdFiles = Directory.GetFiles(rootPath, "*.chd", searchOption);
@@ -261,20 +250,16 @@ public class PsxConvertPlanner
             var baseName = Path.GetFileNameWithoutExtension(chdFile);
             var destinationPath = Path.Combine(directory, baseName + ".iso");
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
-            var discInfo = _parser.Parse(chdFile);
             var alreadyConverted = !rebuild && File.Exists(destinationPath);
 
-            string? warning = null;
-            if (mediaType == ChdMediaType.CD)
-            {
-                warning = "ISO extraction is intended for DVD media; use --to bin for CD titles";
-            }
+            var warning = mediaType == ChdMediaType.CD
+                ? "ISO extraction is intended for DVD media; use --to bin for CD titles"
+                : null;
 
             operations.Add(new PsxConvertOperation
             {
                 SourcePath = chdFile,
                 DestinationPath = destinationPath,
-                DiscInfo = discInfo,
                 Target = PsxConversionTarget.Iso,
                 MediaType = mediaType,
                 AlreadyConverted = alreadyConverted,

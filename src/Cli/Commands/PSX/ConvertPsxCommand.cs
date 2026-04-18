@@ -432,7 +432,6 @@ public static class ConvertPsxCommand
 
         var ready = operations.Count(op => op.AlreadyConverted);
         var pending = operations.Count - ready;
-        var multiDisc = operations.Count(op => (op.DiscInfo.DiscCount ?? 1) > 1);
         var warnings = operations.Count(op => !string.IsNullOrWhiteSpace(op.Warning));
 
         var table = new Table().Border(TableBorder.Rounded);
@@ -441,7 +440,6 @@ public static class ConvertPsxCommand
         table.AddRow("Total images", operations.Count.ToString("N0"));
         table.AddRow("Pending", pending.ToString("N0"));
         table.AddRow("Ready/skipped", ready.ToString("N0"));
-        table.AddRow("Multi-disc", multiDisc.ToString("N0"));
         table.AddRow("Warnings", warnings.ToString("N0"));
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();

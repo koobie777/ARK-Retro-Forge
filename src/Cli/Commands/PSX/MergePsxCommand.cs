@@ -43,15 +43,22 @@ public static class MergePsxCommand
             new HeaderMetadata("Delete source", deleteFlag ? "[red]Yes[/]" : "No", IsMarkup: deleteFlag));
         DatUsageHelper.WarnIfCatalogMissing("psx", "PSX merge");
 
+        await using var dbManager = new DatabaseManager(Path.Combine(InstancePathResolver.GetInstanceRoot(), "db"));
+        await dbManager.InitializeAsync();
+        var repo = new RomRepository(dbManager.GetConnection());
+
+        if (await repo.CountByRootAsync(root) == 0)
+        {
+            AnsiConsole.MarkupLine("[yellow]⚠ ROM cache is empty for this root.[/]");
+            AnsiConsole.MarkupLine("[grey]Run 'ROM Scan & Verify' first to populate the index.[/]");
+            return (int)ExitCode.OK;
+        }
+
         var operations = await AnsiConsole.Status()
             .Spinner(Spinner.Known.Dots)
             .SpinnerStyle(Style.Parse("yellow"))
             .StartAsync("Scanning for multi-track CUE files...", async ctx =>
             {
-                await using var dbManager = new DatabaseManager(Path.Combine(InstancePathResolver.GetInstanceRoot(), "db"));
-                await dbManager.InitializeAsync();
-                var repo = new RomRepository(dbManager.GetConnection());
-
                 var planner = new PsxBinMergePlanner();
                 var ops = await planner.PlanMergesAsync(root, recursive, outputDirectory: flatten ? root : null, romRepository: repo, flatten: flatten);
                 ctx.Status($"Found {ops.Count} multi-track layout(s)");
