@@ -70,8 +70,22 @@ public static class ConvertPsxCommand
             return (int)ExitCode.OK;
         }
 
-        RenderQueueSummary(operations);
-        RenderPlanTable(operations, target);
+        // Pre-flight: resolve chdman once, run all checks before touching any files
+        var chdmanResult = new ToolManager().CheckTool("chdman");
+        var preflight = planner.RunPreflight(operations, root, chdmanResult.IsFound, chdmanResult.Version);
+        RenderPreflightReport(preflight);
+
+        if (!preflight.AllPassed)
+        {
+            AnsiConsole.MarkupLine("[red]☄️ Pre-flight failed — correct the issues above and retry.[/]");
+            return (int)ExitCode.GeneralError;
+        }
+
+        // Use the readable subset from pre-flight (removes any locked/missing source files)
+        var readableOps = preflight.ReadableOperations;
+
+        RenderQueueSummary(readableOps);
+        RenderPlanTable(readableOps, target);
 
         if (!apply)
         {
@@ -82,15 +96,7 @@ public static class ConvertPsxCommand
             return (int)ExitCode.OK;
         }
 
-        var chdmanPath = FindChdman();
-        if (chdmanPath == null)
-        {
-            AnsiConsole.MarkupLine("[red]☄️ [[IMPACT]] | Component: convert psx | Context: chdman.exe not found | Fix: Place chdman.exe in .\\tools\\ directory[/]");
-            AnsiConsole.MarkupLine("[yellow]💡 Run 'ark-retro-forge doctor' to check tool status[/]");
-            return (int)ExitCode.ToolMissing;
-        }
-
-        var summary = await ExecuteConversionsAsync(operations, chdmanPath, target, deleteSource);
+        var summary = await ExecuteConversionsAsync(readableOps, chdmanResult.Path!, target, deleteSource);
         RenderConversionSummary(summary);
         return summary.Failures.Count > 0 ? (int)ExitCode.GeneralError : (int)ExitCode.OK;
     }
@@ -344,10 +350,30 @@ public static class ConvertPsxCommand
         }
     }
 
-    private static string? FindChdman()
+    private static void RenderPreflightReport(PsxPreflightResult preflight)
     {
-        var result = new ToolManager().CheckTool("chdman");
-        return result.IsFound ? result.Path : null;
+        var lines = new System.Text.StringBuilder();
+        foreach (var check in preflight.Checks)
+        {
+            var icon  = check.Passed ? "[green]✓[/]" : "[red]✗[/]";
+            var label = check.Label.EscapeMarkup().PadRight(14);
+            var detail = check.Detail.EscapeMarkup();
+            lines.AppendLine($" {icon} {label} {detail}");
+            if (!check.Passed && check.Fix != null)
+            {
+                lines.AppendLine($"   [grey]Fix: {check.Fix.EscapeMarkup()}[/]");
+            }
+        }
+
+        var title = preflight.AllPassed ? "[green]Pre-flight Check[/]" : "[red]Pre-flight Check[/]";
+        var panel = new Panel(new Markup(lines.ToString().TrimEnd()))
+        {
+            Header = new PanelHeader(title),
+            Border = BoxBorder.Rounded,
+            Padding = new Padding(1, 0, 1, 0)
+        };
+        AnsiConsole.Write(panel);
+        AnsiConsole.WriteLine();
     }
 
     private static string? GetArgValue(string[] args, string flag)
