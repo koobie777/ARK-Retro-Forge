@@ -98,11 +98,12 @@ public class PsxConvertPlanner
             var directory = flatten ? rootPath : (Path.GetDirectoryName(chdFile) ?? string.Empty);
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
 
+            var baseName = Path.GetFileNameWithoutExtension(chdFile);
+            var destinationBin = Path.Combine(directory, baseName + ".bin");
+            var destinationCue = Path.Combine(directory, baseName + ".cue");
             var discInfo = _parser.Parse(chdFile);
-            var destinationBin = Path.Combine(directory, PsxNameFormatter.Format(discInfo with { Extension = ".bin" }));
-            var destinationCue = Path.Combine(directory, PsxNameFormatter.Format(discInfo with { Extension = ".cue" }));
             var alreadyConverted = !rebuild && File.Exists(destinationCue) && File.Exists(destinationBin);
-            var generatedCueContent = GenerateSingleTrackCue(Path.GetFileName(destinationBin));
+            var generatedCueContent = GenerateSingleTrackCue(baseName + ".bin");
 
             var warning = mediaType == ChdMediaType.DVD
                 ? "DVD images should be extracted to ISO instead of BIN/CUE"
@@ -141,6 +142,7 @@ public class PsxConvertPlanner
             var baseName = Path.GetFileNameWithoutExtension(chdFile);
             var destinationPath = Path.Combine(directory, baseName + ".iso");
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
+            var discInfo = _parser.Parse(chdFile);
             var alreadyConverted = !rebuild && File.Exists(destinationPath);
 
             string? warning = null;
@@ -153,7 +155,7 @@ public class PsxConvertPlanner
             {
                 SourcePath = chdFile,
                 DestinationPath = destinationPath,
-                DiscInfo = new PsxDiscInfo { FilePath = chdFile },
+                DiscInfo = discInfo,
                 Target = PsxConversionTarget.Iso,
                 MediaType = mediaType,
                 AlreadyConverted = alreadyConverted,
