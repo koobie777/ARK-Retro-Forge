@@ -98,12 +98,67 @@ public class PsxNameParserTests
     {
         // Arrange
         var filename = "Xploder vv2.0 (Europe).bin";
-        
+
         // Act
         var result = _parser.Parse(filename);
-        
+
         // Assert
         Assert.Equal(PsxContentType.Cheat, result.ContentType);
         Assert.NotNull(result.Warning);
+    }
+
+    // --- P2 region-duplication cases ---
+
+    [Fact]
+    public void Parse_SimpleFormatNoSerial_ExtractsTitleAndRegion()
+    {
+        var result = _parser.Parse("Final Fantasy VII (USA).bin");
+        Assert.Equal("Final Fantasy VII", result.Title);
+        Assert.Equal("USA", result.Region);
+        Assert.Null(result.DiscNumber);
+    }
+
+    [Fact]
+    public void Parse_DuplicateRegionInFilename_RegionExtractedAndRoundTripClean()
+    {
+        // Parser leaves the extra (USA) in Title; formatter must strip it
+        var result = _parser.Parse("Final Fantasy VII (USA) (USA).bin");
+        Assert.Equal("USA", result.Region);
+        var formatted = PsxNameFormatter.Format(result with { Extension = ".bin" });
+        Assert.Equal("Final Fantasy VII (USA).bin", formatted);
+        Assert.DoesNotContain("(USA) (USA)", formatted);
+    }
+
+    [Fact]
+    public void Parse_MultiDiscWithRegionNoSerial_ExtractsTitleRegionAndDisc()
+    {
+        // (Disc 1) blocks SimplePattern; Step 5b must rescue region from the cleaned title
+        var result = _parser.Parse("Final Fantasy VII (USA) (Disc 1).bin");
+        Assert.Equal("Final Fantasy VII", result.Title);
+        Assert.Equal("USA", result.Region);
+        Assert.Equal(1, result.DiscNumber);
+    }
+
+    [Fact]
+    public void Parse_MultiDiscWithRegionNoSerial_FormatterOutputIsIdempotent()
+    {
+        // DiscCount is unknown without DAT, so IsMultiDisc is false and the formatter
+        // drops the disc suffix. Whatever the formatter produces on the first pass
+        // must be reproduced identically on the second pass.
+        var first = _parser.Parse("Final Fantasy VII (USA) (Disc 1).bin");
+        var firstFormatted = PsxNameFormatter.Format(first with { Extension = ".bin" });
+
+        var second = _parser.Parse(firstFormatted);
+        var secondFormatted = PsxNameFormatter.Format(second with { Extension = ".bin" });
+        Assert.Equal(firstFormatted, secondFormatted);
+    }
+
+    [Fact]
+    public void Parse_LanguageTagsWithRegion_PreservesTagsInTitle()
+    {
+        // Language tags are embedded in Title; stripping them is the rename planner's job
+        var result = _parser.Parse("Some Game (En,Fr,De) (USA).bin");
+        Assert.Equal("Some Game (En,Fr,De)", result.Title);
+        Assert.Equal("USA", result.Region);
     }
 }

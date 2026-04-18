@@ -251,6 +251,27 @@ public partial class PsxNameParser
             }
         }
 
+        // 5b. Region extraction from embedded title
+        // Handles filenames like "Title (Region) (Disc N)" where the disc token blocks SimplePattern,
+        // leaving region embedded in the title after Step 5 cleanup.
+        if (string.IsNullOrWhiteSpace(region) && !string.IsNullOrWhiteSpace(title))
+        {
+            var regionExtract = SimplePattern().Match(title);
+            if (regionExtract.Success)
+            {
+                var candidateRegion = regionExtract.Groups[2].Value.Trim();
+                if (!candidateRegion.StartsWith("Disc ", StringComparison.OrdinalIgnoreCase) &&
+                    !candidateRegion.StartsWith("Track ", StringComparison.OrdinalIgnoreCase) &&
+                    !VersionPattern().IsMatch($"({candidateRegion})") &&
+                    !candidateRegion.Contains(',') &&
+                    !int.TryParse(candidateRegion, out _))
+                {
+                    region = candidateRegion;
+                    title = regionExtract.Groups[1].Value.Trim();
+                }
+            }
+        }
+
         // 6. DAT Enrichment (Title -> Metadata)
         // If we still have no serial (Probe failed, Filename failed), try to look up by Title
         if (string.IsNullOrWhiteSpace(serial) && !string.IsNullOrWhiteSpace(title))

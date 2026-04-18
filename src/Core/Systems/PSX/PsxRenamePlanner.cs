@@ -130,11 +130,17 @@ public class PsxRenamePlanner
 
             foreach (var group in multiDiscGroups)
             {
-                var count = group.Count;
+                // Cluster by logical disc so that mixed-extension pairs (e.g., BIN+CUE for
+                // the same disc, or BIN+CHD across different discs) are counted correctly.
+                var logicalDiscs = ClusterIntoLogicalDiscs(group);
+                var count = logicalDiscs.Count;
                 for (var i = 0; i < count; i++)
                 {
-                    var discNumber = group[i].Info.DiscNumber ?? (i + 1);
-                    discAssignments[group[i].Info.FilePath] = (discNumber, count);
+                    var discNumber = logicalDiscs[i][0].Info.DiscNumber ?? (i + 1);
+                    foreach (var item in logicalDiscs[i])
+                    {
+                        discAssignments[item.Info.FilePath] = (discNumber, count);
+                    }
                 }
             }
         }
@@ -330,11 +336,53 @@ public class PsxRenamePlanner
     {
         var title = disc.Title?.Trim() ?? string.Empty;
         var region = disc.Region?.Trim() ?? string.Empty;
-        var extension = disc.Extension?.Trim() ?? string.Empty;
         return string.Join('|',
             title.ToUpperInvariant(),
-            region.ToUpperInvariant(),
-            extension.ToUpperInvariant());
+            region.ToUpperInvariant());
+    }
+
+    // Groups a flat list of items (possibly mixed extensions) into logical disc slots.
+    // Priority: explicit DiscNumber > Serial > individual file path (one disc each).
+    // This prevents CUE+BIN pairs or same-serial items from inflating DiscCount.
+    private static List<List<DiscoveredItem>> ClusterIntoLogicalDiscs(List<DiscoveredItem> items)
+    {
+        var clusters = new List<List<DiscoveredItem>>();
+        var assigned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        // Pass 1: cluster by explicit disc number (highest confidence)
+        foreach (var group in items
+            .Where(i => i.Info.DiscNumber.HasValue)
+            .GroupBy(i => i.Info.DiscNumber!.Value)
+            .OrderBy(g => g.Key))
+        {
+            var cluster = group.ToList();
+            clusters.Add(cluster);
+            foreach (var item in cluster)
+                assigned.Add(item.Info.FilePath);
+        }
+
+        // Pass 2: cluster remaining items by serial (e.g., CUE+BIN with same serial but no disc number)
+        var remaining = items.Where(i => !assigned.Contains(i.Info.FilePath)).ToList();
+        foreach (var group in remaining
+            .Where(i => !string.IsNullOrWhiteSpace(i.Info.Serial))
+            .GroupBy(i => i.Info.Serial!, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(g => g.First().Info.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            var cluster = group.ToList();
+            clusters.Add(cluster);
+            foreach (var item in cluster)
+                assigned.Add(item.Info.FilePath);
+        }
+
+        // Pass 3: each remaining item is its own disc
+        foreach (var item in items
+            .Where(i => !assigned.Contains(i.Info.FilePath))
+            .OrderBy(i => i.Info.FilePath, StringComparer.OrdinalIgnoreCase))
+        {
+            clusters.Add([item]);
+        }
+
+        return clusters;
     }
 
     private static string? StripLanguageTags(string? title)

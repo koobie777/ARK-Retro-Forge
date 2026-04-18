@@ -78,8 +78,10 @@ public class PsxMultiTrackTests
         // Act
         var result = _parser.Parse(filename);
         
-        // Assert
-        Assert.Equal("The Adventures of Lomax (USA)", result.Title);
+        // Assert — step 5b now correctly extracts region from the cleaned title,
+        // so Title is clean and Region is populated separately.
+        Assert.Equal("The Adventures of Lomax", result.Title);
+        Assert.Equal("USA", result.Region);
         Assert.DoesNotContain("Track", result.Title!);
     }
 }
