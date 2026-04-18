@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
+using ARK.Core.IO;
 using ARK.Core.Systems.PSX;
 using Spectre.Console;
 
@@ -514,6 +515,15 @@ public static class ConvertPsxCommand
 
             if (process.ExitCode == 0)
             {
+                if (!string.IsNullOrWhiteSpace(operation.GeneratedCueContent) &&
+                    !string.IsNullOrWhiteSpace(operation.DestinationCuePath) &&
+                    !File.Exists(operation.DestinationCuePath))
+                {
+                    var staging = new ArkStaging();
+                    staging.StageWrite(operation.DestinationCuePath, operation.GeneratedCueContent);
+                    await staging.CommitAsync(cancellationToken: token);
+                }
+
                 if (deleteSource)
                 {
                     DeleteOriginals(operation, target);

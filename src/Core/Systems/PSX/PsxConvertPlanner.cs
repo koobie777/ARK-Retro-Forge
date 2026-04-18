@@ -24,6 +24,7 @@ public record PsxConvertOperation
     public required ChdMediaType MediaType { get; init; }
     public bool AlreadyConverted { get; init; }
     public string? Warning { get; init; }
+    public string? GeneratedCueContent { get; init; }
 }
 
 /// <summary>
@@ -95,11 +96,13 @@ public class PsxConvertPlanner
         foreach (var chdFile in chdFiles)
         {
             var directory = flatten ? rootPath : (Path.GetDirectoryName(chdFile) ?? string.Empty);
-            var baseName = Path.GetFileNameWithoutExtension(chdFile);
-            var destinationCue = Path.Combine(directory, baseName + ".cue");
-            var destinationBin = Path.Combine(directory, baseName + ".bin");
             var mediaType = ChdMediaTypeHelper.DetermineFromFilePath(chdFile);
+
+            var discInfo = _parser.Parse(chdFile);
+            var destinationBin = Path.Combine(directory, PsxNameFormatter.Format(discInfo with { Extension = ".bin" }));
+            var destinationCue = Path.Combine(directory, PsxNameFormatter.Format(discInfo with { Extension = ".cue" }));
             var alreadyConverted = !rebuild && File.Exists(destinationCue) && File.Exists(destinationBin);
+            var generatedCueContent = GenerateSingleTrackCue(Path.GetFileName(destinationBin));
 
             var warning = mediaType == ChdMediaType.DVD
                 ? "DVD images should be extracted to ISO instead of BIN/CUE"
@@ -110,15 +113,21 @@ public class PsxConvertPlanner
                 SourcePath = chdFile,
                 DestinationCuePath = destinationCue,
                 DestinationBinPath = destinationBin,
-                DiscInfo = new PsxDiscInfo { FilePath = chdFile },
+                DiscInfo = discInfo,
                 Target = PsxConversionTarget.BinCue,
                 MediaType = mediaType,
                 AlreadyConverted = alreadyConverted,
+                GeneratedCueContent = generatedCueContent,
                 Warning = warning
             });
         }
 
         return operations;
+    }
+
+    private static string GenerateSingleTrackCue(string binFileName)
+    {
+        return $"FILE \"{binFileName}\" BINARY\r\n  TRACK 01 MODE2/2352\r\n    INDEX 01 00:00:00\r\n";
     }
 
     private List<PsxConvertOperation> PlanChdToIso(string rootPath, SearchOption searchOption, bool rebuild, bool flatten)
