@@ -84,9 +84,11 @@ public class ToolManager
     private static string FindToolsDirectory(string startFrom)
     {
         // Walk up from the binary location looking for a tools\ dir that contains a known executable.
-        // Depth limit prevents runaway traversal on unusual installations.
+        // AppContext.BaseDirectory always has a trailing separator — trim it first so
+        // Path.GetDirectoryName steps to the true parent on the first iteration rather than
+        // returning the same directory and wasting one depth level.
         const int MaxDepth = 6;
-        var current = startFrom;
+        var current = Path.TrimEndingDirectorySeparator(startFrom);
         for (var depth = 0; depth < MaxDepth; depth++)
         {
             if (string.IsNullOrWhiteSpace(current))
