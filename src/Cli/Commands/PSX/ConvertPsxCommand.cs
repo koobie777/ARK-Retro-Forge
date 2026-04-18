@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Core.IO;
 using ARK.Core.Systems.PSX;
+using ARK.Core.Tools;
 using Spectre.Console;
 
 namespace ARK.Cli.Commands.PSX;
@@ -74,7 +75,10 @@ public static class ConvertPsxCommand
 
         if (!apply)
         {
-            AnsiConsole.MarkupLine("[yellow]💡 Next step: Add --apply to execute conversions[/]");
+            AnsiConsole.MarkupLine("[yellow]┌─ DRY-RUN PREVIEW ─────────────────────────────────────────┐[/]");
+            AnsiConsole.MarkupLine("[yellow]│  No files were modified. This is a plan only.             │[/]");
+            AnsiConsole.MarkupLine("[yellow]│  Add --apply to execute the conversions shown above.       │[/]");
+            AnsiConsole.MarkupLine("[yellow]└────────────────────────────────────────────────────────────┘[/]");
             return (int)ExitCode.OK;
         }
 
@@ -142,13 +146,23 @@ public static class ConvertPsxCommand
 
         if (pending.Count == 0)
         {
-            return new ConversionSummary(converted, opList.Count, failures);
+            return new ConversionSummary(converted, opList.Count - pending.Count, failures, TimeSpan.Zero, 0);
         }
+
+        // Per-file status tracking for live table
+        var statuses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var op in pending)
+        {
+            statuses[op.SourcePath] = "[yellow]Pending[/]";
+        }
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        long totalBytesProcessed = 0;
 
         var progressColumns = new ProgressColumn[]
         {
             new TaskDescriptionColumn(),
-            new ProgressBarColumn { Width = 50, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
+            new ProgressBarColumn { Width = 40, CompletedStyle = new Style(Color.SpringGreen1), RemainingStyle = new Style(Color.Grey35) },
             new PercentageColumn(),
             new RemainingTimeColumn(),
             new SpinnerColumn()
@@ -159,27 +173,42 @@ public static class ConvertPsxCommand
             .Columns(progressColumns)
             .StartAsync(async ctx =>
             {
-                var task = ctx.AddTask("Converting PSX images", maxValue: pending.Count);
-                foreach (var op in pending)
+                var task = ctx.AddTask($"[0/{pending.Count}] Starting...", maxValue: pending.Count);
+                for (var i = 0; i < pending.Count; i++)
                 {
+                    var op = pending[i];
                     OperationContextScope.ThrowIfCancellationRequested();
-                    task.Description = $"Converting {FormatTaskLabel(op.SourcePath)}";
+
+                    var label = FormatTaskLabel(op.SourcePath);
+                    task.Description = $"[{i + 1}/{pending.Count}] {label}";
+                    statuses[op.SourcePath] = "[cyan]Converting...[/]";
 
                     var result = await RunConversionAsync(op, chdmanPath, target, deleteSource, token);
                     if (result.Success)
                     {
                         converted++;
+                        statuses[op.SourcePath] = "[green]Done[/]";
+                        try
+                        {
+                            var fi = new FileInfo(op.SourcePath);
+                            if (fi.Exists) totalBytesProcessed += fi.Length;
+                        }
+                        catch { /* best effort */ }
                     }
                     else
                     {
                         failures.Add(result);
+                        statuses[op.SourcePath] = "[red]Failed[/]";
                     }
 
                     task.Increment(1);
                 }
+
+                task.Description = $"[{pending.Count}/{pending.Count}] Complete";
             });
 
-        return new ConversionSummary(converted, opList.Count - pending.Count, failures);
+        stopwatch.Stop();
+        return new ConversionSummary(converted, opList.Count - pending.Count, failures, stopwatch.Elapsed, totalBytesProcessed);
     }
 
     private static string BuildChdmanArguments(PsxConvertOperation op, PsxConversionTarget target)
@@ -317,27 +346,8 @@ public static class ConvertPsxCommand
 
     private static string? FindChdman()
     {
-        var toolsDir = Path.Combine(AppContext.BaseDirectory, "tools");
-        var chdmanPath = Path.Combine(toolsDir, "chdman.exe");
-        if (File.Exists(chdmanPath))
-        {
-            return chdmanPath;
-        }
-
-        var pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (pathEnv != null)
-        {
-            foreach (var path in pathEnv.Split(Path.PathSeparator))
-            {
-                var fullPath = Path.Combine(path, "chdman.exe");
-                if (File.Exists(fullPath))
-                {
-                    return fullPath;
-                }
-            }
-        }
-
-        return null;
+        var result = new ToolManager().CheckTool("chdman");
+        return result.IsFound ? result.Path : null;
     }
 
     private static string? GetArgValue(string[] args, string flag)
@@ -413,12 +423,29 @@ public static class ConvertPsxCommand
 
     private static void RenderConversionSummary(ConversionSummary summary)
     {
+        var elapsed = summary.Elapsed;
+        var elapsedStr = elapsed.TotalHours >= 1
+            ? $"{elapsed:h\\:mm\\:ss}"
+            : $"{elapsed:mm\\:ss}";
+
+        var bytesGb = summary.BytesProcessed / 1_073_741_824.0;
+        var bytesStr = bytesGb >= 1
+            ? $"{bytesGb:F2} GB"
+            : $"{summary.BytesProcessed / 1_048_576.0:F1} MB";
+
+        var speedStr = summary.Elapsed.TotalSeconds > 0
+            ? $"{summary.BytesProcessed / 1_048_576.0 / summary.Elapsed.TotalSeconds:F1} MB/s"
+            : "–";
+
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("[cyan]Metric[/]");
         table.AddColumn("[green]Value[/]");
         table.AddRow("Converted", summary.Converted.ToString("N0"));
         table.AddRow("Skipped", summary.Skipped.ToString("N0"));
         table.AddRow("Failures", summary.Failures.Count.ToString("N0"));
+        table.AddRow("Elapsed", elapsedStr);
+        table.AddRow("Data processed", bytesStr);
+        table.AddRow("Avg speed", speedStr);
         AnsiConsole.Write(table);
 
         if (summary.Failures.Count > 0)
@@ -459,7 +486,7 @@ public static class ConvertPsxCommand
             => new(operation, false, exitCode, message, details);
     }
 
-    private sealed record ConversionSummary(int Converted, int Skipped, IReadOnlyList<ConversionResult> Failures);
+    private sealed record ConversionSummary(int Converted, int Skipped, IReadOnlyList<ConversionResult> Failures, TimeSpan Elapsed, long BytesProcessed);
 
     private static async Task<ConversionResult> RunConversionAsync(
         PsxConvertOperation operation,

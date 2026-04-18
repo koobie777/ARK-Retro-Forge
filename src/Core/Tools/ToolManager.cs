@@ -78,7 +78,43 @@ public class ToolManager
 
     public ToolManager(string? toolsDirectory = null)
     {
-        _toolsDirectory = toolsDirectory ?? Path.Combine(AppContext.BaseDirectory, "tools");
+        _toolsDirectory = toolsDirectory ?? FindToolsDirectory(AppContext.BaseDirectory);
+    }
+
+    private static string FindToolsDirectory(string startFrom)
+    {
+        // Walk up from the binary location looking for a tools\ dir that contains a known executable.
+        // Depth limit prevents runaway traversal on unusual installations.
+        const int MaxDepth = 6;
+        var current = startFrom;
+        for (var depth = 0; depth < MaxDepth; depth++)
+        {
+            if (string.IsNullOrWhiteSpace(current))
+            {
+                break;
+            }
+
+            var candidate = Path.Combine(current, "tools");
+            if (Directory.Exists(candidate))
+            {
+                var hasKnownTool = KnownTools.Any(t => File.Exists(Path.Combine(candidate, t.ExecutableName)));
+                if (hasKnownTool)
+                {
+                    return candidate;
+                }
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (parent == null || parent == current)
+            {
+                break;
+            }
+
+            current = parent;
+        }
+
+        // Fall back to the default location even if the directory doesn't exist yet.
+        return Path.Combine(startFrom, "tools");
     }
 
     /// <summary>
