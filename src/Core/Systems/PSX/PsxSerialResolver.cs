@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
+using ARK.Core.Tools;
 
 namespace ARK.Core.Systems.PSX;
 
@@ -62,6 +64,14 @@ public partial class PsxSerialResolver : IPsxSerialResolver
         }
 
         var extension = Path.GetExtension(filePath);
+
+        if (extension.Equals(".chd", StringComparison.OrdinalIgnoreCase))
+        {
+            var (found, probedSerial) = TryFromChdProbeAsync(filePath).GetAwaiter().GetResult();
+            serial = probedSerial;
+            return found;
+        }
+
         if (!extension.Equals(".bin", StringComparison.OrdinalIgnoreCase) &&
             !extension.Equals(".iso", StringComparison.OrdinalIgnoreCase))
         {
@@ -104,6 +114,85 @@ public partial class PsxSerialResolver : IPsxSerialResolver
         catch (UnauthorizedAccessException)
         {
             return false;
+        }
+    }
+
+    private async Task<(bool Found, string? Serial)> TryFromChdProbeAsync(
+        string chdFile,
+        CancellationToken cancellationToken = default)
+    {
+        var toolManager = new ToolManager();
+        var chdman = toolManager.CheckTool("chdman");
+        if (!chdman.IsFound || string.IsNullOrWhiteSpace(chdman.Path))
+        {
+            return (false, null);
+        }
+
+        var tempDir = Path.GetTempPath();
+        var stem = $"ark_probe_{Guid.NewGuid():N}";
+        var tempCue = Path.Combine(tempDir, stem + ".cue");
+        var tempBin = Path.Combine(tempDir, stem + ".bin");
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = chdman.Path,
+                Arguments = $"extractcd -i \"{chdFile}\" -o \"{tempCue}\" -ob \"{tempBin}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            });
+
+            if (process == null)
+            {
+                return (false, null);
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
+
+            if (process.ExitCode != 0)
+            {
+                return (false, null);
+            }
+
+            // Single-track CHD: tempBin exists at the exact -ob path.
+            // Multi-track CHD: chdman suffixes tracks as "(Track 1).bin" or "(Track 01).bin".
+            string[] candidates =
+            [
+                tempBin,
+                Path.Combine(tempDir, stem + " (Track 1).bin"),
+                Path.Combine(tempDir, stem + " (Track 01).bin")
+            ];
+
+            foreach (var candidate in candidates)
+            {
+                if (TryFromDiscProbe(candidate, out var probedSerial))
+                {
+                    return (true, probedSerial);
+                }
+            }
+
+            return (false, null);
+        }
+        catch
+        {
+            return (false, null);
+        }
+        finally
+        {
+            try
+            {
+                foreach (var f in Directory.GetFiles(tempDir, stem + "*"))
+                {
+                    File.Delete(f);
+                }
+            }
+            catch
+            {
+                // best-effort cleanup
+            }
         }
     }
 }
