@@ -13,15 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Parallel workers for convert psx** — `--workers N` flag (default 4, clamped 1–8) runs N chdman processes concurrently via `SemaphoreSlim` + `Task.WhenAll`
 - **HDD detection warning** — warns when `workers > 4` on a `DriveType.Fixed` drive to protect throughput
 - **Workers persisted in session state** — `ConvertPsxOptions.Workers` field in `SessionState`; interactive menu prompts and remembers value across sessions
-- **Spectre markup audit (Part A)** — all user-supplied strings (filenames, paths, error messages) now escaped via `EscapeMarkup()` or `[[` `]]` pattern across all PSX command files
-
-### Fixed
-- `[N/M]` progress label crash — bracket sequences escaped with `[[` `]]` in `ExecuteConversionsAsync`
-- Unescaped path and error strings in `ConvertPsxCommand`, `CleanPsxCommand`, `CuePsxCommand`, `DuplicatesPsxCommand`, `Program.cs`
-
-### Changed
-- `ExecuteConversionsAsync` rewritten — sequential foreach replaced with parallel `SemaphoreSlim` worker pool; thread-safe counters via `Interlocked`; failures collected in `ConcurrentBag`
-
+- **Spectre markup audit** — all user-supplied strings (filenames, paths, error messages) escaped via `EscapeMarkup()` or `[[` `]]` pattern across all PSX command files
 - `CLAUDE.md` v3.0 — constitutional standing orders for Commander (Claude Code)
 - `CHANGELOG.md` — technical change history following Keep a Changelog
 - `.ark/missions/` directory structure for mission lifecycle tracking
@@ -32,8 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Expanded chain of command: Admiral / Captain / Commander
 
 ### Changed
+- `ExecuteConversionsAsync` rewritten — sequential foreach replaced with parallel `SemaphoreSlim` worker pool; thread-safe counters via `Interlocked`; failures collected in `ConcurrentBag`
 - Documentation governance now mandatory per Law 13
 - Command structure formalized with rank-based responsibilities
+
+### Fixed
+- `[N/M]` progress label crash — bracket sequences escaped with `[[` `]]` in `ExecuteConversionsAsync`
+- Unescaped path and error strings in `ConvertPsxCommand`, `CleanPsxCommand`, `CuePsxCommand`, `DuplicatesPsxCommand`, `Program.cs`
+
+### Removed
+- `AGENTS.md` — legacy file superseded by `CLAUDE.md` v3.0
 
 ---
 
