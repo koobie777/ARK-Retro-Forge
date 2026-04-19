@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
 using ARK.Cli.Commands.PSX;
 using ARK.Cli.Commands.Archives;
@@ -717,13 +716,6 @@ public class Program
         long totalBytes = 0;
         var startTime = DateTime.UtcNow;
 
-        // Initialize PSX parser if we are in PSX mode
-        PsxNameParser? psxParser = null;
-        if (_currentSystem.Code.Equals("psx", StringComparison.OrdinalIgnoreCase))
-        {
-            psxParser = new PsxNameParser();
-        }
-
         var progressColumns = new ProgressColumn[]
         {
             new TaskDescriptionColumn(),
@@ -751,30 +743,7 @@ public class Program
                     stats.Bytes += info.Length;
                     extensionStats[ext] = stats;
 
-                    var romRecord = BuildRomRecord(file, scanTimestamp);
-
-                    // Enhanced detection for PSX
-                    if (psxParser != null && (romRecord.SystemId == "PSX" || IsPsxExtension(file)))
-                    {
-                        try 
-                        {
-                            var discInfo = psxParser.Parse(file);
-                            romRecord = romRecord with 
-                            { 
-                                Title = discInfo.Title ?? romRecord.Title,
-                                Region = discInfo.Region ?? romRecord.Region,
-                                Serial = discInfo.Serial,
-                                DiscNumber = discInfo.DiscNumber,
-                                DiscCount = discInfo.DiscCount
-                            };
-                        }
-                        catch
-                        {
-                            // Fallback to basic record if parsing fails
-                        }
-                    }
-
-                    await romRepository.UpsertRomAsync(romRecord);
+                    await romRepository.UpsertRomAsync(BuildRomRecord(file, info, scanTimestamp));
 
                     task.Description = $"Indexing {TruncateLabel(Path.GetFileName(file))}";
                     task.Increment(1);
@@ -822,12 +791,6 @@ public class Program
         return (int)ExitCode.OK;
     }
 
-    private static bool IsPsxExtension(string path)
-    {
-        var ext = Path.GetExtension(path);
-        return new[] { ".bin", ".cue", ".iso", ".pbp", ".chd", ".cso" }
-            .Contains(ext, StringComparer.OrdinalIgnoreCase);
-    }
 
 
     private static async Task<int> RunVerifyAsync(string[] args)
@@ -2109,33 +2072,21 @@ public class Program
         ES_SYSTEM_REQUIRED = 0x00000001
     }
 
-    private static readonly Regex TitleRegionPattern = new(@"^(?<title>.+?)\s*\((?<region>[^)]+)\)", RegexOptions.Compiled);
-
-    private static RomRecord BuildRomRecord(string filePath, DateTime timestamp)
-    {
-        var info = new FileInfo(filePath);
-        var nameWithoutExt = Path.GetFileNameWithoutExtension(filePath);
-        var match = TitleRegionPattern.Match(nameWithoutExt);
-
-        string? title = null;
-        string? region = null;
-        if (match.Success)
-        {
-            title = match.Groups["title"].Value.Trim();
-            region = match.Groups["region"].Value.Trim();
-        }
-
-        var systemId = GuessSystemId(info.Extension);
-
-        return new RomRecord(
+    // Scan stores only what the filesystem provides — no parsing, no probing, no I/O beyond stat.
+    // Title, region, serial, disc numbers are populated by rename when it runs.
+    private static RomRecord BuildRomRecord(string filePath, FileInfo info, DateTime timestamp)
+        => new(
             filePath,
             info.Length,
             timestamp,
-            systemId,
-            title,
-            region,
-            Path.GetFileName(filePath));
-    }
+            GuessSystemId(info.Extension),
+            Title: null,
+            Region: null,
+            RomId: Path.GetFileName(filePath));
+
+    // Overload for callers that haven't pre-fetched FileInfo (verify path).
+    private static RomRecord BuildRomRecord(string filePath, DateTime timestamp)
+        => BuildRomRecord(filePath, new FileInfo(filePath), timestamp);
 
     private static string? GuessSystemId(string extension)
     {

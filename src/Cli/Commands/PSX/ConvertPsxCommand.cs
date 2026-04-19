@@ -186,7 +186,7 @@ public static class ConvertPsxCommand
                     OperationContextScope.ThrowIfCancellationRequested();
 
                     var label = FormatTaskLabel(op.SourcePath);
-                    task.Description = $"[{i + 1}/{pending.Count}] {label}";
+                    task.Description = $"[[{i + 1}/{pending.Count}]] {label}";
                     statuses[op.SourcePath] = "[cyan]Converting...[/]";
 
                     var result = await RunConversionAsync(op, chdmanPath, target, deleteSource, token);
