@@ -17,7 +17,7 @@ public static class CuePsxCommand
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]Error: Root directory not found: {root}[/]");
+            AnsiConsole.MarkupLine($"[red]Error: Root directory not found: {root.EscapeMarkup()}[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -134,7 +134,7 @@ public static class CuePsxCommand
                 catch (Exception ex)
                 {
                     CliLogger.LogError($"Failed to process CUE: {op.TargetCuePath}", ex);
-                    AnsiConsole.MarkupLine($"[red]Failed: {Path.GetFileName(op.TargetCuePath)} - {ex.Message}[/]");
+                    AnsiConsole.MarkupLine($"[red]Failed: {Path.GetFileName(op.TargetCuePath).EscapeMarkup()} - {ex.Message.EscapeMarkup()}[/]");
                 }
                 
                 task.Increment(1);

@@ -10,6 +10,7 @@ internal sealed record SessionState
     public bool PreventSleep { get; init; }
     public CleanPsxOptions CleanPsx { get; init; } = new();
     public RenamePsxOptions RenamePsx { get; init; } = new();
+    public ConvertPsxOptions ConvertPsx { get; init; } = new();
 }
 
 internal sealed record CleanPsxOptions
@@ -30,6 +31,11 @@ internal sealed record RenamePsxOptions
     public bool RestoreArticles { get; init; } = false;
     public bool MultiDisc { get; init; } = true;
     public bool MultiTrack { get; init; } = true;
+}
+
+internal sealed record ConvertPsxOptions
+{
+    public int Workers { get; init; } = 4;
 }
 
 internal static class SessionStateManager

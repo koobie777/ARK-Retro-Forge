@@ -37,7 +37,7 @@ public static class CleanPsxCommand
         var ingestRoot = GetArgValue(args, "--ingest-root");
         if (!string.IsNullOrWhiteSpace(ingestRoot) && !Directory.Exists(ingestRoot))
         {
-            AnsiConsole.MarkupLine($"[yellow]Ignored ingest root because the path does not exist: {ingestRoot}[/]");
+            AnsiConsole.MarkupLine($"[yellow]Ignored ingest root because the path does not exist: {ingestRoot.EscapeMarkup()}[/]");
             ingestRoot = null;
         }
 

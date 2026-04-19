@@ -786,7 +786,7 @@ public class Program
             AnsiConsole.Write(extTable);
         }
 
-        AnsiConsole.MarkupLine($"\n[dim]Next: run [bold]verify --root \"{root}\"[/] to hash files.[/]");
+        AnsiConsole.MarkupLine($"\n[dim]Next: run [bold]verify --root \"{root.EscapeMarkup()}\"[/] to hash files.[/]");
 
         return (int)ExitCode.OK;
     }
@@ -1513,7 +1513,16 @@ public class Program
         var rebuild = PromptYesNo("Force rebuild existing outputs?", false);
         var deleteSource = apply && PromptYesNo("Delete source files after conversion?", false);
 
-        var args = new List<string> { "convert", "psx", "--root", root };
+        var defaultWorkers = SessionStateManager.State.ConvertPsx.Workers;
+        var workers = AnsiConsole.Prompt(
+            new TextPrompt<int>($"Parallel workers [grey](1-8, default {defaultWorkers})[/]?")
+                .DefaultValue(defaultWorkers)
+                .Validate(n => n is >= 1 and <= 8
+                    ? ValidationResult.Success()
+                    : ValidationResult.Error("Workers must be between 1 and 8.")));
+        SessionStateManager.Update(s => s with { ConvertPsx = s.ConvertPsx with { Workers = workers } });
+
+        var args = new List<string> { "convert", "psx", "--root", root, "--workers", workers.ToString() };
         if (recursive)
         {
             args.Add("--recursive");
@@ -1862,7 +1871,7 @@ public class Program
 
     private static PromptCancelAction ShowPromptCancelledOptions(string context)
     {
-        AnsiConsole.MarkupLine($"\n[yellow]{context} cancelled via ESC.[/]");
+        AnsiConsole.MarkupLine($"\n[yellow]{context.EscapeMarkup()} cancelled via ESC.[/]");
         AnsiConsole.MarkupLine("[grey]Press [bold]R[/] to retry or [bold]M[/] to return.[/]");
         while (true)
         {

@@ -135,7 +135,7 @@ public static class DuplicatesPsxCommand
             foreach (var group in duplicateGroups.Take(showDetailCount))
             {
                 AnsiConsole.WriteLine();
-                AnsiConsole.MarkupLine($"[bold cyan]{group.Title ?? "Unknown"}[/] - Hash: {group.Hash[..12]}...");
+                AnsiConsole.MarkupLine($"[bold cyan]{(group.Title ?? "Unknown").EscapeMarkup()}[/] - Hash: {group.Hash[..12]}...");
                 
                 foreach (var file in group.Files)
                 {

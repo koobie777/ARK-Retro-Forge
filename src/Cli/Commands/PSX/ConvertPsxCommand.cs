@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using ARK.Cli.Infrastructure;
@@ -25,7 +26,7 @@ public static class ConvertPsxCommand
 
         if (!Directory.Exists(root))
         {
-            AnsiConsole.MarkupLine($"[red]☄️ [[IMPACT]] | Component: convert psx | Context: Directory not found: {root} | Fix: Verify the --root path exists[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ [[IMPACT]] | Component: convert psx | Context: Directory not found: {root.EscapeMarkup()} | Fix: Verify the --root path exists[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -35,6 +36,7 @@ public static class ConvertPsxCommand
         var rebuild = args.Contains("--rebuild");
         var flatten = args.Contains("--flatten");
         var targetArg = GetArgValue(args, "--to") ?? "chd";
+        var workers = Math.Clamp(int.TryParse(GetArgValue(args, "--workers"), out var w) ? w : 4, 1, 8);
 
         if (deleteSource && !apply)
         {
@@ -44,7 +46,7 @@ public static class ConvertPsxCommand
 
         if (!TryParseTarget(targetArg, out var target))
         {
-            AnsiConsole.MarkupLine($"[red]☄️ Invalid --to value '{targetArg}'. Use chd, bin, or iso.[/]");
+            AnsiConsole.MarkupLine($"[red]☄️ Invalid --to value '{targetArg.EscapeMarkup()}'. Use chd, bin, or iso.[/]");
             return (int)ExitCode.InvalidArgs;
         }
 
@@ -56,10 +58,25 @@ public static class ConvertPsxCommand
             new ConsoleDecorations.HeaderMetadata("Scope", recursive ? "Recursive" : "Top-level"),
             new ConsoleDecorations.HeaderMetadata("Target", target.ToString().ToUpperInvariant()),
             new ConsoleDecorations.HeaderMetadata("Mode", apply ? "[green]APPLY[/]" : "[yellow]DRY-RUN[/]", IsMarkup: true),
+            new ConsoleDecorations.HeaderMetadata("Workers", workers.ToString()),
             new ConsoleDecorations.HeaderMetadata("Rebuild", rebuild ? "Yes" : "No"),
             new ConsoleDecorations.HeaderMetadata("Flatten", flatten ? "Yes" : "No"),
             new ConsoleDecorations.HeaderMetadata("Delete source", deleteSource ? "[red]Yes[/]" : "No", IsMarkup: deleteSource));
         AnsiConsole.WriteLine();
+
+        if (workers > 4)
+        {
+            try
+            {
+                var drive = new DriveInfo(Path.GetPathRoot(root) ?? root);
+                if (drive.DriveType == DriveType.Fixed)
+                {
+                    AnsiConsole.MarkupLine("[yellow]⚠  HDD detected — high worker count may reduce throughput on spinning disks.[/]");
+                    AnsiConsole.WriteLine();
+                }
+            }
+            catch { /* ignore if drive info unavailable */ }
+        }
 
         var planner = new PsxConvertPlanner();
         var operations = planner.PlanConversions(root, recursive, rebuild, target, flatten);
@@ -96,7 +113,7 @@ public static class ConvertPsxCommand
             return (int)ExitCode.OK;
         }
 
-        var summary = await ExecuteConversionsAsync(readableOps, chdmanResult.Path!, target, deleteSource);
+        var summary = await ExecuteConversionsAsync(readableOps, chdmanResult.Path!, target, deleteSource, workers);
         RenderConversionSummary(summary);
         return summary.Failures.Count > 0 ? (int)ExitCode.GeneralError : (int)ExitCode.OK;
     }
@@ -142,28 +159,21 @@ public static class ConvertPsxCommand
         IEnumerable<PsxConvertOperation> operations,
         string chdmanPath,
         PsxConversionTarget target,
-        bool deleteSource)
+        bool deleteSource,
+        int workers)
     {
         var opList = operations.ToList();
         var pending = opList.Where(o => !o.AlreadyConverted).ToList();
-        var failures = new List<ConversionResult>();
+        var failures = new ConcurrentBag<ConversionResult>();
         var converted = 0;
+        var completed = 0;
+        long totalBytesProcessed = 0;
         var token = OperationContextScope.CurrentToken;
 
         if (pending.Count == 0)
         {
-            return new ConversionSummary(converted, opList.Count - pending.Count, failures, TimeSpan.Zero, 0);
+            return new ConversionSummary(0, opList.Count, failures.ToList(), TimeSpan.Zero, 0);
         }
-
-        // Per-file status tracking for live table
-        var statuses = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var op in pending)
-        {
-            statuses[op.SourcePath] = "[yellow]Pending[/]";
-        }
-
-        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        long totalBytesProcessed = 0;
 
         var progressColumns = new ProgressColumn[]
         {
@@ -174,47 +184,56 @@ public static class ConvertPsxCommand
             new SpinnerColumn()
         };
 
+        var stopwatch = Stopwatch.StartNew();
+
         await AnsiConsole.Progress()
             .AutoClear(false)
             .Columns(progressColumns)
             .StartAsync(async ctx =>
             {
-                var task = ctx.AddTask($"[0/{pending.Count}] Starting...", maxValue: pending.Count);
-                for (var i = 0; i < pending.Count; i++)
+                var task = ctx.AddTask($"[[0/{pending.Count}]] Starting...", maxValue: pending.Count);
+                var semaphore = new SemaphoreSlim(workers, workers);
+
+                var workerTasks = pending.Select(async op =>
                 {
-                    var op = pending[i];
-                    OperationContextScope.ThrowIfCancellationRequested();
-
-                    var label = FormatTaskLabel(op.SourcePath);
-                    task.Description = $"[[{i + 1}/{pending.Count}]] {label}";
-                    statuses[op.SourcePath] = "[cyan]Converting...[/]";
-
-                    var result = await RunConversionAsync(op, chdmanPath, target, deleteSource, token);
-                    if (result.Success)
+                    await semaphore.WaitAsync(token);
+                    try
                     {
-                        converted++;
-                        statuses[op.SourcePath] = "[green]Done[/]";
-                        try
+                        OperationContextScope.ThrowIfCancellationRequested();
+                        var label = FormatTaskLabel(op.SourcePath);
+                        var seq = Interlocked.Increment(ref completed);
+                        task.Description = $"[[{seq}/{pending.Count}]] {label}";
+
+                        var result = await RunConversionAsync(op, chdmanPath, target, deleteSource, token);
+                        if (result.Success)
                         {
-                            var fi = new FileInfo(op.SourcePath);
-                            if (fi.Exists) totalBytesProcessed += fi.Length;
+                            Interlocked.Increment(ref converted);
+                            try
+                            {
+                                var fi = new FileInfo(op.SourcePath);
+                                if (fi.Exists) Interlocked.Add(ref totalBytesProcessed, fi.Length);
+                            }
+                            catch { /* best effort */ }
                         }
-                        catch { /* best effort */ }
+                        else
+                        {
+                            failures.Add(result);
+                        }
+
+                        task.Increment(1);
                     }
-                    else
+                    finally
                     {
-                        failures.Add(result);
-                        statuses[op.SourcePath] = "[red]Failed[/]";
+                        semaphore.Release();
                     }
+                }).ToList();
 
-                    task.Increment(1);
-                }
-
-                task.Description = $"[{pending.Count}/{pending.Count}] Complete";
+                await Task.WhenAll(workerTasks);
+                task.Description = $"[[{pending.Count}/{pending.Count}]] Complete";
             });
 
         stopwatch.Stop();
-        return new ConversionSummary(converted, opList.Count - pending.Count, failures, stopwatch.Elapsed, totalBytesProcessed);
+        return new ConversionSummary(converted, opList.Count - pending.Count, failures.ToList(), stopwatch.Elapsed, totalBytesProcessed);
     }
 
     private static string BuildChdmanArguments(PsxConvertOperation op, PsxConversionTarget target)
@@ -252,7 +271,7 @@ public static class ConvertPsxCommand
         }
         catch (Exception ex)
         {
-            AnsiConsole.MarkupLine($"[red]  Failed to delete source: {ex.Message}[/]");
+            AnsiConsole.MarkupLine($"[red]  Failed to delete source: {ex.Message.EscapeMarkup()}[/]");
         }
     }
 
