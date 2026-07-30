@@ -62,6 +62,8 @@ Violating any of these is a defect regardless of whether tests pass.
 
 7. **Never let an operation touch the filesystem.** Operations return plans. `Executor` acts. See above.
 
+   **DRY-RUN scope.** The DRY-RUN default protects *user data* — ROM collections, archives, anything the user would grieve. It does not extend to ARK's own configuration: `config set` writes the value the user just typed, and previewing that is ceremony, not safety. Config writes still go through `Plan` → `Executor` and are still journaled; only the `--apply` requirement is lifted. This boundary is deliberate and closed. Any future request to skip `--apply` on an operation touching user data is refused, and this clause is not precedent for it.
+
 8. **Never drop an unrecognized token.** Unknown parentheticals go to the unknown bucket — preserved, flagged, surfaced. Some are genuinely part of a title.
 
 9. **Never proceed to the next phase before the current gate passes.** v1 failed because every tool was added before any tool was proven. This is the rule that failure produced.
@@ -107,12 +109,27 @@ The v1 logic works, it's just trapped in `Program.cs`. Lift it into `Core/Diagno
 
 Exists to establish the Core/UI boundary on low-risk code. Every later component copies its shape.
 
-> **Gate:** `ark medical-bay` matches v1 output. `MedicalBayService` unit-tested with no console attached. Zero logic in the CLI command file.
+> **Gate:** `MedicalBayService` unit-tested with no console attached. Human render and `--json` serialize the same report object, enforced by a field-parity test. Zero logic in the CLI command file.
+>
+> Output deliberately **does not** match v1: `--json` now carries the full report rather than the tool array alone, and the global tool-missing verdict is removed. Requirements are per-operation.
 
-### Phase 2 — DAT infrastructure
-Download, parse, index, cache. **Add No-Intro sources** — v1's `dat-sources.json` has 79 entries: 77 Redump, 2 No-Intro. Cartridge work has almost no DAT backing until that's fixed.
+**Forward note — external processes are outside the Executor guarantee.** `File.Move`/`Delete`/`WriteAllText`/`CreateDirectory` are covered; launching `chdman` to write a CHD is not. When tool execution returns in a later phase, external tools write to a staging directory and `Executor` places the results, so the journal stays accurate and the output stays reversible.
 
-> **Gate:** `ark dat sync --system n64` fetches and indexes. Second run hits cache. Catalog queryable by name and by hash.
+### Phase 2 — System definitions + DAT infrastructure
+Coupled, because a system definition includes which DAT sources cover it.
+
+**System definitions.** v1's `SystemProfiles` is a PlayStation-only registry that silently falls back to `psx` on an unknown code. Replace it: code, display name, aliases, file extensions, archive expectations, format qualifiers (`Headered`, `BigEndian`, `Decrypted`, `NKit RVZ`), and DAT sources. Unknown codes report as unrecognized — never substituted.
+
+**DAT infrastructure.** Parse, index, cache, query by name and by hash.
+
+**No-Intro is import-only, not scraped.** Datomatic requires a session-cookie GET/POST form flow ending in a "Prepare" step; the established tool for it (`datoso-seed-nointro`) requires Firefox and geckodriver. Bundling a headless browser contradicts the portable single-EXE promise, and a silent-breaking scraper is worse than none. Datomatic offers a "Daily" full pack — so:
+
+- `ark dat import <path>` — user-supplied DAT or Daily pack. **Primary path for No-Intro.**
+- `ark dat sync` — automated, for sources with direct URLs. Redump's 77 entries already qualify.
+
+Medical Bay reports catalog coverage so gaps are visible rather than silent.
+
+> **Gate:** `ark dat import` ingests a Daily pack and indexes it. `ark dat sync` fetches a Redump source; second run hits cache. Catalog queryable by name and by hash. Unknown system code reports unrecognized rather than falling back.
 
 ### Phase 3 — Naming (parser + formatter)
 `Core/Naming/`: `TokenVocabulary`, `NameTokenizer`, `NameFormatter`, `ParsedName`. Vocabulary per `ARK-FILENAME-VOCABULARY.md`.

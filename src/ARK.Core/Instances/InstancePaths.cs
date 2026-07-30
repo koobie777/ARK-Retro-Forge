@@ -77,6 +77,9 @@ public sealed class InstancePaths
     /// </summary>
     public string DatSourcesManifestPath => Path.Combine(_baseDirectory, "config", "dat", "dat-sources.json");
 
+    /// <summary>This instance's settings file (<c>&lt;root&gt;/settings.json</c>).</summary>
+    public string SettingsFile => Path.Combine(Root, "settings.json");
+
     /// <summary>Absolute path of the journal file for a given session.</summary>
     public string JournalFileFor(string sessionId) => Path.Combine(Journal, $"{sessionId}.json");
 
