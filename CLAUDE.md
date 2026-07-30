@@ -68,6 +68,8 @@ Violating any of these is a defect regardless of whether tests pass.
 
 10. **Never ship a file-touching operation before it is reversible.** `Executor` journals from the moment it exists, in Phase 0. `ark undo` lands before the first destructive verb.
 
+11. **Never call `SharpCompress.IArchive.WriteToDirectory()`.** CVE-2026-44788 (GHSA-6c8g-7p36-r338, CVSS 5.9) is a zip-slip path traversal in that method, escalating to arbitrary file writes on TAR via symlink chaining. **No patched version exists** — every release through 0.47.4 is affected, so a version bump is not a fix. ARK does not need it: scan reads the entry list, hashing streams a single entry. Enforce with an architecture test. If archive extraction ever becomes a user-facing verb, it is hand-rolled with per-entry path validation against the target root, never delegated.
+
 ---
 
 ## Definition of Done
@@ -88,7 +90,7 @@ A component is done when **all four** hold:
 Each phase depends only on phases above it.
 
 ### Phase 0 — Skeleton
-Branch `v2` off `main`. `main` stays at v1.0.2 so current downloads keep working. Old code moves to `legacy/` — mined for **data, not code**.
+Branch `v2` off `main`. `main` stays at v1.1.0 so current downloads keep working. The v2 branch sets a version prefix so `ark --version` reports `2.0.0-alpha.x` — MinVer would otherwise inherit `1.1.x` and make a rewrite look like a patch. Old code moves to `legacy/` — mined for **data, not code**.
 
 - Solution: `ARK.Core`, `ARK.Cli`, `ARK.Tests`
 - Instance path resolution: where DB, DATs, logs, journal, quarantine live per `--instance`
