@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<!DOCTYPE datafile PUBLIC "-//Logiqx//DTD ROM Management Datafile//EN" "http://www.logiqx.com/Dats/datafile.dtd">
+<datafile>
+  <header>
+    <name>Sony - PlayStation</name>
+    <description>Sony - PlayStation</description>
+    <version>2024-01-15</version>
+    <date>2024-01-15</date>
+    <author>redump.org</author>
+    <homepage>redump.org</homepage>
+    <url>http://redump.org/</url>
+  </header>
+  <game name="Test Adventure (USA)">
+    <description>Test Adventure (USA)</description>
+    <rom name="Test Adventure (USA) (Track 1).bin" size="52348800" crc="11111111" md5="11111111111111111111111111111111" sha1="1111111111111111111111111111111111111111"/>
+    <rom name="Test Adventure (USA) (Track 2).bin" size="10584000" crc="22222222" md5="22222222222222222222222222222222" sha1="2222222222222222222222222222222222222222"/>
+    <rom name="Test Adventure (USA).cue" size="200" crc="33333333"/>
+  </game>
+  <game name="Demo Disc (Europe)">
+    <description>Demo Disc (Europe)</description>
+    <rom name="Demo Disc (Europe).bin" size="681984000" crc="44444444" md5="44444444444444444444444444444444" sha1="4444444444444444444444444444444444444444"/>
+    <rom name="Demo Disc (Europe).cue" size="120" crc="55555555"/>
+  </game>
+</datafile>

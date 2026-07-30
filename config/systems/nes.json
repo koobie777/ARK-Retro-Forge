@@ -1,0 +1,9 @@
+{
+  "code": "nes",
+  "displayName": "Nintendo Entertainment System",
+  "aliases": ["Nintendo - Nintendo Entertainment System", "NES", "Famicom", "FC"],
+  "romExtensions": [".nes"],
+  "archiveExtensions": [".zip", ".7z"],
+  "formatQualifiers": ["Headered", "Headerless"],
+  "datSources": []
+}

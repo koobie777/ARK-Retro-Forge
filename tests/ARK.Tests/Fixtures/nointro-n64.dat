@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<!DOCTYPE datafile PUBLIC "-//Logiqx//DTD ROM Management Datafile//EN" "http://www.logiqx.com/Dats/datafile.dtd">
+<datafile>
+  <header>
+    <name>Nintendo - Nintendo 64</name>
+    <description>Nintendo - Nintendo 64 (BigEndian)</description>
+    <version>20240201-123456</version>
+    <date>2024-02-01</date>
+    <author>No-Intro</author>
+    <homepage>No-Intro</homepage>
+    <url>https://www.no-intro.org</url>
+  </header>
+  <game name="Super Test 64 (USA)">
+    <description>Super Test 64 (USA)</description>
+    <rom name="Super Test 64 (USA).z64" size="8388608" crc="1a2b3c4d" md5="0123456789abcdef0123456789abcdef" sha1="0123456789abcdef0123456789abcdef01234567"/>
+  </game>
+  <game name="Test Racer (Europe)">
+    <description>Test Racer (Europe)</description>
+    <rom name="Test Racer (Europe).z64" size="12582912" crc="deadbeef"/>
+  </game>
+  <game name="Puzzle Quest (Japan)">
+    <description>Puzzle Quest (Japan)</description>
+    <rom name="Puzzle Quest (Japan).z64" size="4194304" crc="cafebabe" sha1="cafebabecafebabecafebabecafebabecafebabe"/>
+  </game>
+</datafile>

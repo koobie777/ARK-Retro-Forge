@@ -1,0 +1,9 @@
+{
+  "code": "snes",
+  "displayName": "Super Nintendo Entertainment System",
+  "aliases": ["Nintendo - Super Nintendo Entertainment System", "SNES", "Super Nintendo", "Super Famicom", "SFC"],
+  "romExtensions": [".sfc", ".smc"],
+  "archiveExtensions": [".zip", ".7z"],
+  "formatQualifiers": ["Headered", "Headerless"],
+  "datSources": []
+}

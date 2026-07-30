@@ -1,0 +1,9 @@
+{
+  "code": "n64",
+  "displayName": "Nintendo 64",
+  "aliases": ["Nintendo - Nintendo 64", "N64", "Nintendo 64"],
+  "romExtensions": [".z64", ".n64", ".v64"],
+  "archiveExtensions": [".zip", ".7z"],
+  "formatQualifiers": ["BigEndian", "ByteSwapped", "LittleEndian"],
+  "datSources": ["No-Intro - Nintendo 64"]
+}

@@ -1,26 +1,33 @@
+using System.Globalization;
+
 namespace ARK.Core.Diagnostics;
 
 /// <summary>
-/// Per-system DAT status for the Medical Bay report: how many local DAT files are present for a
-/// system and when they were last updated, with derived catalog/staleness state. Reports presence,
-/// not contents — it does not parse DAT file bodies.
+/// Real per-DAT catalog coverage for the Medical Bay report: which system a DAT covers, how many
+/// entries it indexed, its version/date, and whether that date is old enough to be worth refreshing.
+/// Backed by the SQLite catalog, not by counting files on disk.
 /// </summary>
 public sealed record DatStatus
 {
-    private const int StaleThresholdDays = 7;
+    private const int StaleThresholdDays = 90;
 
-    /// <summary>System code the summary is for.</summary>
+    /// <summary>System code the DAT covers, or a marker when the DAT's system was not recognized.</summary>
     public required string System { get; init; }
 
-    /// <summary>Number of local <c>.dat</c> files found for the system in this instance.</summary>
-    public required int LocalFileCount { get; init; }
+    /// <summary>The DAT's header name.</summary>
+    public required string DatName { get; init; }
 
-    /// <summary>Most recent write time across the local DAT files, or null when there are none.</summary>
-    public required DateTime? LastUpdatedUtc { get; init; }
+    /// <summary>Number of ROM entries indexed from the DAT.</summary>
+    public required int EntryCount { get; init; }
 
-    /// <summary>True when at least one local DAT file is present.</summary>
-    public bool HasCatalog => LocalFileCount > 0;
+    /// <summary>DAT version string from the header, if any.</summary>
+    public required string? Version { get; init; }
 
-    /// <summary>True when the newest local DAT file is older than the staleness threshold.</summary>
-    public bool IsStale => LastUpdatedUtc is { } timestamp && timestamp < DateTime.UtcNow.AddDays(-StaleThresholdDays);
+    /// <summary>DAT publication date from the header, if any.</summary>
+    public required string? Date { get; init; }
+
+    /// <summary>True when <see cref="Date"/> parses and is older than the staleness threshold.</summary>
+    public bool IsStale =>
+        DateTime.TryParse(Date, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var date)
+        && date < DateTime.UtcNow.AddDays(-StaleThresholdDays);
 }

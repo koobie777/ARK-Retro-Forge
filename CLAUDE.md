@@ -171,10 +171,27 @@ Built now, while a cartridge unit looks trivial, so disc support later is one ne
 
 > **Gate:** No code outside resolvers touches `FileInfo`. `ark scan <root>` on a mixed drive reports the three buckets with reasons. Directory classifier reproduces the 17/140 split on the reference corpus.
 
-### Phase 5 — Hashing + cache
-Tiered: group by size (free) → CRC32 survivors → SHA1 only on CRC collisions. Unique sizes are never hashed. SQLite cache keyed path + size + mtime, per instance.
+### Phase 5 — Hashing + verification
+Tiered hashing for **deduplication**: group by size (free) → CRC32 survivors → SHA1 only on CRC collisions. Unique sizes are never hashed. SQLite cache keyed path + size + mtime, per instance.
 
-> **Gate:** Second run over an unchanged set performs approximately zero hashing.
+**Verification is a separate concern and always hashes.** Size and presence prove nothing. Incomplete torrent transfers pre-allocate, and pieces span file boundaries — so a deselected file adjacent to a selected one receives partial data and ends up with the correct name, the correct size, and the wrong contents. Every cheap check passes it.
+
+`ark verify` sorts a set into four states:
+
+| State | Meaning |
+|---|---|
+| **Verified** | Hash matches a DAT entry |
+| **Mismatched** | Name matches a DAT entry, hash does not — incomplete, corrupt, or a different dump |
+| **Unrecognized** | No match by hash or by name |
+| **Excluded** | Not ROM content |
+
+Mismatched is **diagnosable, not unknown**, and must be reported as such. Detection is layered cheapest-first: client extensions (`.part`, `.!ut`, `.!qB`, `.crdownload`), zero-byte files, size mismatch against the DAT, then hash for whatever survives.
+
+**Verification gates renaming.** Only Verified units receive canonical names. Renaming a corrupt file to its canonical name produces a file that looks verified and will never be questioned again — worse than v1's damage, which at least announced itself in the filename.
+
+Nothing is deleted. Mismatches are reported; quarantine is offered and never automatic. The report is exportable in a form usable for re-queuing specific titles in a torrent client, so recovery is targeted rather than a full re-download.
+
+> **Gate:** Second run over an unchanged set performs approximately zero hashing. A file with correct name and size but corrupted contents reports Mismatched, not Verified and not Unrecognized. A rename operation refuses a Mismatched unit.
 
 ### Phase 6 — `ark undo`
 The journal already exists from Phase 0. This adds inversion and the verb.
@@ -197,6 +214,25 @@ Selectable, savable policies. Not a hardcoded rule — a preservationist and a c
 - Custom category rules
 
 > **Gate:** Absent rev tag ranks as Rev 0 / oldest. Pre-release builds never auto-ordered — date tag or ask. `v1.10` sorts above `v1.9`.
+
+### Phase 8.5 — Collection reports
+The join of catalog (Phase 2), scan (Phase 4), verification (Phase 5), and policy (Phase 8). No new subsystem — this is what the pipeline was built to produce, and it is the headline user-facing feature.
+
+Three reports, pivotable by system, by region, or both:
+
+| Report | Definition |
+|---|---|
+| **Missing** | In the declared target set, absent from disk |
+| **Unrecognized** | On disk, absent from every DAT — bad dumps, hacks, foreign sources |
+| **Upgradable** | Present on disk, but a higher revision exists in the DAT |
+
+**Completeness is measured against a declared target, never against the whole DAT.** A full No-Intro DAT carries every region, revision, proto, beta, sample, unlicensed and aftermarket release. Comparing a USA collection against all of it reports tens of thousands missing — true and useless. The target set comes from the Phase 8 policy (*USA retail, latest revision, no pre-release* is a different question from *everything tracked*). This is the 1G1R concept, and it is why this phase depends on the policy engine.
+
+**The tokenizer runs on DAT entry names here, not only on filenames.** Region, revision, and dev-status filtering all require parsing catalog entries. DAT names are the clean canonical case Phase 3 handles best.
+
+Output must be exportable in a form usable for re-acquisition — the missing list is a work queue, not a wall of text.
+
+> **Gate:** Missing/unrecognized/upgradable computed against a declared target set. Pivots by system and by region. Changing the policy changes the missing count and nothing else. Export is machine-readable.
 
 ### Phase 9 — GUI (Avalonia)
 Flagship interface over the same Core. Confirmation flows — candidate picking, dedup review, variant approval — are where a GUI genuinely beats a terminal.

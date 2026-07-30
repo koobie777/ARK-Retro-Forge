@@ -22,7 +22,7 @@ public static class MedicalBayRenderer
         nameof(MedicalBayReport.InstanceName),
         nameof(MedicalBayReport.RomRoot),
         nameof(MedicalBayReport.RomRootSet),
-        nameof(MedicalBayReport.ActiveSystemProfile),
+        nameof(MedicalBayReport.ActiveSystem),
         nameof(MedicalBayReport.Tools),
         nameof(MedicalBayReport.DatCatalogs)
     ];
@@ -41,16 +41,27 @@ public static class MedicalBayRenderer
     private static void RenderHeader(IAnsiConsole console, MedicalBayReport report)
     {
         var romRoot = report.RomRootSet ? report.RomRoot! : "Not set";
-        var profile = report.ActiveSystemProfile;
 
         var grid = new Grid();
         grid.AddColumn();
         grid.AddColumn();
         grid.AddRow("Instance", Markup.Escape(report.InstanceName));
         grid.AddRow("ROM Root", Markup.Escape(romRoot));
-        grid.AddRow("System", Markup.Escape($"{profile.Name} ({profile.Code})"));
+        grid.AddRow("System", Markup.Escape(DescribeSystem(report.ActiveSystem)));
 
         console.Write(new Panel(grid) { Header = new PanelHeader("Medical Bay") });
+    }
+
+    private static string DescribeSystem(ActiveSystemStatus system)
+    {
+        if (system.Code is null)
+        {
+            return "Not set";
+        }
+
+        return system.Recognized
+            ? $"{system.DisplayName} ({system.Code})"
+            : $"{system.Code} (unrecognized)";
     }
 
     private static void RenderTools(IAnsiConsole console, IReadOnlyList<ToolCheckResult> tools)
@@ -83,18 +94,24 @@ public static class MedicalBayRenderer
         var table = new Table().Border(TableBorder.Rounded);
         table.Title = new TableTitle("DAT Catalogs");
         table.AddColumn("System");
-        table.AddColumn("Catalog");
-        table.AddColumn("Files");
-        table.AddColumn("Last Sync (UTC)");
+        table.AddColumn("DAT");
+        table.AddColumn("Entries");
+        table.AddColumn("Version");
+        table.AddColumn("Freshness");
+
+        if (catalogs.Count == 0)
+        {
+            table.AddRow("[dim]none[/]", "[dim]no catalogs imported[/]", "-", "-", "-");
+        }
 
         foreach (var catalog in catalogs)
         {
-            var status = !catalog.HasCatalog ? "Missing" : catalog.IsStale ? "Stale" : "Ready";
             table.AddRow(
                 Markup.Escape(catalog.System),
-                status,
-                catalog.LocalFileCount.ToString("N0", CultureInfo.InvariantCulture),
-                catalog.LastUpdatedUtc?.ToString("u", CultureInfo.InvariantCulture) ?? "-");
+                Markup.Escape(catalog.DatName),
+                catalog.EntryCount.ToString("N0", CultureInfo.InvariantCulture),
+                Markup.Escape(catalog.Version ?? "-"),
+                catalog.IsStale ? "Stale" : "Current");
         }
 
         console.Write(table);

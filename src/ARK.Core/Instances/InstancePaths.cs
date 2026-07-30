@@ -77,6 +77,14 @@ public sealed class InstancePaths
     /// </summary>
     public string DatSourcesManifestPath => Path.Combine(_baseDirectory, "config", "dat", "dat-sources.json");
 
+    /// <summary>
+    /// Shared system-definitions directory (<c>&lt;base&gt;/config/systems</c>). Shared across instances.
+    /// </summary>
+    public string SystemsDirectory => Path.Combine(_baseDirectory, "config", "systems");
+
+    /// <summary>This instance's SQLite DAT catalog database (<c>&lt;root&gt;/db/catalog.db</c>).</summary>
+    public string CatalogDatabase => Path.Combine(Db, "catalog.db");
+
     /// <summary>This instance's settings file (<c>&lt;root&gt;/settings.json</c>).</summary>
     public string SettingsFile => Path.Combine(Root, "settings.json");
 

@@ -1,4 +1,3 @@
-using ARK.Core.Systems;
 using ARK.Core.Tools;
 
 namespace ARK.Core.Diagnostics;
@@ -20,8 +19,8 @@ public sealed record MedicalBayReport
     /// <summary>True when a ROM root is configured.</summary>
     public required bool RomRootSet { get; init; }
 
-    /// <summary>The active system profile.</summary>
-    public required SystemProfile ActiveSystemProfile { get; init; }
+    /// <summary>How the active system code resolves (recognized, unrecognized, or unset).</summary>
+    public required ActiveSystemStatus ActiveSystem { get; init; }
 
     /// <summary>Per-tool status for every known tool.</summary>
     public required IReadOnlyList<ToolCheckResult> Tools { get; init; }

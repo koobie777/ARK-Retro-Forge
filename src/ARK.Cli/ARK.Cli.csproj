@@ -23,6 +23,9 @@
     <Content Include="..\..\config\dat\dat-sources.json" Link="config\dat\dat-sources.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="..\..\config\systems\*.json" Link="config\systems\%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

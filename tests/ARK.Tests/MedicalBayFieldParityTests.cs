@@ -2,7 +2,6 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using ARK.Cli.Rendering;
 using ARK.Core.Diagnostics;
-using ARK.Core.Systems;
 using ARK.Core.Tools;
 using Spectre.Console;
 
@@ -39,7 +38,7 @@ public class MedicalBayFieldParityTests
         using var document = JsonDocument.Parse(MedicalBayJson.Serialize(report));
         var root = document.RootElement;
 
-        AssertObjectKeys(root.GetProperty("ActiveSystemProfile"), typeof(SystemProfile));
+        AssertObjectKeys(root.GetProperty("ActiveSystem"), typeof(ActiveSystemStatus));
         AssertObjectKeys(root.GetProperty("Tools")[0], typeof(ToolCheckResult));
         AssertObjectKeys(root.GetProperty("DatCatalogs")[0], typeof(DatStatus));
     }
@@ -62,10 +61,10 @@ public class MedicalBayFieldParityTests
 
         Assert.Contains("inst-parity", text, StringComparison.Ordinal);          // InstanceName
         Assert.Contains(@"R:\roms", text, StringComparison.Ordinal);             // RomRoot + RomRootSet
-        Assert.Contains("Sony PlayStation", text, StringComparison.Ordinal);     // ActiveSystemProfile
+        Assert.Contains("Nintendo 64", text, StringComparison.Ordinal);          // ActiveSystem
         Assert.Contains("chdman", text, StringComparison.Ordinal);              // Tools
         Assert.Contains("0.261", text, StringComparison.Ordinal);              // tool version/minimum
-        Assert.Contains("n64", text, StringComparison.Ordinal);                // DatCatalogs system
+        Assert.Contains("snes", text, StringComparison.Ordinal);               // DatCatalogs system
     }
 
     private static MedicalBayReport SampleReport() => new()
@@ -73,7 +72,7 @@ public class MedicalBayFieldParityTests
         InstanceName = "inst-parity",
         RomRoot = @"R:\roms",
         RomRootSet = true,
-        ActiveSystemProfile = new SystemProfile("psx", "Sony PlayStation", "PS1 orchestration"),
+        ActiveSystem = new ActiveSystemStatus { Code = "n64", Recognized = true, DisplayName = "Nintendo 64" },
         Tools =
         [
             new ToolCheckResult
@@ -89,7 +88,7 @@ public class MedicalBayFieldParityTests
         ],
         DatCatalogs =
         [
-            new DatStatus { System = "n64", LocalFileCount = 3, LastUpdatedUtc = DateTime.UtcNow }
+            new DatStatus { System = "snes", DatName = "Nintendo - Super Nintendo", EntryCount = 3, Version = "20240201", Date = "2024-02-01" }
         ]
     };
 

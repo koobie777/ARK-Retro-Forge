@@ -1,0 +1,18 @@
+# kind	dirty_input	expected_canonical	note
+# Synthesized. A clean No-Intro set contains ZERO of these — that is why they must be built.
+# expected 'FLAG:*' means the tokenizer must refuse rather than produce a name.
+stack-region-2	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) (USA)	Adventure Time - Explore the Dungeon Because I Don't Know! (USA)	title regex swallows prior tag; formatter re-appends
+stack-region-3	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) (USA) (USA)	Adventure Time - Explore the Dungeon Because I Don't Know! (USA)	compounded across repeated runs
+stack-mixed	Adventure Time - Finn & Jake Investigations (USA) (Rev 1) (USA)	Adventure Time - Finn & Jake Investigations (USA) (Rev 1)	duplicate collapses, rev survives, order normalises
+stack-disc	Baten Kaitos - Eternal Wings and the Lost Ocean (USA) (Disc 1) (Disc 1)	Baten Kaitos - Eternal Wings and the Lost Ocean (USA) (Disc 1)	disc tag stacked the same way region did
+order-scrambled	Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (Rev 1) (USA)	Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA) (Rev 1)	tokens out of canonical order
+order-lang-first	50 Classic Games 3D (En,Fr,Es) (USA)	50 Classic Games 3D (USA) (En,Fr,Es)	language before region — vocabulary must decide, not position
+disk-spelling	Baten Kaitos - Eternal Wings and the Lost Ocean (USA) (Disk 1)	Baten Kaitos - Eternal Wings and the Lost Ocean (USA) (Disc 1)	Disk/Disc spelling variant normalises
+rev-no-space	Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA) (Rev1)	Adventure Time - Hey Ice King! Why'd You Steal Our Garbage!! (USA) (Rev 1)	malformed rev token still recognised
+whitespace	Adventure Time - Explore the Dungeon Because I Don't Know!  (USA)	Adventure Time - Explore the Dungeon Because I Don't Know! (USA)	collapsed whitespace
+article-uninverted	The Alliance Alive (USA)	Alliance Alive, The (USA)	un-inverted article normalises to No-Intro form
+goodtools-good	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) [!]	Adventure Time - Explore the Dungeon Because I Don't Know! (USA)	GoodTools verified-dump flag stripped from canonical name
+goodtools-bad	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) [b]	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) [b]	bad-dump flag is PRESERVED — it is real information
+underscores	Adventure_Time_-_Explore_the_Dungeon_Because_I_Don't_Know!_(USA)	Adventure Time - Explore the Dungeon Because I Don't Know! (USA)	underscore-separated scene rename
+no-region	Adventure Time - Explore the Dungeon Because I Don't Know!	FLAG:no-region	no region boundary — cannot tokenize safely, must flag not guess
+unknown-token	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) (Wobbleflex)	Adventure Time - Explore the Dungeon Because I Don't Know! (USA) (Wobbleflex)	unrecognised token PRESERVED and surfaced, never dropped
