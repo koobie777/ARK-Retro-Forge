@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ARK.Core\ARK.Core.csproj" />
+    <ProjectReference Include="..\..\src\ARK.Cli\ARK.Cli.csproj" />
   </ItemGroup>
 
 </Project>

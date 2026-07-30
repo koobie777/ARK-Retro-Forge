@@ -100,6 +100,27 @@ public sealed class ExecutorTests : IDisposable
         Assert.Equal(1, CountJournalActions(journalPath));
     }
 
+    // WriteText writes its Content field (never Destination) to Source.
+    [Fact]
+    public void Apply_writes_text_from_the_content_field()
+    {
+        var target = Path.Combine(_work, "note.txt");
+        var plan = new Plan(
+            SessionId: "session-" + Guid.NewGuid().ToString("N"),
+            CreatedUtc: DateTimeOffset.UtcNow,
+            Operation: "test-write-text",
+            Actions: new[]
+            {
+                new PlannedAction(ActionKind.WriteText, target, Destination: null, Reason: "write a note", Content: "hello world")
+            });
+
+        var result = new Executor(_paths).Execute(plan, apply: true);
+
+        Assert.True(result.Success);
+        Assert.Equal(1, result.CompletedCount);
+        Assert.Equal("hello world", File.ReadAllText(target));
+    }
+
     private Plan ThreeActionPlan()
     {
         var origin = Path.Combine(_work, "origin.txt");

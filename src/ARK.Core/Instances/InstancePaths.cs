@@ -17,6 +17,8 @@ public sealed class InstancePaths
 
     private const string ProvisionOperation = "instance-provision";
 
+    private readonly string _baseDirectory;
+
     /// <summary>Creates a resolver for a named instance.</summary>
     /// <param name="instanceName">Instance name; sanitized, falling back to <see cref="DefaultInstanceName"/>.</param>
     /// <param name="rootOverride">
@@ -27,8 +29,8 @@ public sealed class InstancePaths
     public InstancePaths(string? instanceName = null, string? rootOverride = null)
     {
         InstanceName = Sanitize(instanceName);
-        var baseDirectory = rootOverride ?? AppContext.BaseDirectory;
-        Root = Path.Combine(baseDirectory, "instances", InstanceName);
+        _baseDirectory = rootOverride ?? AppContext.BaseDirectory;
+        Root = Path.Combine(_baseDirectory, "instances", InstanceName);
         Db = Path.Combine(Root, "db");
         Dat = Path.Combine(Root, "dat");
         Logs = Path.Combine(Root, "logs");
@@ -63,8 +65,23 @@ public sealed class InstancePaths
     /// <summary>Rolling-log file path template consumed by the logging configuration.</summary>
     public string LogFileTemplate => Path.Combine(Logs, "ark-.log");
 
+    /// <summary>
+    /// Shared external-tools directory (<c>&lt;base&gt;/tools</c>). Shared across instances, not
+    /// per-instance — it is independent of <see cref="InstanceName"/>.
+    /// </summary>
+    public string ToolsRoot => Path.Combine(_baseDirectory, "tools");
+
+    /// <summary>
+    /// Path to the shared DAT source manifest (<c>&lt;base&gt;/config/dat/dat-sources.json</c>).
+    /// Shared across instances.
+    /// </summary>
+    public string DatSourcesManifestPath => Path.Combine(_baseDirectory, "config", "dat", "dat-sources.json");
+
     /// <summary>Absolute path of the journal file for a given session.</summary>
     public string JournalFileFor(string sessionId) => Path.Combine(Journal, $"{sessionId}.json");
+
+    /// <summary>This instance's DAT directory for a specific system.</summary>
+    public string DatDirectoryFor(string system) => Path.Combine(Dat, system);
 
     /// <summary>
     /// Builds the plan that creates this instance's directory tree. Handing it to the

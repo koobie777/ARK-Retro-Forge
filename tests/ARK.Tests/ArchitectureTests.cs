@@ -72,6 +72,71 @@ public class ArchitectureTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // Path composition (instance/tools/dat layout) is centralized in the path-resolution types so
+    // that "nothing composes paths outside the resolver" is enforceable. Business and diagnostic
+    // code takes composed paths from the resolver rather than building them inline.
+    private static readonly string[] PathCompositionCalls =
+    {
+        "Path.Combine(",
+        "Path.Join(",
+    };
+
+    private static readonly string[] PathResolverFiles =
+    {
+        "InstancePaths.cs",
+        "ToolLocator.cs",
+    };
+
+    [Fact]
+    public void Paths_are_composed_only_in_the_resolver_types()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (PathResolverFiles.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            foreach (var call in PathCompositionCalls)
+            {
+                if (text.Contains(call, StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} contains '{call}'");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Path composition is permitted only in the resolver types (" + string.Join(", ", PathResolverFiles) + "). Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    // Gate 9: the unreachable ToolMissing branch is gone. Medical Bay reports status; it reaches no
+    // fatal verdict, so no exit-code branch keyed on tool presence survives anywhere in production code.
+    [Fact]
+    public void No_tool_missing_verdict_branch_remains()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (File.ReadAllText(file).Contains("ToolMissing", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "The ToolMissing verdict branch must not exist. Offenders:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";
