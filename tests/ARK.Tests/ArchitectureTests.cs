@@ -44,6 +44,34 @@ public class ArchitectureTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // SharpCompress 0.41.0 carries an unpatched zip-slip path traversal in
+    // IArchive.WriteToDirectory() (CVE-2026-44788 / GHSA-6c8g-7p36-r338): a crafted archive
+    // escapes the target root, escalating to arbitrary file writes on TAR via symlink chaining.
+    // Every release through 0.47.4 is affected, so there is no version bump to take — banning the
+    // method is the mitigation. ARK never needs it: scan reads the entry list and hashing streams
+    // a single entry. If extraction ever becomes a verb it must be hand-rolled with per-entry path
+    // validation against the target root, never routed through this method.
+    [Fact]
+    public void SharpCompress_WriteToDirectory_is_never_referenced()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (File.ReadAllText(file).Contains("WriteToDirectory(", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "SharpCompress IArchive.WriteToDirectory() is banned (unpatched zip-slip, GHSA-6c8g-7p36-r338). " +
+            "Extraction must be hand-rolled with path validation. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";

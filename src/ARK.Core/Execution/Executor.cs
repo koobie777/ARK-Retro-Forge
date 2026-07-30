@@ -114,7 +114,7 @@ public sealed class Executor
                 break;
 
             case ActionKind.WriteText:
-                File.WriteAllText(action.Source, action.Destination ?? string.Empty);
+                File.WriteAllText(action.Source, action.Content ?? string.Empty);
                 break;
 
             default:
@@ -124,6 +124,11 @@ public sealed class Executor
 
     private void WriteJournal(Plan plan, IReadOnlyList<PlannedAction> completed, string journalPath)
     {
+        // Resolves the bootstrap cycle: the instance-provision plan itself creates journal/,
+        // so the journal directory cannot be assumed to exist when the plan's first action is
+        // journaled. The executor therefore ensures journal/ ahead of every write, independent
+        // of the plan. This CreateDirectory is idempotent, so the plan's own CreateDirectory for
+        // journal/ later runs as a no-op and is journaled normally.
         Directory.CreateDirectory(_paths.Journal);
         var document = new JournalDocument(plan.SessionId, plan.CreatedUtc, plan.Operation, completed);
         File.WriteAllText(journalPath, JsonSerializer.Serialize(document, JournalJson));

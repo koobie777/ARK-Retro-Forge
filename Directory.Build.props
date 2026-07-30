@@ -30,10 +30,15 @@
     <RepositoryUrl>https://github.com/koobie777/ARK-Retro-Forge</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     
-    <!-- Versioning with MinVer -->
+    <!--
+      Versioning with MinVer. v2 is a ground-up rewrite, so the floor is 2.0: the latest tag on
+      this branch (v1.1.0 on main; the docs' "v1.0.2" was wrong) is below the floor, so MinVer
+      reports 2.0.0-alpha.<height> until a v2.x tag is cut. This keeps the rewrite from looking
+      like a patch on v1.
+    -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
-    <MinVerMinimumMajorMinor>1.1</MinVerMinimumMajorMinor>
-    <MinVerDefaultPreReleaseIdentifiers>rc</MinVerDefaultPreReleaseIdentifiers>
+    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+    <MinVerDefaultPreReleaseIdentifiers>alpha</MinVerDefaultPreReleaseIdentifiers>
     
     <!-- Code Analysis -->
     <NoWarn>$(NoWarn);CA1014</NoWarn> <!-- Mark assemblies with CLSCompliant -->

@@ -17,11 +17,12 @@
   </ItemGroup>
 
   <!--
-    SharpCompress 0.41.0 is the version proven in v1 and pinned by the Phase 0 brief, but it
-    carries a moderate advisory (GHSA-6c8g-7p36-r338) published after v1's last build. It is
-    unused in Phase 0 (archive extraction lands in a later phase). Suppress this single advisory
-    so the zero-warning gate holds; auditing stays active for every other package/advisory.
-    Revisit and upgrade before archive extraction actually consumes SharpCompress.
+    SharpCompress 0.41.0 carries GHSA-6c8g-7p36-r338 / CVE-2026-44788: an unpatched zip-slip
+    path traversal in IArchive.WriteToDirectory(). Every release through 0.47.4 is affected, so
+    there is no version bump to take. The mitigation is to never call that method (enforced by
+    ArchitectureTests.SharpCompress_WriteToDirectory_is_never_referenced) — ARK only reads entry
+    lists and streams single entries for hashing. Suppress this one advisory so the zero-warning
+    gate holds; auditing stays active for every other package/advisory.
   -->
   <ItemGroup>
     <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-6c8g-7p36-r338" />

@@ -71,6 +71,12 @@ public sealed class InstancePaths
     /// <see cref="Executor"/> with apply is how the tree comes into being — the path type
     /// never mutates the filesystem itself.
     /// </summary>
+    /// <remarks>
+    /// Bootstrap cycle: this plan creates <c>journal/</c>, yet the executor journals each
+    /// action into <c>journal/</c> as it completes. The executor breaks the cycle by ensuring
+    /// <c>journal/</c> exists ahead of every journal write, so the directory is created before
+    /// the plan's own action for it runs (idempotently). See <c>Executor.WriteJournal</c>.
+    /// </remarks>
     public Plan BuildProvisionPlan() => new(
         SessionId: $"provision-{InstanceName}-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}",
         CreatedUtc: DateTimeOffset.UtcNow,
