@@ -1,0 +1,170 @@
+# Reference mixed-use drive — 157 directories, 21,095 files.
+# SYNTHESIZED to the shape documented in CLAUDE.md and docs/phases/phase-4.md:
+#   17 ROM-set directories / 10,045 files identified
+#  140 excluded directories  / 11,050 files
+#
+# NOTE: those two component figures sum to 21,095, not the 22,050 total the documents
+# state — the reference figures do not reconcile with each other by 955 files. The 17/140
+# split is what the gate tests, so the fixture is built to the components and the stated
+# total is left unreconciled rather than invented.
+# File names are drawn from real-names.txt (conformant) or generated (non-conformant),
+# so the two signals are exercised against real No-Intro naming. Replace this file with a
+# real 'dir /s /b' dump to validate against the actual drive.
+# directory	files	dominantExt	dominantPct	conformantPct	expected	note
+No-Intro\Nintendo - Nintendo 64 (BigEndian)	388	.zip	100	99	romset	byte-order qualifier in folder name
+SNES Roms	1200	.zip	100	98	romset	folder name gives no clue; signals decide
+Minerva_Myrient	850	.zip	100	97	romset	folder name gives no clue; signals decide
+Nintendo - Game Boy Advance	1100	.zip	100	99	romset	
+PS2 Downloads	300	.zip	100	96	romset	folder name gives no clue; signals decide
+Roms	650	.zip	100	95	romset	folder name gives no clue; signals decide
+Nintendo - Game Boy	600	.zip	100	98	romset	
+Nintendo - Game Boy Color	500	.zip	100	98	romset	
+Nintendo - Nintendo DS (Decrypted)	900	.zip	100	99	romset	format qualifier in folder name
+Nintendo - Nintendo Entertainment System (Headered)	800	.zip	100	97	romset	header qualifier in folder name
+Nintendo - Super Nintendo Entertainment System	700	.zip	100	98	romset	
+Nintendo - Nintendo 3DS (Decrypted)	500	.zip	100	99	romset	
+Nintendo - GameCube - NKit RVZ	300	.zip	100	97	romset	qualifier is a dash segment, not a parenthetical
+Sony - PlayStation	400	.zip	100	96	romset	
+PSP\Roms	90	.iso	100	94	romset	GATE 6: bare .iso, no archive wrapper — an extension allowlist would reject this
+Nintendo - Wii U - Disc Keys	516	.zip	100	100	romset	GATE 7: known false positive — conformant names, disc keys not games
+Sony - PlayStation 3	251	.zip	100	95	romset	
+cheats\PS3	1500	.ps3savepatch	100	0	excluded	GATE 5: 100% homogeneous, 0% conformant — homogeneity alone would swallow these
+cheats\Retroarch	878	.cht	100	0	excluded	GATE 5: 100% homogeneous, 0% conformant
+Emulators\RetroArch	640	.dll	100	0	excluded	tooling: homogeneous, no region tokens
+Emulators\PCSX2	420	.dll	96	0	excluded	tooling
+Emulators\Dolphin	380	.dll	94	0	excluded	tooling
+firmware\PS3	310	.pup	100	0	excluded	firmware
+firmware\3DS	260	.bin	100	0	excluded	firmware
+BIOS	180	.bin	92	3	excluded	BIOS images
+Projects\ark-retro-forge	240	.cs	91	0	excluded	unrelated source tree
+Projects\notes	150	.md	88	0	excluded	mixed extensions and no region tokens
+Saves\PS2	320	.ps2	100	0	excluded	save data
+Saves\Wii	280	.bin	100	0	excluded	save data
+Downloads\incomplete	95	.part	100	40	excluded	in-flight transfers
+Music	410	.mp3	98	0	excluded	unrelated media
+Videos	260	.mkv	97	0	excluded	unrelated media
+Documents	190	.pdf	85	0	excluded	mixed extensions
+Artwork\boxart	520	.png	100	12	excluded	artwork: homogeneous but names are not conformant enough
+Artwork\snaps	480	.png	100	9	excluded	artwork
+Manuals	240	.pdf	100	30	excluded	manuals: some carry region tokens, below threshold
+tools\chdman	3	.exe	100	0	excluded	too few files to profile
+tools\empty	0		0	0	excluded	empty directory
+misc\set-000	28	.log	100	0	excluded	logs
+misc\set-001	28	.ini	100	0	excluded	configuration
+misc\set-002	28	.txt	82	0	excluded	mixed extensions
+misc\set-003	28	.sav	100	0	excluded	save data
+misc\set-004	28	.xml	89	0	excluded	mixed extensions
+misc\set-005	28	.dat	100	5	excluded	tooling data
+misc\set-006	28	.log	100	0	excluded	logs
+misc\set-007	28	.ini	100	0	excluded	configuration
+misc\set-008	28	.txt	82	0	excluded	mixed extensions
+misc\set-009	28	.sav	100	0	excluded	save data
+misc\set-010	28	.xml	89	0	excluded	mixed extensions
+misc\set-011	28	.dat	100	5	excluded	tooling data
+misc\set-012	28	.log	100	0	excluded	logs
+misc\set-013	28	.ini	100	0	excluded	configuration
+misc\set-014	28	.txt	82	0	excluded	mixed extensions
+misc\set-015	28	.sav	100	0	excluded	save data
+misc\set-016	28	.xml	89	0	excluded	mixed extensions
+misc\set-017	28	.dat	100	5	excluded	tooling data
+misc\set-018	28	.log	100	0	excluded	logs
+misc\set-019	28	.ini	100	0	excluded	configuration
+misc\set-020	28	.txt	82	0	excluded	mixed extensions
+misc\set-021	28	.sav	100	0	excluded	save data
+misc\set-022	28	.xml	89	0	excluded	mixed extensions
+misc\set-023	28	.dat	100	5	excluded	tooling data
+misc\set-024	28	.log	100	0	excluded	logs
+misc\set-025	28	.ini	100	0	excluded	configuration
+misc\set-026	28	.txt	82	0	excluded	mixed extensions
+misc\set-027	28	.sav	100	0	excluded	save data
+misc\set-028	28	.xml	89	0	excluded	mixed extensions
+misc\set-029	28	.dat	100	5	excluded	tooling data
+misc\set-030	28	.log	100	0	excluded	logs
+misc\set-031	28	.ini	100	0	excluded	configuration
+misc\set-032	28	.txt	82	0	excluded	mixed extensions
+misc\set-033	28	.sav	100	0	excluded	save data
+misc\set-034	28	.xml	89	0	excluded	mixed extensions
+misc\set-035	28	.dat	100	5	excluded	tooling data
+misc\set-036	28	.log	100	0	excluded	logs
+misc\set-037	28	.ini	100	0	excluded	configuration
+misc\set-038	28	.txt	82	0	excluded	mixed extensions
+misc\set-039	28	.sav	100	0	excluded	save data
+misc\set-040	28	.xml	89	0	excluded	mixed extensions
+misc\set-041	28	.dat	100	5	excluded	tooling data
+misc\set-042	28	.log	100	0	excluded	logs
+misc\set-043	28	.ini	100	0	excluded	configuration
+misc\set-044	28	.txt	82	0	excluded	mixed extensions
+misc\set-045	28	.sav	100	0	excluded	save data
+misc\set-046	28	.xml	89	0	excluded	mixed extensions
+misc\set-047	28	.dat	100	5	excluded	tooling data
+misc\set-048	28	.log	100	0	excluded	logs
+misc\set-049	28	.ini	100	0	excluded	configuration
+misc\set-050	28	.txt	82	0	excluded	mixed extensions
+misc\set-051	28	.sav	100	0	excluded	save data
+misc\set-052	28	.xml	89	0	excluded	mixed extensions
+misc\set-053	28	.dat	100	5	excluded	tooling data
+misc\set-054	28	.log	100	0	excluded	logs
+misc\set-055	28	.ini	100	0	excluded	configuration
+misc\set-056	28	.txt	82	0	excluded	mixed extensions
+misc\set-057	28	.sav	100	0	excluded	save data
+misc\set-058	28	.xml	89	0	excluded	mixed extensions
+misc\set-059	28	.dat	100	5	excluded	tooling data
+misc\set-060	28	.log	100	0	excluded	logs
+misc\set-061	28	.ini	100	0	excluded	configuration
+misc\set-062	28	.txt	82	0	excluded	mixed extensions
+misc\set-063	28	.sav	100	0	excluded	save data
+misc\set-064	28	.xml	89	0	excluded	mixed extensions
+misc\set-065	28	.dat	100	5	excluded	tooling data
+misc\set-066	28	.log	100	0	excluded	logs
+misc\set-067	28	.ini	100	0	excluded	configuration
+misc\set-068	28	.txt	82	0	excluded	mixed extensions
+misc\set-069	28	.sav	100	0	excluded	save data
+misc\set-070	28	.xml	89	0	excluded	mixed extensions
+misc\set-071	28	.dat	100	5	excluded	tooling data
+misc\set-072	28	.log	100	0	excluded	logs
+misc\set-073	28	.ini	100	0	excluded	configuration
+misc\set-074	28	.txt	82	0	excluded	mixed extensions
+misc\set-075	28	.sav	100	0	excluded	save data
+misc\set-076	28	.xml	89	0	excluded	mixed extensions
+misc\set-077	28	.dat	100	5	excluded	tooling data
+misc\set-078	28	.log	100	0	excluded	logs
+misc\set-079	28	.ini	100	0	excluded	configuration
+misc\set-080	28	.txt	82	0	excluded	mixed extensions
+misc\set-081	27	.sav	100	0	excluded	save data
+misc\set-082	27	.xml	89	0	excluded	mixed extensions
+misc\set-083	27	.dat	100	5	excluded	tooling data
+misc\set-084	27	.log	100	0	excluded	logs
+misc\set-085	27	.ini	100	0	excluded	configuration
+misc\set-086	27	.txt	82	0	excluded	mixed extensions
+misc\set-087	27	.sav	100	0	excluded	save data
+misc\set-088	27	.xml	89	0	excluded	mixed extensions
+misc\set-089	27	.dat	100	5	excluded	tooling data
+misc\set-090	27	.log	100	0	excluded	logs
+misc\set-091	27	.ini	100	0	excluded	configuration
+misc\set-092	27	.txt	82	0	excluded	mixed extensions
+misc\set-093	27	.sav	100	0	excluded	save data
+misc\set-094	27	.xml	89	0	excluded	mixed extensions
+misc\set-095	27	.dat	100	5	excluded	tooling data
+misc\set-096	27	.log	100	0	excluded	logs
+misc\set-097	27	.ini	100	0	excluded	configuration
+misc\set-098	27	.txt	82	0	excluded	mixed extensions
+misc\set-099	27	.sav	100	0	excluded	save data
+misc\set-100	27	.xml	89	0	excluded	mixed extensions
+misc\set-101	27	.dat	100	5	excluded	tooling data
+misc\set-102	27	.log	100	0	excluded	logs
+misc\set-103	27	.ini	100	0	excluded	configuration
+misc\set-104	27	.txt	82	0	excluded	mixed extensions
+misc\set-105	27	.sav	100	0	excluded	save data
+misc\set-106	27	.xml	89	0	excluded	mixed extensions
+misc\set-107	27	.dat	100	5	excluded	tooling data
+misc\set-108	27	.log	100	0	excluded	logs
+misc\set-109	27	.ini	100	0	excluded	configuration
+misc\set-110	27	.txt	82	0	excluded	mixed extensions
+misc\set-111	27	.sav	100	0	excluded	save data
+misc\set-112	27	.xml	89	0	excluded	mixed extensions
+misc\set-113	27	.dat	100	5	excluded	tooling data
+misc\set-114	27	.log	100	0	excluded	logs
+misc\set-115	27	.ini	100	0	excluded	configuration
+misc\set-116	27	.txt	82	0	excluded	mixed extensions
+misc\set-117	27	.sav	100	0	excluded	save data
+misc\set-118	27	.xml	89	0	excluded	mixed extensions

@@ -87,6 +87,11 @@ public sealed class InstancePaths
     /// </summary>
     public string NamingDirectory => Path.Combine(_baseDirectory, "config", "naming");
 
+    /// <summary>
+    /// Shared scan-rules file (<c>&lt;base&gt;/config/scan/scan-rules.json</c>). Shared across instances.
+    /// </summary>
+    public string ScanRulesPath => Path.Combine(_baseDirectory, "config", "scan", "scan-rules.json");
+
     /// <summary>This instance's SQLite DAT catalog database (<c>&lt;root&gt;/db/catalog.db</c>).</summary>
     public string CatalogDatabase => Path.Combine(Db, "catalog.db");
 

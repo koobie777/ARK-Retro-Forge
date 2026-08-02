@@ -177,6 +177,52 @@ public class ArchitectureTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // Phase 4 gate 13: file metadata is reached through IFileSystemReader, so every type in the
+    // scan pipeline is pure and the 21,095-file reference drive runs with no disk involved.
+    // FileHasher is the pre-existing exception: hashing genuinely needs the file itself.
+    private static readonly string[] FileMetadataTypes =
+    {
+        "FileInfo",
+        "DirectoryInfo",
+    };
+
+    private static readonly string[] FilesystemAccessFiles =
+    {
+        "FileSystemReader.cs",
+        "FileHasher.cs",
+        "InstancePaths.cs",
+    };
+
+    [Fact]
+    public void File_metadata_types_are_touched_only_by_the_filesystem_reader()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (FilesystemAccessFiles.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            foreach (var type in FileMetadataTypes)
+            {
+                if (text.Contains(type, StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} references '{type}'");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "FileInfo/DirectoryInfo are permitted only in (" + string.Join(", ", FilesystemAccessFiles) +
+            "). Everything else takes file metadata from IFileSystemReader. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";

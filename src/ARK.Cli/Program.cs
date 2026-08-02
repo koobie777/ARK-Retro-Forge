@@ -1,12 +1,16 @@
 using System.CommandLine;
 using ARK.Cli.Commands;
+using ARK.Core.Configuration;
 using ARK.Core.Dat;
 using ARK.Core.Diagnostics;
 using ARK.Core.Execution;
 using ARK.Core.Instances;
+using ARK.Core.Naming;
+using ARK.Core.Scanning;
 using ARK.Core.Settings;
 using ARK.Core.Systems;
 using ARK.Core.Tools;
+using ARK.Core.Units;
 using Serilog;
 using Spectre.Console;
 
@@ -22,6 +26,24 @@ var importer = new DatImporter(catalog, systems);
 using var httpClient = new HttpClient();
 var syncService = new DatSyncService(catalog, httpClient);
 
+var vocabulary = NamingVocabularyLoader.Load(paths.NamingDirectory);
+var tokenizer = new NameTokenizer(vocabulary);
+var formatter = new NameFormatter(tokenizer);
+
+var scanRules = ScanRulesLoader.Load(paths.ScanRulesPath);
+var fileSystem = new FileSystemReader();
+var archiveExtensions = systems.All.SelectMany(system => system.ArchiveExtensions).Distinct(StringComparer.OrdinalIgnoreCase);
+var resolvers = new IGameUnitResolver[]
+{
+    new CartridgeUnitResolver(tokenizer, new ArchiveInspector(fileSystem, archiveExtensions)),
+    new DiscUnitResolver(),
+};
+var scanService = new ScanService(
+    fileSystem,
+    new DirectoryProfiler(tokenizer, scanRules, systems.All.SelectMany(system => system.FormatQualifiers)),
+    resolvers,
+    scanRules);
+
 try
 {
     var root = new RootCommand(
@@ -29,6 +51,8 @@ try
     root.Add(MedicalBayCommand.Build(AnsiConsole.Console, BuildMedicalBayReport));
     root.Add(ConfigCommand.Build(AnsiConsole.Console, settingsStore, executor));
     root.Add(DatCommand.Build(AnsiConsole.Console, catalog, importer, syncService, LoadManifestSources(), EnsureProvisioned));
+    root.Add(ParseCommand.Build(AnsiConsole.Console, tokenizer, formatter, vocabulary));
+    root.Add(ScanCommand.Build(AnsiConsole.Console, ScanRoot));
 
     // Handle exceptions here (see catch below) rather than letting System.CommandLine dump a raw
     // stack trace for a user-fixable condition like a malformed settings file.
@@ -53,6 +77,11 @@ MedicalBayReport BuildMedicalBayReport()
     return new MedicalBayService(paths, tools, catalog, systems)
         .Generate(new MedicalBayContext(settings.RomRoot, settings.ActiveSystem));
 }
+
+// The name index is built once per scan from whatever DATs are indexed. With no DAT imported it
+// is empty, so every unit in a ROM set reports as a candidate — the honest answer, not a failure.
+ScanReport ScanRoot(string root) =>
+    scanService.Scan(root, DatNameIndex.Build(catalog.AllEntries(), tokenizer, vocabulary));
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {

@@ -140,8 +140,18 @@ Pure string work, zero I/O — the fastest feedback loop in the project. Corpus 
 
 > **Gate:** `parse(format(parse(x))) == parse(x)` across the entire corpus. Language tags never classify as regions. Unknown bucket never silently empties. 100% on both halves.
 
+### Naming: matching keys are token sets, not strings
+
+Canonical token order is a **partial** order, derived from the precedence graph observed in real data. Categories with unambiguous evidence are ordered; categories whose observed order conflicts are mutually unorderable and preserve input order. This is what makes `format(parse(x)) == x` hold on clean No-Intro names — an invented total order would rewrite names that were already correct.
+
+**Consequence:** two names carrying identical tokens in different orders are *both* canonical. A scrambled name normalizes to something that may not equal the DAT string byte-for-byte despite being the same release.
+
+Therefore all grouping, matching, and comparison operate on **`ParsedName` token sets**, never on formatted strings. This binds Phase 5 name matching, Phase 7 variant grouping, and Phase 8.5 target-set comparison. String equality is a valid fast path only when both sides originate from the same DAT.
+
 ### Phase 4 — Scan + game unit resolution
 `Core/Units/`: `IGameUnitResolver`, `GameUnit`. `CartridgeUnitResolver` returns one unit per archive. Disc resolver interface defined, implementation stubbed.
+
+Also lands **`ark parse "<filename>"`** — carried over from Phase 3. Prints title, each classified token, the unknown bucket, the canonical reassembly, and the token-set match key. Exits non-zero on a flagged name. This is the debugging surface for every phase after naming.
 
 **Scan classifies directories, not files.** Real drives mix ROM sets with emulators, tools, firmware, cheats, and unrelated projects. Folder names are no help — the reference drive uses `No-Intro`, `SNES Roms`, `Minerva_Myrient`, `Nintendo - Game Boy Advance`, and `PS2 Downloads` for the same kind of thing.
 
@@ -153,6 +163,8 @@ Two signals, both required:
 | Naming conformance — share of files containing a recognized region token | ≥ 80% |
 
 Validated against a 22,050-file mixed-use drive: **17 ROM-set directories / 10,045 files** identified, 140 directories / 11,050 files correctly excluded.
+
+> Those two component figures sum to **21,095**, not 22,050 — the reference numbers do not reconcile with each other by 955 files. The 17/140 split is what the gate tests and what `tests/ARK.Tests/corpus/reference-drive.tsv` is built to; the stated total is left unreconciled rather than invented. That fixture is **synthesized to the documented shape**, drawing its conformant names from the real 9,363-name corpus. Replacing it with a real `dir /s /b` dump validates the classifier against the actual drive.
 
 Both signals are necessary. Cheat directories (`.cht`, `.ps3savepatch`) score 100% homogeneity and 0% conformance — homogeneity alone swallows them. `PSP\Roms` is 90 bare `.iso` files with no archive — conformance catches it where an extension allowlist would not.
 

@@ -197,6 +197,25 @@ public sealed class DatCatalog
             .ToList();
     }
 
+    /// <summary>
+    /// Every indexed entry, optionally narrowed to one system. Used to build an in-memory
+    /// token-set index for scanning: identifying 10,000 files one SQL query at a time would be
+    /// 10,000 round trips, and name identity is a token-set comparison rather than anything SQL
+    /// can express.
+    /// </summary>
+    public IReadOnlyList<CatalogEntry> AllEntries(string? system = null)
+    {
+        using var connection = OpenReadOnly();
+        if (connection is null)
+        {
+            return [];
+        }
+
+        return system is { Length: > 0 }
+            ? connection.Query<CatalogEntry>($"{EntrySelect} WHERE c.system = @system;", new { system }).ToList()
+            : connection.Query<CatalogEntry>($"{EntrySelect};").ToList();
+    }
+
     /// <summary>Per-DAT coverage. Empty when nothing has been indexed.</summary>
     public IReadOnlyList<DatCoverage> Coverage()
     {
