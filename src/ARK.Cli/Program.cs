@@ -35,7 +35,7 @@ var fileSystem = new FileSystemReader();
 var archiveExtensions = systems.All.SelectMany(system => system.ArchiveExtensions).Distinct(StringComparer.OrdinalIgnoreCase);
 var resolvers = new IGameUnitResolver[]
 {
-    new CartridgeUnitResolver(tokenizer, new ArchiveInspector(fileSystem, archiveExtensions)),
+    new CartridgeUnitResolver(tokenizer, new ArchiveInspector(fileSystem, archiveExtensions), scanRules.DiscDescriptorExtensions),
     new DiscUnitResolver(),
 };
 var scanService = new ScanService(
@@ -78,10 +78,11 @@ MedicalBayReport BuildMedicalBayReport()
         .Generate(new MedicalBayContext(settings.RomRoot, settings.ActiveSystem));
 }
 
-// The name index is built once per scan from whatever DATs are indexed. With no DAT imported it
-// is empty, so every unit in a ROM set reports as a candidate — the honest answer, not a failure.
+// Identification is scoped per ROM-set directory to the one DAT that directory resolves to, and
+// each DAT's index is built on first use. A directory that resolves to no DAT identifies nothing,
+// which is the honest answer rather than a catalog-wide search that finds the wrong release.
 ScanReport ScanRoot(string root) =>
-    scanService.Scan(root, DatNameIndex.Build(catalog.AllEntries(), tokenizer, vocabulary));
+    scanService.Scan(root, new DatScopeResolver(catalog, systems, tokenizer, vocabulary));
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {

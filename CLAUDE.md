@@ -204,6 +204,23 @@ Built now, while a cartridge unit looks trivial, so disc support later is one ne
 
 > **Gate:** No code outside resolvers touches `FileInfo`. `ark scan <root>` on a mixed drive reports the three buckets with reasons. Directory classifier reproduces the 17/140 split on the reference corpus.
 
+### Phase 4.1 — identification is scoped to one DAT
+
+**A ROM-set directory is identified against exactly one DAT, never the whole catalog.** Resolution: the directory name equals an indexed DAT name (these are byte-identical on real collections — `GB\Nintendo - Game Boy` against the DAT `Nintendo - Game Boy`); failing that, the directory resolves to a system + qualifier that has a DAT indexed; failing that, **nothing is identified**. There is no catalog-wide fallback.
+
+A catalog-wide search is a Prohibition 6 violation with a confident label on it. Against 1.5M entries across 334 DATs, 308 Redump PlayStation images matched `Non-Redump - Sony - PlayStation` and `Sony - PlayStation (PS one Classics) (PSN)` purely on shared titles — different artifacts, different hashes. Phase 5 would then hash each against the wrong entry, fail every one, and report **Mismatched**: false corruption on healthy files, which is precisely the alarm fatigue the five-state model exists to prevent.
+
+**This is not a downgrade.** Game Boy identifies correctly with `gb` undefined as a system, while PlayStation becomes honest — no Redump DAT imported means no identification. The scan names the DAT each directory was compared against, or states that none was.
+
+### Unsupported format is not an anomaly
+
+| Class | Meaning |
+|---|---|
+| **Unsupported format** | Correct structure, no resolver for it yet — a `.cue` plus its `.bin` tracks while the disc resolver is stubbed |
+| **Anomaly** | Genuinely malformed — unreadable archive, or two unrelated games in one archive |
+
+One track sheet plus data files is one disc image. Several track sheets, or none, means genuinely more than one thing in the archive. Unsupported-format units are **summarized by count, never listed per file**: 1,762 of 1,765 PlayStation archives on the reference drive are `.bin` + `.cue`, and listing them buried the 2 real corrupt downloads underneath. An anomaly list that is 99.8% normal files is a list nobody reads.
+
 ### Phase 5 — Hashing + verification
 Tiered hashing for **deduplication**: group by size (free) → CRC32 survivors → SHA1 only on CRC collisions. Unique sizes are never hashed. SQLite cache keyed path + size + mtime, per instance.
 

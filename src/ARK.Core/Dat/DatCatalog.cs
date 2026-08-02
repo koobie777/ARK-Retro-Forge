@@ -245,6 +245,21 @@ public sealed class DatCatalog
     }
 
     /// <summary>
+    /// Every entry belonging to one named DAT. Identification is scoped to a single DAT, so this
+    /// is the query that backs it: a Redump disc image and a PSN re-release share a title and are
+    /// entirely different artifacts, and comparing across DATs answers the wrong question.
+    /// </summary>
+    public IReadOnlyList<CatalogEntry> EntriesForDat(string datName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(datName);
+
+        using var connection = OpenReadOnly();
+        return connection?
+            .Query<CatalogEntry>($"{EntrySelect} WHERE c.dat_name = @datName;", new { datName })
+            .ToList() ?? [];
+    }
+
+    /// <summary>
     /// Entries belonging to one <b>(system, qualifier)</b> variant. <c>(Headered)</c> and
     /// <c>(Headerless)</c> cover the same games with different hashes, so a lookup that cannot
     /// name the variant cannot give a correct answer.

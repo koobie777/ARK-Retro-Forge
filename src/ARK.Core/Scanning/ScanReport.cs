@@ -34,6 +34,35 @@ public sealed record ScannedUnit(GameUnit Unit, CatalogEntry? Match)
 public sealed record ExcludedFile(FileEntry File, string Reason);
 
 /// <summary>
+/// A profiled directory together with the DAT its contents were identified against.
+/// </summary>
+/// <param name="Profile">The measured signals and verdict.</param>
+/// <param name="Scope">
+/// The DAT identification was confined to, or null when none applied. Null must be visible in the
+/// report: a user needs to see what their files were compared against, and see when nothing was.
+/// </param>
+public sealed record ScannedDirectory(DirectoryProfile Profile, DatScope? Scope)
+{
+    /// <summary>Absolute directory path.</summary>
+    public string Path => Profile.Path;
+
+    /// <summary>Leaf directory name.</summary>
+    public string Name => Profile.Name;
+
+    /// <summary>Files directly inside.</summary>
+    public int FileCount => Profile.FileCount;
+
+    /// <summary>Whether this directory holds a ROM set.</summary>
+    public bool IsRomSet => Profile.IsRomSet;
+
+    /// <summary>Why it was excluded, when it was.</summary>
+    public ExclusionReason Reason => Profile.Reason;
+
+    /// <summary>Human-readable statement of the verdict.</summary>
+    public string Explain() => Profile.Explain();
+}
+
+/// <summary>
 /// The result of a scan: an inventory and nothing else. Scanning is read-only, produces no
 /// <c>Plan</c>, and writes no journal — there is nothing here to undo.
 /// </summary>
@@ -44,16 +73,20 @@ public sealed record ExcludedFile(FileEntry File, string Reason);
 /// <param name="Flagged">Files carrying in-flight-transfer signals.</param>
 public sealed record ScanReport(
     string Root,
-    IReadOnlyList<DirectoryProfile> Directories,
+    IReadOnlyList<ScannedDirectory> Directories,
     IReadOnlyList<ScannedUnit> Units,
     IReadOnlyList<ExcludedFile> Excluded,
     IReadOnlyList<FileEntry> Flagged)
 {
     /// <summary>Directories admitted as ROM sets.</summary>
-    public IReadOnlyList<DirectoryProfile> RomSetDirectories => Directories.Where(d => d.IsRomSet).ToArray();
+    public IReadOnlyList<ScannedDirectory> RomSetDirectories => Directories.Where(d => d.IsRomSet).ToArray();
 
     /// <summary>Directories rejected, each carrying its reason.</summary>
-    public IReadOnlyList<DirectoryProfile> ExcludedDirectories => Directories.Where(d => !d.IsRomSet).ToArray();
+    public IReadOnlyList<ScannedDirectory> ExcludedDirectories => Directories.Where(d => !d.IsRomSet).ToArray();
+
+    /// <summary>ROM-set directories that resolved to no DAT, so nothing in them could be identified.</summary>
+    public IReadOnlyList<ScannedDirectory> UnscopedRomSets =>
+        Directories.Where(d => d.IsRomSet && d.Scope is null).ToArray();
 
     /// <summary>Units whose name matched a DAT entry.</summary>
     public IReadOnlyList<ScannedUnit> Identified => Units.Where(u => u.Bucket == ScanBucket.Identified).ToArray();
@@ -63,6 +96,12 @@ public sealed record ScanReport(
 
     /// <summary>Units carrying an anomaly ARK declined to resolve by guessing.</summary>
     public IReadOnlyList<ScannedUnit> Anomalies => Units.Where(u => u.Unit.HasAnomalies).ToArray();
+
+    /// <summary>
+    /// Units whose structure no resolver handles yet. Not defects in the collection, and reported
+    /// separately so they never crowd out the genuine findings.
+    /// </summary>
+    public IReadOnlyList<ScannedUnit> UnsupportedFormats => Units.Where(u => u.Unit.IsUnsupportedFormat).ToArray();
 
     /// <summary>Every file seen, across every directory.</summary>
     public int TotalFiles => Directories.Sum(directory => directory.FileCount);

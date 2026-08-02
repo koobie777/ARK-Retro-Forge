@@ -45,13 +45,18 @@ public sealed class ScanService
     }
 
     /// <summary>
-    /// Scans <paramref name="root"/>. <paramref name="index"/> supplies name identification; pass
-    /// null when no DAT is indexed, in which case every unit in a ROM set is a candidate — which
-    /// is the honest answer, not a failure.
+    /// Scans <paramref name="root"/>. <paramref name="scopes"/> ties each ROM-set directory to the
+    /// one DAT its contents are compared against.
     /// </summary>
-    public ScanReport Scan(string root, DatNameIndex? index = null)
+    /// <remarks>
+    /// Identification is never catalog-wide. A directory that resolves to no DAT yields nothing
+    /// but candidates, which is the true answer — matching a Redump disc image against a PSN
+    /// re-release because both carry the title would be a guess wearing a confident label, and
+    /// verification would later report every one of them as corrupt.
+    /// </remarks>
+    public ScanReport Scan(string root, IDatScopeResolver? scopes = null)
     {
-        var directories = new List<DirectoryProfile>();
+        var directories = new List<ScannedDirectory>();
         var units = new List<ScannedUnit>();
         var excluded = new List<ExcludedFile>();
         var flagged = new List<FileEntry>();
@@ -59,15 +64,19 @@ public sealed class ScanService
         foreach (var listing in _reader.EnumerateDirectories(root))
         {
             var profile = _profiler.Profile(listing);
-            directories.Add(profile);
             flagged.AddRange(profile.IncompleteDownloads);
 
             if (!profile.IsRomSet)
             {
+                directories.Add(new ScannedDirectory(profile, null));
                 var reason = profile.Explain();
                 excluded.AddRange(listing.Files.Select(file => new ExcludedFile(file, reason)));
                 continue;
             }
+
+            var scope = scopes?.Resolve(profile.Name);
+            var index = scope is null ? null : scopes!.IndexFor(scope);
+            directories.Add(new ScannedDirectory(profile, scope));
 
             // An in-flight transfer inside a ROM set is set aside rather than identified: its
             // name is already correct while its bytes are not, which is precisely the case that

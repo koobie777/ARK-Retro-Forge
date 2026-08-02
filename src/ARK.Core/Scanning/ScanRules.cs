@@ -32,6 +32,13 @@ public sealed class ScanRules
     public string[] ExcludedDirectoryNames { get; set; } = Array.Empty<string>();
 
     /// <summary>
+    /// Extensions of a disc image's track sheet. An archive holding one of these plus its data
+    /// files is a disc image — correct structure that the stubbed disc resolver does not handle —
+    /// rather than an archive that wrongly contains two games.
+    /// </summary>
+    public string[] DiscDescriptorExtensions { get; set; } = { ".cue", ".gdi", ".ccd", ".toc", ".m3u" };
+
+    /// <summary>
     /// Directories that pass both signals but are known not to contain games.
     /// <c>Nintendo - Wii U - Disc Keys</c> is 516 flawlessly No-Intro-named archives holding disc
     /// keys. Conformant naming does not prove game content; these are admitted but flagged so the

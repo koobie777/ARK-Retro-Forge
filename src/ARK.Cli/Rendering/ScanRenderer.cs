@@ -22,6 +22,7 @@ public static class ScanRenderer
         RenderBuckets(console, report);
         RenderRomSets(console, report);
         RenderExclusions(console, report, listAll);
+        RenderUnsupported(console, report);
         RenderAnomalies(console, report);
         RenderFlagged(console, report);
 
@@ -65,30 +66,42 @@ public static class ScanRenderer
         table.AddColumn(new TableColumn("Files").RightAligned());
         table.AddColumn(new TableColumn("Ext").RightAligned());
         table.AddColumn(new TableColumn("Named").RightAligned());
-        table.AddColumn("Qualifiers");
+        table.AddColumn("Compared against");
 
         foreach (var directory in romSets.OrderByDescending(d => d.FileCount))
         {
-            var name = directory.Warnings.Count > 0
+            var name = directory.Profile.Warnings.Count > 0
                 ? $"[yellow]{Markup.Escape(directory.Name)} (!)[/]"
                 : Markup.Escape(directory.Name);
+
+            // Naming the DAT is the point: a user has to be able to see what their files were
+            // compared against, and see when nothing was.
+            var scope = directory.Scope is null
+                ? "[yellow]no DAT — nothing identified[/]"
+                : Markup.Escape(directory.Scope.ToString());
 
             table.AddRow(
                 name,
                 directory.FileCount.ToString(),
-                $"{directory.ExtensionHomogeneity:P0} {Markup.Escape(directory.DominantExtension)}",
-                $"{directory.NamingConformance:P0}",
-                Markup.Escape(string.Join(", ", directory.FormatQualifiers)));
+                $"{directory.Profile.ExtensionHomogeneity:P0} {Markup.Escape(directory.Profile.DominantExtension)}",
+                $"{directory.Profile.NamingConformance:P0}",
+                scope);
         }
 
         console.Write(table);
 
-        foreach (var directory in romSets.Where(d => d.Warnings.Count > 0))
+        foreach (var directory in romSets.Where(d => d.Profile.Warnings.Count > 0))
         {
-            foreach (var warning in directory.Warnings)
+            foreach (var warning in directory.Profile.Warnings)
             {
                 console.MarkupLineInterpolated($"[yellow](!)[/] {directory.Name}: {warning}");
             }
+        }
+
+        if (report.UnscopedRomSets.Count > 0)
+        {
+            console.MarkupLineInterpolated(
+                $"[yellow]{report.UnscopedRomSets.Count} ROM-set director(ies) matched no imported DAT.[/] Import the matching DAT to identify them; nothing was guessed.");
         }
 
         console.WriteLine();
@@ -134,6 +147,32 @@ public static class ScanRenderer
             console.MarkupLineInterpolated($"[grey]... {excluded.Count - shown.Count} more. Use --all to list every one.[/]");
         }
 
+        console.WriteLine();
+    }
+
+    // Correct structure with no resolver for it yet. Summarized by count and never listed per
+    // file: on the reference drive this is 1,762 PlayStation disc images, and printing one line
+    // each would bury every genuine finding under normal files.
+    private static void RenderUnsupported(IAnsiConsole console, ScanReport report)
+    {
+        var unsupported = report.UnsupportedFormats;
+        if (unsupported.Count == 0)
+        {
+            return;
+        }
+
+        console.MarkupLineInterpolated($"[blue]Unsupported formats ({unsupported.Count})[/] — correct files, no resolver yet:");
+
+        foreach (var group in unsupported
+            .SelectMany(scanned => scanned.Unit.UnsupportedFormats.Select(issue => (scanned.Unit.SetFolder, issue.Code)))
+            .GroupBy(pair => (pair.SetFolder, pair.Code))
+            .OrderByDescending(group => group.Count()))
+        {
+            console.MarkupLineInterpolated(
+                $"  {group.Count()} × [blue]{group.Key.Code}[/] in {group.Key.SetFolder}");
+        }
+
+        console.MarkupLine("[grey]These are not defects. They are counted, not listed.[/]");
         console.WriteLine();
     }
 
