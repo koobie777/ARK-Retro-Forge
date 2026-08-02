@@ -21,4 +21,25 @@ internal static class TestFixtures
 
         throw new DirectoryNotFoundException("Could not locate config/systems.");
     }
+
+    /// <summary>Locates the shipped <c>config/naming</c> directory by walking up from the test bin.</summary>
+    public static string ShippedNamingDirectory()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var candidate = Path.Combine(dir.FullName, "config", "naming");
+            if (File.Exists(Path.Combine(candidate, "regions.json")))
+            {
+                return candidate;
+            }
+        }
+
+        throw new DirectoryNotFoundException("Could not locate config/naming.");
+    }
+
+    /// <summary>Reads a committed naming-corpus file, skipping <c>#</c> comment and blank lines.</summary>
+    public static IReadOnlyList<string> ReadCorpus(string name) =>
+        File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "corpus", name))
+            .Where(line => line.Length > 0 && !line.StartsWith('#'))
+            .ToArray();
 }

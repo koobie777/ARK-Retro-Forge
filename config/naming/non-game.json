@@ -1,0 +1,11 @@
+{
+  "category": "NonGame",
+  "note": "Excluded from variant grouping entirely. A Bonus Disc is not a revision of the game it shipped beside; DLC is not a release candidate. Classify, set aside, never compare against retail entries.",
+  "multiValued": true,
+  "terms": [
+    "DLC",
+    "Save Data",
+    "Bonus Disc",
+    "Bonus PlayStation Disc"
+  ]
+}

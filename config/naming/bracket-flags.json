@@ -1,0 +1,10 @@
+{
+  "category": "BracketFlag",
+  "note": "GoodTools / TOSEC bracket flags. Brackets BEFORE the region boundary are title content and never reach here — that is how '[BIOS] Challenger GB (USA) (Unl)' survives intact.",
+  "stripNote": "[!] asserts a verified dump, which the DAT already tells us, so it is dropped. [b] is a bad-dump marker: real information, and discarding it loses data. Everything else is preserved.",
+  "strip": ["!"],
+  "terms": [
+    "!", "!p", "b", "a", "f", "h", "t", "o", "p", "c", "BIOS"
+  ],
+  "translationPrefixes": ["T+", "T-"]
+}

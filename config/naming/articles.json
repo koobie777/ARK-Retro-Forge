@@ -1,0 +1,15 @@
+{
+  "category": "Article",
+  "note": "Article inversion. 519 occurrences (5.2%) in the reference corpus. The article moves to the end of the FIRST ' - ' segment, matching No-Intro: 'Addams Family, The - Pugsley's Scavenger Hunt'.",
+  "invertOnFormat": ["The"],
+  "invertNote": "ONLY 'The' rewrites a title. Every other article is ambiguous with real leading title words and rewriting them corrupts real files: 'Die Hard' (German article vs English verb), 'Las Vegas Cool Hand' (Spanish article vs proper noun), 'An M. Night Shyamalan Film - The Last Airbender' (real article No-Intro left un-inverted). 'The ' leads 0 of 9,363 canonical names, so inverting it is provably a no-op on clean data. The rest are used for grouping only.",
+  "groupingOnly": [
+    "A", "An",
+    "Le", "La", "Les", "L'",
+    "Der", "Die", "Das", "Ein", "Eine",
+    "El", "Los", "Las", "Un", "Una",
+    "Il", "Lo", "I", "Gli",
+    "De", "Het", "Een",
+    "En", "Ett"
+  ]
+}

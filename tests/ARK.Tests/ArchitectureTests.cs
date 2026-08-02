@@ -137,6 +137,46 @@ public class ArchitectureTests
             "The ToolMissing verdict branch must not exist. Offenders:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // Phase 3 gate 14: naming is pure string work. Keeping every file read out of Core/Naming is
+    // what makes the tokenizer testable at string speed against a 9,363-name corpus, and it is
+    // why the one type that does read config lives in Core/Configuration instead.
+    private static readonly string[] IoCalls =
+    {
+        "File.",
+        "Directory.",
+        "FileInfo",
+        "DirectoryInfo",
+        "StreamReader",
+        "StreamWriter",
+        "Path.",
+    };
+
+    [Fact]
+    public void Naming_performs_no_io()
+    {
+        var namingDirectory = Path.Combine(FindSourceRoot(), "ARK.Core", "Naming");
+        Assert.True(Directory.Exists(namingDirectory), $"Expected {namingDirectory} to exist.");
+
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(namingDirectory))
+        {
+            var text = File.ReadAllText(file);
+            foreach (var call in IoCalls)
+            {
+                if (text.Contains(call, StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} contains '{call}'");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Core/Naming is pure string work and must perform no I/O. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";

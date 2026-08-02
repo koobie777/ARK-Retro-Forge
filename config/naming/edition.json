@@ -1,0 +1,23 @@
+{
+  "category": "Edition",
+  "note": "Release/mode/dump variants that are NOT pre-release build state. Kept apart from dev-status because real data orders them differently: (Unl) (Alt) but (Arcade Mode) (Rev 1).",
+  "excludedNote": "'Revised' is deliberately absent. It occurs exactly once in the reference corpus, BEFORE the region boundary, in 'Analog Controller Service Disc (Revised) (USA)' — it is title content there. Listing it would make it pullable and would strip it out of that title.",
+  "multiValued": true,
+  "terms": [
+    "Alt",
+    "Update",
+    "Program",
+    "Simulation Mode",
+    "Arcade Mode",
+    "Trial Disc",
+    "Arcade Disc",
+    "Evolution Disc",
+    "Interactive Sampler CD",
+    "Mission Briefing",
+    "The Making of",
+    "Video",
+    "Allies",
+    "Soviet",
+    "English-only Audio"
+  ]
+}

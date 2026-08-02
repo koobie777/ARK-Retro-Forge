@@ -1,0 +1,26 @@
+{
+  "category": "Licensing",
+  "note": "A separate policy axis from development status. 'Keep retail only' must not silently mean 'delete 390 unlicensed titles' unless the user chose that. Multi-valued: (Aftermarket) (Unl) legitimately co-occur.",
+  "multiValued": true,
+  "terms": [
+    "Unl",
+    "Aftermarket",
+    "Pirate",
+    "Tengen",
+    "Retro-Bit",
+    "Retro-Bit Generations",
+    "Limited Run Games",
+    "Strictly Limited Games",
+    "Not For Resale",
+    "Piko Interactive",
+    "Broke Studio",
+    "Second Dimension",
+    "QUByte Classics",
+    "Pixel Heart",
+    "iam8bit",
+    "NintendoAge",
+    "RetroZone",
+    "Color Dreams",
+    "Idea-Tek"
+  ]
+}

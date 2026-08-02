@@ -1,0 +1,11 @@
+{
+  "category": "Language",
+  "note": "Base codes. A language token splits on ',' or '+' and every element must be a base code with an optional locale suffix (En-US, Es-XL, Pt-BR). '+' separates distinct language SETS within one release and is preserved verbatim, never flattened.",
+  "listSeparator": ",",
+  "terms": [
+    "En", "Ja", "Fr", "De", "Es", "It", "Nl", "Pt", "Sv", "No", "Da", "Fi",
+    "Zh", "Ko", "Pl", "Ru", "Cs", "Hu", "El", "Tr", "Ar", "He", "Ca", "Hr",
+    "Sl", "Sk", "Ro", "Bg", "Uk", "Th", "Vi", "Id", "Ms", "Hi", "Ga", "Gd",
+    "Cy", "Eu", "Gl", "Af", "Sq", "Et", "Lv", "Lt", "Fa"
+  ]
+}

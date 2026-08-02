@@ -1,0 +1,48 @@
+{
+  "note": "Canonical emission order, expressed as RANK GROUPS rather than a total order.",
+  "derivation": "Computed as the strongly-connected components of the token-precedence graph observed across all 9,363 real names, topologically sorted. Categories in DIFFERENT groups have every real observation agreeing on direction, so a rank is real information. Categories in the SAME group are mutually unorderable — real No-Intro data contains both directions (12x '(Unl) (v2.35)' against 54x '(v1.1) (Unl)'; 2x '(1994-08-09) (Proto)' against 36x '(Proto 1) (1993-10-11)'). Sorting is STABLE, so same-rank tokens keep their input order.",
+  "why": "No total order can reproduce all 9,363 names — 29 are mutually contradictory. Imposing one would rewrite 29 correctly-named files so they no longer match their DAT entry, and every other ROM manager would then flag them as misnamed. Preserving input order where the reference data contradicts itself yields exact reproduction of all 9,363 while still normalising everything that is provably wrong.",
+  "rankGroups": [
+    ["Region"],
+    ["Language"],
+    ["Compilation"],
+    ["Disc"],
+    [
+      "Version",
+      "Revision",
+      "DevStatus",
+      "Date",
+      "Edition",
+      "Licensing",
+      "Distribution",
+      "Publisher",
+      "Serial",
+      "Hardware",
+      "Unknown"
+    ],
+    ["NonGame"]
+  ],
+  "pullBeforeBoundaryNote": "A metadata token sitting BEFORE the region boundary is pulled out and re-placed only when its category is a closed, structurally-decidable form. Version, Date, Serial, Publisher, Compilation and Unknown are NOT pulled: they are open forms that legitimately appear inside a title, which is exactly what protects 'Interactive CD Sampler Pack Volume Three (Version 3.5) (USA) (Rev 1)' and '4 Games on One Game Pak (Nickelodeon Movies) (USA)'.",
+  "pullBeforeBoundary": [
+    "Region",
+    "Language",
+    "Revision",
+    "Disc",
+    "DevStatus",
+    "Licensing",
+    "Distribution",
+    "Hardware",
+    "NonGame",
+    "Edition"
+  ],
+  "compilationHints": [
+    "Collection",
+    "Flashback",
+    "Mini Mix",
+    "Museum",
+    "Anniversary",
+    "Classics",
+    "Vol",
+    "Volume"
+  ]
+}

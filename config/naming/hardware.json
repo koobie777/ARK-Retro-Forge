@@ -1,0 +1,30 @@
+{
+  "category": "Hardware",
+  "note": "Cartridge capability or PCB design. NEVER a dedup or variant signal. PCB codes (NINA-06, MB-91, NES-BK) are listed here so the closed vocabulary claims them before the open serial pattern would.",
+  "multiValued": true,
+  "compoundHeads": true,
+  "terms": [
+    "SGB Enhanced",
+    "GB Compatible",
+    "CGB+SGB Enhanced",
+    "NDSi Enhanced",
+    "Rumble Version",
+    "Competition Cart",
+    "Aladdin Compact Cartridge",
+    "DX",
+    "NINA-03",
+    "NINA-06",
+    "MB-91",
+    "NES-BK",
+    "NES-N7",
+    "SNS-XM",
+    "SNS-NA",
+    "SuperVision",
+    "Intellivision",
+    "EDC",
+    "GDI",
+    "DSI",
+    "NOD",
+    "1 EPROM"
+  ]
+}

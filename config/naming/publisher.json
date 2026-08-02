@@ -1,0 +1,22 @@
+{
+  "category": "Publisher",
+  "note": "Open vocabulary in principle — this list only seeds the names observed in a metadata slot. An unlisted publisher falls through to the unknown bucket, which is the intended input queue for extending this file. Publishers appearing BEFORE the region boundary are title content and the boundary rule resolves them without any list.",
+  "multiValued": true,
+  "terms": [
+    "Acclaim",
+    "Accolade",
+    "HAL Laboratory",
+    "Hudson",
+    "Jaleco",
+    "Kemco",
+    "Little Orbit",
+    "Majesco",
+    "Mindscape",
+    "Namco",
+    "ShareData",
+    "Taito",
+    "THQ",
+    "UBI Soft",
+    "Vivendi"
+  ]
+}

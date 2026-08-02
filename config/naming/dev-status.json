@@ -1,0 +1,29 @@
+{
+  "category": "DevStatus",
+  "note": "Pre-release build state ONLY. Retail carries no tag and outranks every entry here. Ordering BETWEEN these is not determinable — Alpha/Beta/Proto have no consistent cross-publisher timeline. Edition/mode tokens (Alt, Arcade Mode, Trial Disc) are a different axis and live in edition.json.",
+  "ordinalPrefixes": ["Proto", "Beta", "Demo", "Sample"],
+  "compoundHeads": true,
+  "compoundHeadsNote": "Compound forms occur in real data: (Kiosk, GameCube), (Kiosk, E3 2003), (Kiosk, E3 1997). A comma+space list whose head is a term classifies here — which is also what stops it being mistaken for a region list of the same shape.",
+  "terms": [
+    "Proto",
+    "Sample",
+    "Demo",
+    "Beta",
+    "Alpha",
+    "Kiosk",
+    "Preview",
+    "Debug",
+    "Debug Version",
+    "Trial",
+    "Tech Demo",
+    "Test Program",
+    "Wi-Fi Kiosk",
+    "Auto Demo",
+    "Trade Demo",
+    "Possible Proto",
+    "Early Proto",
+    "Promo",
+    "Playable Game Preview",
+    "Patreon Demo 0320"
+  ]
+}

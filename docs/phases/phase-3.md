@@ -55,6 +55,8 @@ Title (Region) (Languages) (Version|Revision) (DevStatus) (Date) (Disc) (Licensi
 
 Each token appears **exactly once**. Always rebuilt from scratch, never appended to.
 
+> **Resolved during implementation.** This order is a *partial* order. Measured across the corpus, no total order reproduces all 9,363 names — 29 are mutually contradictory in No-Intro itself (`(Unl) (v2.35)` ×12 against `(v1.1) (Unl)` ×54). Order therefore ships as rank groups in `config/naming/order.json`, sorted stably: enforced where the data agrees, input order preserved where it does not. Gate 5 passes at 100%, and ARK's output keeps matching the DAT byte-for-byte instead of renaming 29 correct files into names their own DAT entry no longer matches. See `ARK-FILENAME-VOCABULARY.md` § *The order above is a partial order*.
+
 ### Classification order — strictly first-match-wins
 
 1. Split on the region boundary; everything left is title

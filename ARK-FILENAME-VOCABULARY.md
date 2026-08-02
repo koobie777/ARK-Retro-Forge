@@ -37,6 +37,29 @@ Title (Region) (Languages) (Version|Revision) (DevStatus) (Date) (Disc) (Licensi
 
 Each token appears **exactly once**. Rebuilt from scratch on every write, never appended to.
 
+### The order above is a partial order, not a total one
+
+Measured across all 9,363 names: **no single total order reproduces the corpus.** 29 names are mutually contradictory, because No-Intro itself is internally inconsistent on which token comes first:
+
+| Pair | One way | The other |
+|---|---|---|
+| Licensing / Version | `(Unl) (v2.35)` — 12 | `(v1.1) (Unl)` — 54 |
+| Date / DevStatus | `(1994-08-09) (Proto)` — 2 | `(Proto 1) (1993-10-11)` — 36 |
+| Revision / DevStatus | `(Rev 1) (Sample)` — 4 | the reverse — 4 |
+| Licensing / Revision | `(Unl) (Rev 1)` — 3 | the reverse — 6 |
+
+Imposing one order would rewrite 29 correctly-named files into names their own DAT entry no longer matches — and every other ROM manager would then report them as misnamed. So order is stored as **rank groups**, computed as the strongly-connected components of the observed precedence graph:
+
+```
+0: Region   1: Language   2: Compilation   3: Disc
+4: Version Revision DevStatus Date Edition Licensing Distribution Publisher Serial Hardware Unknown
+5: NonGame
+```
+
+Categories in **different** groups have every real observation agreeing, so the order is real information and is enforced. Categories in the **same** group are mutually unorderable, so a **stable** sort preserves whatever order the input had. This reproduces all 9,363 names exactly while still normalizing everything provably wrong — stacked duplicates, metadata stranded before the region boundary, `Disk`/`Disc`, `Rev1`.
+
+**Normalize what is wrong; preserve what is merely different.**
+
 ---
 
 ## Closed Vocabularies

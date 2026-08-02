@@ -82,6 +82,11 @@ public sealed class InstancePaths
     /// </summary>
     public string SystemsDirectory => Path.Combine(_baseDirectory, "config", "systems");
 
+    /// <summary>
+    /// Shared naming-vocabulary directory (<c>&lt;base&gt;/config/naming</c>). Shared across instances.
+    /// </summary>
+    public string NamingDirectory => Path.Combine(_baseDirectory, "config", "naming");
+
     /// <summary>This instance's SQLite DAT catalog database (<c>&lt;root&gt;/db/catalog.db</c>).</summary>
     public string CatalogDatabase => Path.Combine(Db, "catalog.db");
 

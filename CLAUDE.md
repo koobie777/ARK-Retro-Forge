@@ -161,7 +161,7 @@ Directory profiling reads listings only. No file is opened to decide whether a d
 **Three output buckets, never two:**
 1. **Identified** — DAT hash or name match
 2. **Candidate** — in a ROM-set directory, no DAT match. Reported, never acted on.
-3. **Excluded** — with a stated reason, visible in the report
+3. **Excluded** — with a stated reason, visible in the report. Active-download directories are excluded from write operations here, before any unit reaches an operation.
 
 Exclusion rules live in editable config, not in code. One user's junk is not the next user's junk.
 
@@ -181,9 +181,56 @@ Tiered hashing for **deduplication**: group by size (free) → CRC32 survivors �
 | State | Meaning |
 |---|---|
 | **Verified** | Hash matches a DAT entry |
+| **In Progress** | Actively being written, or inside a declared incomplete-download directory. **Not judged.** |
 | **Mismatched** | Name matches a DAT entry, hash does not — incomplete, corrupt, or a different dump |
 | **Unrecognized** | No match by hash or by name |
 | **Excluded** | Not ROM content |
+
+**In Progress is distinct from Mismatched and the distinction is not cosmetic.** A file mid-download fails hash verification, which is technically true and uselessly reported. Sixty "corrupt" files that are merely still downloading is the alarm-fatigue failure — a user who sees one false corruption report stops reading the report.
+
+The dangerous case is not the obviously-partial torrent. It is the one stalled at 99.9%: it looks finished, it will sit that way indefinitely, and the few incomplete files are indistinguishable from complete ones by name and size.
+
+Detection, cheapest first:
+
+1. Incomplete-file extensions — `.!qB`, `.part`, `.!ut`, `.bc!`, `.crdownload`, `.aria2`. Free, but only present if the client is configured to append them.
+2. Active write — mtime within a recent window, or the file refuses an exclusive open (a sharing violation means something owns the handle now).
+3. Declared incomplete-download directory, from settings.
+4. Size mismatch against the DAT — defeated by pre-allocation, still worth checking.
+5. Hash — the only definitive answer.
+
+**Write operations refuse, not warn.** A directory showing active-download signals is excluded from renaming, moving, and quarantine by default. Reports still run: coverage, missing, mismatched all remain available. Nothing is modified until the set has settled.
+
+**Renaming files in an active torrent breaks the seed.** The client loses its paths, reports the files missing, and stops seeding — silent damage, and real damage to anyone maintaining ratio on a private tracker. This applies to *completed* torrents still seeding, not only to downloads in flight, so completeness is not sufficient grounds to write.
+
+**Documented workflow: seed from the download directory, build the organized collection elsewhere.** ARK reads torrent output and writes to a separate root, leaving the seed intact.
+
+### Unselected-file spillover
+
+Torrent pieces span file boundaries, so files the user explicitly marked *do not download* still accumulate partial data at their edges. Observed on a real 490 GB GameCube set: unwanted entries sitting at 5.8%, 28.3%, 53.0%, 57.7% — and some at **100%**, complete and valid despite never being requested.
+
+This splits into two categories needing opposite responses:
+
+| Case | Reality | Correct action |
+|---|---|---|
+| Unwanted, 100% | Genuine complete file, hash-verifies | Region/variant **policy** decides — not a verification concern |
+| Unwanted, partial | Fragment of something never requested | Delete — no re-acquisition wanted |
+| Wanted, partial | Incomplete download of a desired title | Re-acquire |
+
+**ARK cannot separate rows 2 and 3 unaided.** Both present identically: name matches a DAT entry, hash does not. Without knowing the user's per-file priorities, an unwanted fragment and a corrupt download are the same observation.
+
+### Optional torrent-client integration
+
+qBittorrent's Web API exposes per-file progress *and* per-file priority on localhost. Where available, it:
+
+- Distinguishes *unwanted fragment* from *genuinely corrupt* — impossible by hashing alone
+- Replaces a multi-hour hash pass over a large set with an instant lookup
+- Identifies in-flight files definitively, no heuristics
+
+**Strictly optional.** Hash verification remains the universal path and the only requirement. No client integration is ever a dependency, and absence of it degrades cleanly to the hash path.
+
+**Cheap detection layers demonstrably fail here.** In the observed case there was no `.!qB` extension (the client was not configured to append one) and the file was pre-allocated to full size with an ordinary timestamp — a 0.99 GB file missing 16 MB that passes both the extension check and the size check. Treat extension and size as optimizations that reduce hashing, never as sufficient evidence of completeness.
+
+The Phase 5 hash cache keys on path + size + mtime, so a hash taken mid-download self-invalidates on the next write. That safety falls out of the existing cache design and needs no additional work.
 
 Mismatched is **diagnosable, not unknown**, and must be reported as such. Detection is layered cheapest-first: client extensions (`.part`, `.!ut`, `.!qB`, `.crdownload`), zero-byte files, size mismatch against the DAT, then hash for whatever survives.
 
@@ -191,7 +238,7 @@ Mismatched is **diagnosable, not unknown**, and must be reported as such. Detect
 
 Nothing is deleted. Mismatches are reported; quarantine is offered and never automatic. The report is exportable in a form usable for re-queuing specific titles in a torrent client, so recovery is targeted rather than a full re-download.
 
-> **Gate:** Second run over an unchanged set performs approximately zero hashing. A file with correct name and size but corrupted contents reports Mismatched, not Verified and not Unrecognized. A rename operation refuses a Mismatched unit.
+> **Gate:** Second run over an unchanged set performs approximately zero hashing. A file with correct name and size but corrupted contents reports Mismatched, not Verified and not Unrecognized. A rename operation refuses a Mismatched unit. A file with an incomplete-download extension, or one inside a declared incomplete directory, reports In Progress rather than Mismatched. Write operations refuse a directory showing active-download signals while still producing reports for it.
 
 ### Phase 6 — `ark undo`
 The journal already exists from Phase 0. This adds inversion and the verb.
