@@ -131,6 +131,18 @@ Medical Bay reports catalog coverage so gaps are visible rather than silent.
 
 > **Gate:** `ark dat import` ingests a Daily pack and indexes it. `ark dat sync` fetches a Redump source; second run hits cache. Catalog queryable by name and by hash. Unknown system code reports unrecognized rather than falling back.
 
+### Phase 2.1 — one system, N DAT variants keyed by qualifier
+
+A DAT name carrying a format qualifier resolves to **(system, qualifier)**, not to a system alone. `(Headered)` and `(Headerless)` are two distinct hash sets over the same ~4,500 games; a headered ROM will never match a headerless DAT, and N64 splits the same way across byte orders.
+
+Resolution is exact alias first; failing that, strip a **single trailing parenthetical** and require both that the base matches an alias **and** that the parenthetical is declared in that system's `formatQualifiers`. Anything else is unrecognized.
+
+The negatives carry the weight. `Nintendo - Nintendo 64 (Mario no Photopi SmartMedia)` has a matching base but names a *subset, not a format* — admitting it would file a handful of SmartMedia dumps as the N64 library. An alias list is the wrong fix for the same reason: it would make qualified names resolve and then silently merge incompatible hash sets.
+
+**This binds Phase 5.** Hash verification must target the variant the ROM actually is. Catalog lookups take `(system, qualifier)` and a null qualifier is matched exactly, never as "any" — the unqualified DAT is its own third set.
+
+Real catalog, after the fix: `nes (Headered)` 4,505 · `nes (Headerless)` 4,509 · `n64 (BigEndian)` 1,157 · `n64 (ByteSwapped)` 1,157 · `snes` 4,128.
+
 ### Phase 3 — Naming (parser + formatter)
 `Core/Naming/`: `TokenVocabulary`, `NameTokenizer`, `NameFormatter`, `ParsedName`. Vocabulary per `ARK-FILENAME-VOCABULARY.md`.
 
@@ -164,7 +176,16 @@ Two signals, both required:
 
 Validated against a 22,050-file mixed-use drive: **17 ROM-set directories / 10,045 files** identified, 140 directories / 11,050 files correctly excluded.
 
-> Those two component figures sum to **21,095**, not 22,050 — the reference numbers do not reconcile with each other by 955 files. The 17/140 split is what the gate tests and what `tests/ARK.Tests/corpus/reference-drive.tsv` is built to; the stated total is left unreconciled rather than invented. That fixture is **synthesized to the documented shape**, drawing its conformant names from the real 9,363-name corpus. Replacing it with a real `dir /s /b` dump validates the classifier against the actual drive.
+> **Validated against the real drive listing** (`tests/ARK.Tests/corpus/reference-drive.txt`, 22,050 real paths across 622 directories). The full reconciliation, at `MinimumFileCount = 5`:
+>
+> | | Directories | Files |
+> |---|---|---|
+> | ROM sets | 17 | 10,045 |
+> | Excluded, enough files to profile | 179 | 11,283 |
+> | Excluded, below the minimum file count | 426 | 722 |
+> | **Total** | **622** | **22,050** |
+>
+> The earlier "140 directories / 11,050 files" figure was a partial count — it omitted the 426 directories too small to profile, which is where the missing 955 files were. The classifier reproduces this split exactly.
 
 Both signals are necessary. Cheat directories (`.cht`, `.ps3savepatch`) score 100% homogeneity and 0% conformance — homogeneity alone swallows them. `PSP\Roms` is 90 bare `.iso` files with no archive — conformance catches it where an extension allowlist would not.
 

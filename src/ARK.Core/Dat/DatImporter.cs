@@ -39,7 +39,8 @@ public sealed class DatImporter
             foreach (var (entryName, dat) in DatReader.ReadDats(stream))
             {
                 var origin = entryName is null ? file : $"{file}::{entryName}";
-                results.Add(_catalog.Import(dat, InferSystem(dat), origin));
+                var match = InferSystem(dat);
+                results.Add(_catalog.Import(dat, match?.Code, match?.Qualifier, origin));
             }
         }
 
@@ -64,7 +65,10 @@ public sealed class DatImporter
         throw new FileNotFoundException($"Import path not found: {path}", path);
     }
 
-    private string? InferSystem(LogiqxDat dat) =>
-        _systems.ResolveByAlias(dat.Header.Name)?.Code
-        ?? _systems.ResolveByAlias(dat.Header.Description)?.Code;
+    // The header name is the authority; description is a fallback for DATs that carry a terse or
+    // absent name. Both go through qualifier-aware resolution, so a format variant lands on its
+    // own (system, qualifier) entry set rather than being merged or dropped.
+    private SystemMatch? InferSystem(LogiqxDat dat) =>
+        _systems.ResolveDatName(dat.Header.Name)
+        ?? _systems.ResolveDatName(dat.Header.Description);
 }

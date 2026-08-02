@@ -30,17 +30,23 @@ public class ScanServiceTests
             rules);
     }
 
-    // Gate 15. Three buckets, never two — every file accounted for.
+    // Gate 15. Three buckets, never two — every one of the real drive's 22,050 files accounted for.
     [Fact]
     public void Three_buckets_account_for_every_file_on_the_reference_drive()
     {
-        var report = Build(new InMemoryFileSystemReader(ReferenceDrive.Listings())).Scan(@"D:\Games");
+        var expected = ReferenceDrive.Expectations();
+
+        var report = Build(new InMemoryFileSystemReader(ReferenceDrive.Listings())).Scan(@"D:\");
 
         Assert.True(report.IsComplete,
             $"{report.TotalFiles} seen; {report.IdentifiedFileCount} identified + {report.CandidateFileCount} candidate + {report.ExcludedFileCount} excluded");
-        Assert.Equal(21_095, report.TotalFiles);
-        Assert.Equal(17, report.RomSetDirectories.Count);
-        Assert.Equal(140, report.ExcludedDirectories.Count);
+        Assert.Equal(expected.TotalFiles, report.TotalFiles);
+        Assert.Equal(expected.RomSetDirectories, report.RomSetDirectories.Count);
+        Assert.Equal(expected.OtherDirectories + expected.TooFewDirectories, report.ExcludedDirectories.Count);
+
+        // With no DAT indexed every unit in a ROM set is a candidate — the honest answer.
+        Assert.Equal(expected.RomSetFiles, report.CandidateFileCount);
+        Assert.Equal(expected.OtherFiles + expected.TooFewFiles, report.ExcludedFileCount);
     }
 
     // Gate 12 (part). Profiling reads listings only: no file is opened to decide what a directory is.
@@ -49,7 +55,7 @@ public class ScanServiceTests
     {
         var reader = new InMemoryFileSystemReader(ReferenceDrive.Listings());
 
-        Build(reader).Scan(@"D:\Games");
+        Build(reader).Scan(@"D:\");
 
         Assert.Empty(reader.Opened);
     }

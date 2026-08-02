@@ -23,7 +23,7 @@ public static class DatRenderer
         {
             table.AddRow(
                 Markup.Escape(result.DatName),
-                Markup.Escape(result.System ?? "(unrecognized)"),
+                Markup.Escape(result.SystemLabel),
                 result.EntryCount.ToString("N0", CultureInfo.InvariantCulture));
         }
 
@@ -57,8 +57,11 @@ public static class DatRenderer
             $"[green]Sync complete:[/] {summary.Fetched} fetched, {summary.Skipped} cached, {summary.Failed} failed.");
     }
 
-    /// <summary>Renders catalog coverage.</summary>
-    public static void RenderCoverage(IAnsiConsole console, IReadOnlyList<DatCoverage> coverage)
+    /// <summary>
+    /// Renders catalog coverage. Summary by default; author lists only when asked for, because a
+    /// real catalog spans roughly 200 DATs whose author fields run to dozens of names each.
+    /// </summary>
+    public static void RenderCoverage(IAnsiConsole console, IReadOnlyList<DatCoverage> coverage, bool verbose = false)
     {
         ArgumentNullException.ThrowIfNull(console);
         ArgumentNullException.ThrowIfNull(coverage);
@@ -67,27 +70,56 @@ public static class DatRenderer
         table.Title = new TableTitle("DAT Catalog Coverage");
         table.AddColumn("System");
         table.AddColumn("DAT");
-        table.AddColumn("Entries");
+        table.AddColumn(new TableColumn("Entries").RightAligned());
         table.AddColumn("Version");
-        table.AddColumn("Date");
-        table.AddColumn("Author");
+
+        if (verbose)
+        {
+            table.AddColumn("Date");
+            table.AddColumn("Author");
+        }
 
         if (coverage.Count == 0)
         {
-            table.AddRow("[dim]none[/]", "[dim]no catalogs imported[/]", "-", "-", "-", "-");
+            console.MarkupLine("[yellow]No catalogs match.[/]");
+            return;
         }
 
         foreach (var entry in coverage)
         {
-            table.AddRow(
-                Markup.Escape(entry.System ?? "(unrecognized)"),
+            var cells = new List<string>
+            {
+                Markup.Escape(Label(entry)),
                 Markup.Escape(entry.DatName),
                 entry.EntryCount.ToString("N0", CultureInfo.InvariantCulture),
                 Markup.Escape(entry.Version ?? "-"),
-                Markup.Escape(entry.Date ?? "-"),
-                Markup.Escape(entry.Author ?? "-"));
+            };
+
+            if (verbose)
+            {
+                cells.Add(Markup.Escape(entry.Date ?? "-"));
+                cells.Add(Markup.Escape(entry.Author ?? "-"));
+            }
+
+            table.AddRow(cells.ToArray());
         }
 
         console.Write(table);
+
+        var recognized = coverage.Count(entry => entry.System is not null);
+        var entries = coverage.Sum(entry => (long)entry.EntryCount);
+        console.MarkupLineInterpolated(
+            $"[grey]{coverage.Count} DAT(s): {recognized} resolved to a system, {coverage.Count - recognized} unrecognized. {entries:N0} entries.[/]");
+
+        if (!verbose)
+        {
+            console.MarkupLine("[grey]Use --verbose for dates and authors, --system <code> to narrow.[/]");
+        }
     }
+
+    // A format qualifier is part of the identity, not decoration: (Headered) and (Headerless) are
+    // two distinct hash sets over the same games.
+    private static string Label(DatCoverage entry) => entry.System is null
+        ? "(unrecognized)"
+        : entry.Qualifier is null ? entry.System : $"{entry.System} ({entry.Qualifier})";
 }

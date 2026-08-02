@@ -79,14 +79,39 @@ public static class DatCommand
         return command;
     }
 
+    // The real catalog holds over a million entries across roughly 200 DATs, so an unfiltered
+    // dump with full author lists is unreadable. Default to a summary and let the caller narrow.
     private static Command BuildList(IAnsiConsole console, DatCatalog catalog)
     {
+        var systemOption = new Option<string>("--system") { Description = "Limit to one system code." };
+        var recognizedOption = new Option<bool>("--recognized") { Description = "Only DATs that resolved to a system." };
+        var unrecognizedOption = new Option<bool>("--unrecognized") { Description = "Only DATs that did not resolve." };
+        var verboseOption = new Option<bool>("--verbose") { Description = "Include author lists." };
+
         var command = new Command("list", "Show catalog coverage per system.");
-        command.SetAction(_ =>
+        command.Add(systemOption);
+        command.Add(recognizedOption);
+        command.Add(unrecognizedOption);
+        command.Add(verboseOption);
+
+        command.SetAction(parseResult =>
         {
-            DatRenderer.RenderCoverage(console, catalog.Coverage());
+            var recognized = parseResult.GetValue(recognizedOption);
+            var unrecognized = parseResult.GetValue(unrecognizedOption);
+            if (recognized && unrecognized)
+            {
+                console.MarkupLine("[red]--recognized and --unrecognized are mutually exclusive.[/]");
+                return 1;
+            }
+
+            var coverage = catalog.Coverage(
+                parseResult.GetValue(systemOption),
+                recognized ? true : unrecognized ? false : null);
+
+            DatRenderer.RenderCoverage(console, coverage, parseResult.GetValue(verboseOption));
             return 0;
         });
+
         return command;
     }
 }

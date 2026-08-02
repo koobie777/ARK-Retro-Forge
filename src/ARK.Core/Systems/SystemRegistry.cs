@@ -64,6 +64,76 @@ public sealed class SystemRegistry
     }
 
     /// <summary>
+    /// Resolves a DAT header name to a system and, where present, a declared format qualifier.
+    /// </summary>
+    /// <remarks>
+    /// <para>Strictly ordered, and deliberately conservative:</para>
+    /// <list type="number">
+    ///   <item><description>Exact alias match — the system, no qualifier.</description></item>
+    ///   <item><description>
+    ///     Strip a single trailing parenthetical and match the remainder. The base must match an
+    ///     alias <b>and</b> the parenthetical must appear in that system's declared
+    ///     <see cref="SystemDefinition.FormatQualifiers"/>.
+    ///   </description></item>
+    ///   <item><description>Anything else — null. Unrecognized, never guessed.</description></item>
+    /// </list>
+    /// <para>
+    /// The negative cases carry as much weight as the positive ones.
+    /// <c>Nintendo - Nintendo 64 (Mario no Photopi SmartMedia)</c> has a matching base but an
+    /// undeclared parenthetical: it names a subset, not a format, and treating it as a byte-order
+    /// variant would file a handful of SmartMedia dumps as if they were the N64 library.
+    /// <c>Nintendo - Nintendo 64DD</c> is a different system whose base never matches at all.
+    /// </para>
+    /// </remarks>
+    public SystemMatch? ResolveDatName(string? datName)
+    {
+        if (string.IsNullOrWhiteSpace(datName))
+        {
+            return null;
+        }
+
+        var name = datName.Trim();
+
+        var exact = ResolveByAlias(name);
+        if (exact is not null)
+        {
+            return new SystemMatch(exact, null);
+        }
+
+        var close = name.LastIndexOf(')');
+        if (close != name.Length - 1)
+        {
+            return null;
+        }
+
+        var open = name.LastIndexOf('(');
+        if (open <= 0)
+        {
+            return null;
+        }
+
+        var qualifier = name[(open + 1)..close].Trim();
+        var baseName = name[..open].Trim();
+        if (qualifier.Length == 0 || baseName.Length == 0)
+        {
+            return null;
+        }
+
+        var system = ResolveByAlias(baseName);
+        if (system is null)
+        {
+            return null;
+        }
+
+        // The base matched, but an undeclared parenthetical is not a format qualifier. Stop here
+        // rather than inventing one — a wrong variant silently merges incompatible hash sets.
+        var declared = system.FormatQualifiers
+            .FirstOrDefault(candidate => candidate.Equals(qualifier, StringComparison.OrdinalIgnoreCase));
+
+        return declared is null ? null : new SystemMatch(system, declared);
+    }
+
+    /// <summary>
     /// Loads every <c>*.json</c> in <paramref name="systemsDirectory"/>. A missing directory yields
     /// an empty registry. Files are sorted by code so ordering is deterministic.
     /// </summary>

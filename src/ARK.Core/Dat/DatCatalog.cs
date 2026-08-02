@@ -21,6 +21,10 @@ public enum NameMatch
 public sealed record CatalogEntry
 {
     public string? System { get; init; }
+
+    /// <summary>Format qualifier of the owning DAT variant, e.g. <c>Headered</c>. Null when unqualified.</summary>
+    public string? Qualifier { get; init; }
+
     public string DatName { get; init; } = string.Empty;
     public string? GameName { get; init; }
     public string RomName { get; init; } = string.Empty;
@@ -38,6 +42,9 @@ public sealed record DatCoverage
 {
     public string DatName { get; init; } = string.Empty;
     public string? System { get; init; }
+
+    /// <summary>Format qualifier of this DAT variant, e.g. <c>Headered</c>. Null when unqualified.</summary>
+    public string? Qualifier { get; init; }
     public string? Description { get; init; }
     public string? Version { get; init; }
     public string? Date { get; init; }
@@ -47,7 +54,17 @@ public sealed record DatCoverage
 }
 
 /// <summary>The outcome of importing one DAT into the catalog.</summary>
-public sealed record DatImportResult(string DatName, string? System, int EntryCount);
+/// <param name="DatName">DAT header name, the idempotency key.</param>
+/// <param name="System">Resolved system code, or null when unrecognized.</param>
+/// <param name="Qualifier">Declared format qualifier, or null when the DAT name carried none.</param>
+/// <param name="EntryCount">Entries indexed.</param>
+public sealed record DatImportResult(string DatName, string? System, string? Qualifier, int EntryCount)
+{
+    /// <summary>Label for the resolved variant, e.g. <c>nes (Headered)</c>, or <c>(unrecognized)</c>.</summary>
+    public string SystemLabel => System is null
+        ? "(unrecognized)"
+        : Qualifier is null ? System : $"{System} ({Qualifier})";
+}
 
 /// <summary>
 /// The per-instance SQLite catalog of indexed DAT entries. Writes go through the SQLite driver, not
@@ -63,6 +80,7 @@ public sealed class DatCatalog
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
             dat_name     TEXT NOT NULL UNIQUE COLLATE NOCASE,
             system       TEXT COLLATE NOCASE,
+            qualifier    TEXT COLLATE NOCASE,
             description  TEXT,
             version      TEXT,
             date         TEXT,
@@ -89,13 +107,14 @@ public sealed class DatCatalog
         """;
 
     private const string EntrySelect = """
-        SELECT c.system AS System, c.dat_name AS DatName, e.game_name AS GameName, e.rom_name AS RomName,
-               e.size AS Size, e.crc32 AS Crc32, e.md5 AS Md5, e.sha1 AS Sha1
+        SELECT c.system AS System, c.qualifier AS Qualifier, c.dat_name AS DatName, e.game_name AS GameName,
+               e.rom_name AS RomName, e.size AS Size, e.crc32 AS Crc32, e.md5 AS Md5, e.sha1 AS Sha1
         FROM entries e
         JOIN catalogs c ON c.id = e.catalog_id
         """;
 
     private readonly string _databasePath;
+    private bool _migrated;
 
     /// <summary>Creates a catalog backed by the instance's <c>db/catalog.db</c>.</summary>
     public DatCatalog(InstancePaths paths)
@@ -108,7 +127,15 @@ public sealed class DatCatalog
     /// Indexes <paramref name="dat"/> under <paramref name="system"/>. Idempotent: re-importing a DAT
     /// with the same header name replaces the previous rows rather than duplicating them.
     /// </summary>
-    public DatImportResult Import(LogiqxDat dat, string? system, string origin)
+    public DatImportResult Import(LogiqxDat dat, string? system, string origin) =>
+        Import(dat, system, null, origin);
+
+    /// <summary>
+    /// Indexes <paramref name="dat"/> under a specific (system, qualifier) variant. Idempotent:
+    /// re-importing a DAT with the same header name replaces the previous rows rather than
+    /// duplicating them.
+    /// </summary>
+    public DatImportResult Import(LogiqxDat dat, string? system, string? qualifier, string origin)
     {
         ArgumentNullException.ThrowIfNull(dat);
         var datName = dat.Header.Name is { Length: > 0 } name ? name : origin;
@@ -120,13 +147,14 @@ public sealed class DatCatalog
 
         connection.Execute(
             """
-            INSERT INTO catalogs (dat_name, system, description, version, date, author, origin, imported_utc, entry_count)
-            VALUES (@datName, @system, @description, @version, @date, @author, @origin, @importedUtc, @entryCount);
+            INSERT INTO catalogs (dat_name, system, qualifier, description, version, date, author, origin, imported_utc, entry_count)
+            VALUES (@datName, @system, @qualifier, @description, @version, @date, @author, @origin, @importedUtc, @entryCount);
             """,
             new
             {
                 datName,
                 system,
+                qualifier,
                 description = dat.Header.Description,
                 version = dat.Header.Version,
                 date = dat.Header.Date,
@@ -151,7 +179,7 @@ public sealed class DatCatalog
         }
 
         transaction.Commit();
-        return new DatImportResult(datName, system, dat.Entries.Count);
+        return new DatImportResult(datName, system, qualifier, dat.Entries.Count);
     }
 
     /// <summary>Exact hash lookup across CRC32/MD5/SHA1. Returns one entry or none — never a guess.</summary>
@@ -216,17 +244,72 @@ public sealed class DatCatalog
             : connection.Query<CatalogEntry>($"{EntrySelect};").ToList();
     }
 
-    /// <summary>Per-DAT coverage. Empty when nothing has been indexed.</summary>
-    public IReadOnlyList<DatCoverage> Coverage()
+    /// <summary>
+    /// Entries belonging to one <b>(system, qualifier)</b> variant. <c>(Headered)</c> and
+    /// <c>(Headerless)</c> cover the same games with different hashes, so a lookup that cannot
+    /// name the variant cannot give a correct answer.
+    /// </summary>
+    /// <param name="system">System code.</param>
+    /// <param name="qualifier">
+    /// Declared qualifier, or null for the unqualified variant. Null is matched exactly, not
+    /// treated as "any" — the unqualified DAT is its own set.
+    /// </param>
+    public IReadOnlyList<CatalogEntry> EntriesFor(string system, string? qualifier)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(system);
+
+        using var connection = OpenReadOnly();
+        if (connection is null)
+        {
+            return [];
+        }
+
+        var predicate = qualifier is null ? "c.qualifier IS NULL" : "c.qualifier = @qualifier";
+        return connection
+            .Query<CatalogEntry>($"{EntrySelect} WHERE c.system = @system AND {predicate};", new { system, qualifier })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Per-DAT coverage, optionally filtered. Filtering lives here rather than in the caller
+    /// because the real catalog holds over a million entries across roughly 200 DATs, and pulling
+    /// all of it back to discard most of it is not a rendering concern.
+    /// </summary>
+    /// <param name="system">Limit to one system code, or null for all.</param>
+    /// <param name="recognized">
+    /// True for DATs that resolved to a system, false for those that did not, null for both.
+    /// </param>
+    public IReadOnlyList<DatCoverage> Coverage(string? system = null, bool? recognized = null)
     {
         using var connection = OpenReadOnly();
-        return connection?.Query<DatCoverage>(
-            """
-            SELECT dat_name AS DatName, system AS System, description AS Description, version AS Version,
-                   date AS Date, author AS Author, entry_count AS EntryCount, imported_utc AS ImportedUtc
+        if (connection is null)
+        {
+            return [];
+        }
+
+        var filters = new List<string>();
+        if (system is { Length: > 0 })
+        {
+            filters.Add("system = @system");
+        }
+
+        if (recognized is not null)
+        {
+            filters.Add(recognized.Value ? "system IS NOT NULL" : "system IS NULL");
+        }
+
+        var where = filters.Count == 0 ? string.Empty : "WHERE " + string.Join(" AND ", filters);
+
+        return connection.Query<DatCoverage>(
+            $"""
+            SELECT dat_name AS DatName, system AS System, qualifier AS Qualifier, description AS Description,
+                   version AS Version, date AS Date, author AS Author, entry_count AS EntryCount,
+                   imported_utc AS ImportedUtc
             FROM catalogs
-            ORDER BY system, dat_name;
-            """).ToList() ?? [];
+            {where}
+            ORDER BY system IS NULL, system, qualifier, dat_name;
+            """,
+            new { system }).ToList();
     }
 
     /// <summary>True if a catalog was already imported from <paramref name="origin"/> (sync cache check).</summary>
@@ -239,6 +322,8 @@ public sealed class DatCatalog
 
     private SqliteConnection OpenWritable()
     {
+        Migrate();
+
         // Pooling is disabled so the database file handle is released as soon as the connection is
         // disposed — important for a per-instance file that may be deleted or moved.
         var connection = new SqliteConnection($"Data Source={_databasePath};Pooling=False");
@@ -255,9 +340,44 @@ public sealed class DatCatalog
             return null;
         }
 
+        Migrate();
+
         var connection = new SqliteConnection($"Data Source={_databasePath};Mode=ReadOnly;Pooling=False");
         connection.Open();
         return connection;
+    }
+
+    /// <summary>
+    /// Brings an existing catalog up to the current schema. <c>CREATE TABLE IF NOT EXISTS</c> does
+    /// not add columns to a table that already exists, and a real catalog holds over a million
+    /// entries across roughly 200 DATs — re-indexing all of it to gain one nullable column would
+    /// be a poor trade. Runs once per instance and only when the database is already there, so
+    /// reads still never create it.
+    /// </summary>
+    private void Migrate()
+    {
+        if (_migrated)
+        {
+            return;
+        }
+
+        _migrated = true;
+
+        if (!File.Exists(_databasePath))
+        {
+            return;
+        }
+
+        using var connection = new SqliteConnection($"Data Source={_databasePath};Pooling=False");
+        connection.Open();
+
+        var columns = connection.Query<string>("SELECT name FROM pragma_table_info('catalogs');").ToList();
+        if (columns.Count > 0 && !columns.Contains("qualifier", StringComparer.OrdinalIgnoreCase))
+        {
+            // Existing rows take a null qualifier. DATs that were unrecognized before this change
+            // stay unrecognized until re-imported, and import is idempotent, so re-import is safe.
+            connection.Execute("ALTER TABLE catalogs ADD COLUMN qualifier TEXT COLLATE NOCASE;");
+        }
     }
 
     private static NameMatch RankOf(CatalogEntry row, string query, string normalizedQuery)

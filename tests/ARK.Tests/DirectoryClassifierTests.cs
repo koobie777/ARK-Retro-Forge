@@ -5,112 +5,132 @@ using ARK.Core.Scanning;
 namespace ARK.Tests;
 
 /// <summary>
-/// Phase 4 Part A: scan classifies directories, not files. Two signals, both required, measured
-/// against the reference mixed-use drive.
+/// Phase 4 Part A, measured against the real 22,050-file mixed-use drive: scan classifies
+/// directories, not files, on two signals that are both required.
 /// </summary>
 public class DirectoryClassifierTests
 {
     private static readonly TokenVocabulary Vocabulary = NamingVocabularyLoader.Load(TestFixtures.ShippedNamingDirectory());
     private static readonly NameTokenizer Tokenizer = new(Vocabulary);
+    private static readonly Lazy<IReadOnlyList<DirectoryProfile>> Drive = new(() => ReferenceDrive.Listings().Select(Profiler().Profile).ToArray());
 
     private static DirectoryProfiler Profiler() =>
-        new(Tokenizer, ScanRulesLoader.Load(TestFixtures.ShippedScanRulesPath()), new[] { "BigEndian", "Headered", "Decrypted", "NKit RVZ" });
+        new(Tokenizer, ScanRulesLoader.Load(TestFixtures.ShippedScanRulesPath()), new[] { "BigEndian", "Headered", "Headerless", "Decrypted", "NKit RVZ" });
 
-    private static IReadOnlyList<DirectoryProfile> ProfileDrive() =>
-        ReferenceDrive.Listings().Select(Profiler().Profile).ToArray();
+    private static IReadOnlyList<DirectoryProfile> ProfileDrive() => Drive.Value;
 
-    // Gate 4. Folder names are no help — No-Intro, SNES Roms, Minerva_Myrient, PS2 Downloads and
-    // Roms are all the same kind of content — so the split must come from the signals alone.
+    private static DirectoryProfile Directory(string relativePath) =>
+        ProfileDrive().Single(profile => profile.Path.EndsWith(relativePath, StringComparison.OrdinalIgnoreCase));
+
+    // Gate 4. Folder names are no help — this drive spells ROM sets "No-Intro", "SNES Roms",
+    // "Minerva_Myrient", "Nintendo - Game Boy Advance", "PS2 Downloads" and "Roms" — so the split
+    // has to come from the measured signals alone.
     [Fact]
     public void Classifier_reproduces_the_reference_split()
     {
+        var expected = ReferenceDrive.Expectations();
         var profiles = ProfileDrive();
-        var expected = ReferenceDrive.Rows();
 
         var romSets = profiles.Where(p => p.IsRomSet).ToArray();
-        var excluded = profiles.Where(p => !p.IsRomSet).ToArray();
+        var tooFew = profiles.Where(p => p.Reason == ExclusionReason.TooFewFiles).ToArray();
+        var other = profiles.Where(p => !p.IsRomSet && p.Reason != ExclusionReason.TooFewFiles).ToArray();
 
-        var mismatches = profiles
-            .Zip(expected, (actual, row) => (actual, row))
-            .Where(pair => pair.actual.IsRomSet != (pair.row.Expected == "romset"))
-            .Select(pair => $"{pair.row.Directory}: expected {pair.row.Expected}, got {pair.actual.Outcome} ({pair.actual.Explain()})")
-            .ToArray();
+        Assert.Equal(expected.TotalFiles, profiles.Sum(p => p.FileCount));
 
-        Assert.True(mismatches.Length == 0, string.Join(Environment.NewLine, mismatches));
+        Assert.Equal(expected.RomSetDirectories, romSets.Length);
+        Assert.Equal(expected.RomSetFiles, romSets.Sum(p => p.FileCount));
 
-        Assert.Equal(17, romSets.Length);
-        Assert.Equal(140, excluded.Length);
-        Assert.Equal(10_045, romSets.Sum(p => p.FileCount));
-        Assert.Equal(11_050, excluded.Sum(p => p.FileCount));
+        Assert.Equal(expected.OtherDirectories, other.Length);
+        Assert.Equal(expected.OtherFiles, other.Sum(p => p.FileCount));
+
+        Assert.Equal(expected.TooFewDirectories, tooFew.Length);
+        Assert.Equal(expected.TooFewFiles, tooFew.Sum(p => p.FileCount));
     }
 
-    // Gate 5. Homogeneity alone swallows 2,378 cheat files.
+    // Gate 5. Both cheat databases are perfectly homogeneous and carry no region tokens at all.
+    // Homogeneity alone admits 2,378 files that are not games.
     [Theory]
-    [InlineData(@"cheats\PS3")]
-    [InlineData(@"cheats\Retroarch")]
-    public void Perfectly_homogeneous_but_unconformant_directory_is_excluded(string relative)
+    [InlineData(@"N64\Emulator\RMG-Portable-Windows64\Data\Cheats", 706, ".cht")]
+    [InlineData(@"PS3\Tools\ps3tools\tools\BruteforceSaveData\Cheats", 1672, ".ps3savepatch")]
+    public void Perfectly_homogeneous_but_unconformant_directory_is_excluded(string relative, int files, string extension)
     {
-        var profile = ProfileDrive().Single(p => p.Path.EndsWith(relative, StringComparison.OrdinalIgnoreCase));
+        var profile = Directory(relative);
 
+        Assert.Equal(files, profile.FileCount);
+        Assert.Equal(extension, profile.DominantExtension);
         Assert.Equal(1.0, profile.ExtensionHomogeneity, 3);
         Assert.Equal(0.0, profile.NamingConformance, 3);
         Assert.False(profile.IsRomSet);
         Assert.Equal(ExclusionReason.BelowNamingConformance, profile.Reason);
     }
 
-    // Gate 6. An extension allowlist would reject 90 bare .iso files with no archive wrapper.
+    // Gate 6. 90 bare .iso files with no archive wrapper — an extension allowlist rejects this,
+    // naming conformance admits it.
     [Fact]
     public void Bare_iso_directory_with_no_archive_wrapper_is_admitted()
     {
-        var profile = ProfileDrive().Single(p => p.Path.EndsWith(@"PSP\Roms", StringComparison.OrdinalIgnoreCase));
+        var profile = Directory(@"PSP\Roms");
 
-        Assert.Equal(".iso", profile.DominantExtension);
         Assert.Equal(90, profile.FileCount);
+        Assert.Equal(".iso", profile.DominantExtension);
         Assert.True(profile.IsRomSet, profile.Explain());
     }
 
-    // Gate 7. 516 flawlessly No-Intro-named archives containing disc keys, not games.
+    // Gate 7. 516 flawlessly No-Intro-named archives containing disc keys, not games. Conformant
+    // naming does not prove game content.
     [Fact]
     public void Known_false_positive_is_admitted_but_flagged_never_silently()
     {
-        var profile = ProfileDrive().Single(p => p.Name == "Nintendo - Wii U - Disc Keys");
+        var profile = Directory(@"Wii U\Wii U Disc Keys\Nintendo - Wii U - Disc Keys");
 
+        Assert.Equal(516, profile.FileCount);
         Assert.True(profile.IsRomSet, "it passes both signals — that is precisely the problem");
         Assert.Contains(profile.Warnings, warning => warning.Contains("known false positive", StringComparison.OrdinalIgnoreCase));
     }
 
     // Gate 10. Recorded, never acted on — header stripping and byte-order work belong to hashing.
     [Theory]
-    [InlineData("Nintendo - Nintendo 64 (BigEndian)", "BigEndian")]
-    [InlineData("Nintendo - Nintendo Entertainment System (Headered)", "Headered")]
-    [InlineData("Nintendo - Nintendo DS (Decrypted)", "Decrypted")]
-    [InlineData("Nintendo - GameCube - NKit RVZ", "NKit RVZ")]
-    public void Format_qualifier_is_read_off_the_folder_name(string leaf, string expected)
+    [InlineData(@"N64\No-Intro\Nintendo - Nintendo 64 (BigEndian)", "BigEndian")]
+    [InlineData(@"NES\NES Roms\Nintendo - Nintendo Entertainment System (Headered)", "Headered")]
+    [InlineData(@"NDS\NDS Roms\Nintendo - Nintendo DS (Decrypted)", "Decrypted")]
+    [InlineData(@"Gamecube\Gamecube Roms\Nintendo - GameCube - NKit RVZ [zstd-19-128k]", "NKit RVZ")]
+    public void Format_qualifier_is_read_off_the_folder_name(string relative, string expected)
     {
-        var profile = ProfileDrive().Single(p => p.Name == leaf);
+        Assert.Contains(expected, Directory(relative).FormatQualifiers);
+    }
 
-        Assert.Contains(expected, profile.FormatQualifiers);
+    // The ROM sets the drive actually holds, spelled every way a real drive spells them.
+    [Theory]
+    [InlineData(@"NDS\NDS Roms\Nintendo - Nintendo DS (Decrypted)")]
+    [InlineData(@"PSX\Minerva_Myrient\Redump\Sony - PlayStation")]
+    [InlineData(@"GBA\Nintendo - Game Boy Advance")]
+    [InlineData(@"SNES\SNES Roms\Nintendo - Super Nintendo Entertainment System")]
+    [InlineData(@"PS2\PS2 Downloads\Minerva_Myrient\Redump\Sony - PlayStation 2")]
+    public void Real_rom_sets_are_admitted_whatever_the_folder_is_called(string relative)
+    {
+        Assert.True(Directory(relative).IsRomSet, Directory(relative).Explain());
+    }
+
+    // Tooling and firmware that sits right beside the ROM sets.
+    [Theory]
+    [InlineData(@"PS3\Tools\ps3tools\tools\scetool\.ps3")]
+    [InlineData(@"Switch\Emulator\Firmware.22.5.0")]
+    [InlineData(@"PS3\Emulator\rpcs3\dev_flash\vsh\module")]
+    public void Tooling_and_firmware_are_excluded(string relative)
+    {
+        Assert.False(Directory(relative).IsRomSet);
     }
 
     // Both signals are always measured, so a rejected directory reports the number it failed on
     // and the number it would have passed.
     [Fact]
-    public void Excluded_directory_states_a_reason_with_its_measurements()
+    public void Every_excluded_directory_states_a_reason()
     {
         foreach (var profile in ProfileDrive().Where(p => !p.IsRomSet))
         {
             Assert.NotEqual(ExclusionReason.None, profile.Reason);
             Assert.False(string.IsNullOrWhiteSpace(profile.Explain()));
         }
-    }
-
-    [Fact]
-    public void Empty_and_tiny_directories_are_excluded_with_their_own_reasons()
-    {
-        var profiles = ProfileDrive();
-
-        Assert.Equal(ExclusionReason.Empty, profiles.Single(p => p.Name == "empty").Reason);
-        Assert.Equal(ExclusionReason.TooFewFiles, profiles.Single(p => p.Name == "chdman").Reason);
     }
 
     // A directory holding only subdirectories is how a tree is organized, not a finding. Reporting
