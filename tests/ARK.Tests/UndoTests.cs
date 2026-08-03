@@ -197,6 +197,31 @@ public sealed class UndoTests : IDisposable
         Assert.False(File.Exists(created));
     }
 
+    // Phase 7 gate 3. The mirror of the restore refusal: if the session created a file and the
+    // user has edited it since, removing it on undo would destroy that edit.
+    [Fact]
+    public void DeleteFile_inverse_refuses_a_file_edited_since_the_session_created_it()
+    {
+        var created = Path.Combine(_root, "created.json");
+
+        Assert.True(_executor.Execute(
+            new Plan("session-created", DateTimeOffset.UnixEpoch, "config-set", new[]
+            {
+                new PlannedAction(ActionKind.WriteText, created, null, "first write", "{}"),
+            }),
+            apply: true).Success);
+
+        File.WriteAllText(created, "{\"edited\":true}");
+
+        Assert.False(_undo.Prepare("session-created").CanApply);
+        Assert.Equal("{\"edited\":true}", File.ReadAllText(created));
+
+        // Explicit, per-run, never the default.
+        Assert.True(_undo.Prepare("session-created", force: true).CanApply);
+        Assert.True(_undo.Apply("session-created", force: true).Result!.Success);
+        Assert.False(File.Exists(created));
+    }
+
     // Gate 9's other half: undo never silently skips something it cannot reverse.
     [Fact]
     public void A_session_containing_an_uninvertible_action_is_refused_whole()

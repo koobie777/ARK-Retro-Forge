@@ -2,6 +2,7 @@ using System.CommandLine;
 using ARK.Cli.Commands;
 using ARK.Core.Configuration;
 using ARK.Core.Dat;
+using ARK.Core.Dedup;
 using ARK.Core.Diagnostics;
 using ARK.Core.Execution;
 using ARK.Core.Hashing;
@@ -66,6 +67,7 @@ try
     root.Add(ParseCommand.Build(AnsiConsole.Console, tokenizer, formatter, vocabulary));
     root.Add(ScanCommand.Build(AnsiConsole.Console, ScanRoot));
     root.Add(VerifyCommand.Build(AnsiConsole.Console, VerifyRoot));
+    root.Add(DedupeCommand.Build(AnsiConsole.Console, AnalyzeDuplicates, QuarantineDuplicates));
     root.Add(UndoCommand.BuildJournal(AnsiConsole.Console, journals));
     root.Add(UndoCommand.BuildUndo(AnsiConsole.Console, new UndoService(journals, executor)));
 
@@ -111,6 +113,40 @@ VerificationReport VerifyRoot(string root, IProgress<VerificationProgress>? prog
     {
         hashCache.Close();
     }
+}
+
+// Dedup rides on the same scan and verification the other verbs use: units come from the scan,
+// eligibility from the verification state, and hashes from the shared cache.
+DedupReport AnalyzeDuplicates(string root, KeepPolicy policy)
+{
+    try
+    {
+        var scan = ScanRoot(root);
+        var verification = verificationService.Verify(scan);
+        return new DedupService(new RomHasher(fileSystem, archiveInspector), hashCache)
+            .Analyze(scan, verification, policy);
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+}
+
+// DRY-RUN builds the plan and stops. Only --apply hands it to the Executor, which journals every
+// move as it completes so `ark undo` can put the set back exactly.
+(QuarantinePlan Plan, ExecutionResult? Result) QuarantineDuplicates(DedupReport report, bool apply)
+{
+    var sessionId = $"dedup-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+    var active = report.ExcludedFor(DedupExclusion.InProgress)
+        .Select(entry => Path.GetDirectoryName(entry.Candidate.Path))
+        .Where(directory => directory is not null)
+        .Distinct(StringComparer.OrdinalIgnoreCase)!;
+
+    var plan = QuarantinePlanner.Build(report, sessionId, DateTimeOffset.UtcNow, active!);
+
+    return plan.Plan.Actions.Count == 0 || !apply
+        ? (plan, null)
+        : (plan, executor.Execute(plan.Plan, apply: true));
 }
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()

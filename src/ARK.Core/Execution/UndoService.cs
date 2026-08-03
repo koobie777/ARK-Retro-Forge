@@ -205,13 +205,27 @@ public sealed class UndoService
                 return Ready(action);
 
             case ActionKind.DeleteFile:
+            {
                 if (!projection.Exists(action.Source))
                 {
                     return Done(action, "file already removed");
                 }
 
+                // Symmetric with the restore path: if the file no longer holds what the session
+                // wrote, someone has changed it, and deleting it would destroy that change.
+                var content = ReadOrNull(action.Source);
+                if (action.Content is not null &&
+                    !string.Equals(content, action.Content, StringComparison.Ordinal) &&
+                    !force)
+                {
+                    return Blocked(
+                        action,
+                        $"{action.Source} has been modified since the session created it; deleting it would discard that change. Re-run with --force to remove it anyway.");
+                }
+
                 projection.Remove(action.Source);
                 return Ready(action);
+            }
 
             case ActionKind.WriteText:
             {

@@ -293,7 +293,7 @@ public sealed class VerificationTests : IDisposable
 
         Service(reader, inspector).Verify(
             ScanOf(files.Select(file => (file, (CatalogEntry?)null)).ToArray()),
-            new Progress<VerificationProgress>(updates.Add));
+            new SynchronousProgress<VerificationProgress>(updates.Add));
 
         Assert.NotEmpty(updates);
         Assert.Equal(5, updates[^1].Total);
@@ -320,7 +320,7 @@ public sealed class VerificationTests : IDisposable
         _caches.Add(cache);
 
         using var cts = new CancellationTokenSource();
-        var progress = new Progress<VerificationProgress>(update =>
+        var progress = new SynchronousProgress<VerificationProgress>(update =>
         {
             if (update.Completed >= 3)
             {
@@ -482,6 +482,19 @@ public sealed class VerificationTests : IDisposable
         using var crc = new Crc32Hasher();
         crc.Append(bytes);
         return Convert.ToHexString(crc.GetHashAndReset()).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Reports synchronously. <see cref="Progress{T}"/> posts to the thread pool, so assertions on
+    /// what it collected can run before the callbacks do — a race that makes these tests flaky.
+    /// </summary>
+    private sealed class SynchronousProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _handler;
+
+        public SynchronousProgress(Action<T> handler) => _handler = handler;
+
+        public void Report(T value) => _handler(value);
     }
 
     private static string Snapshot(string root) => string.Join("\n", Directory

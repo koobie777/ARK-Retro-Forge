@@ -304,6 +304,14 @@ The journal already exists from Phase 0. This adds inversion and the verb.
 ### Phase 7 — Deduplication
 Hash-identical `GameUnit`s only. This is **not** variant handling — different revisions have different hashes and are not duplicates.
 
+`ark dedupe <root>` ships **report-only and DRY-RUN**: a first run with no flags decides nothing and moves nothing, twice over. A `--policy` chooses what to keep; `--apply` carries it out.
+
+**A tie is reported, never resolved.** When the policy cannot separate two copies the group is listed and skipped — a coin flip presented as a decision is Prohibition 6 with a confident label on it.
+
+**Verification state gates participation.** Verified and Unrecognized are eligible; **In Progress is excluded outright** (its hash describes bytes about to change); Mismatched is reported and never collapsed, because two identical corrupt files are two corrupt files and collapsing them hides the second.
+
+Quarantine goes to `<root>/.ark-quarantine/<session-id>/`, keeping each unit's path relative to the root — same volume by design, since a cross-volume move is a copy. Every directory level is journaled separately: `CreateDirectory` builds a whole chain in one call, and journaling only the leaf would leave undo unable to remove the levels above it.
+
 > **Gate:** Nothing moves without `--apply`. Quarantine manifest and journal written. `ark undo` restores the set exactly.
 
 ### Phase 8 — Variant policy engine

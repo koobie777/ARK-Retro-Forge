@@ -85,6 +85,7 @@ public class ArchitectureTests
     {
         "InstancePaths.cs",
         "ToolLocator.cs",
+        "QuarantinePaths.cs",
     };
 
     [Fact]
@@ -278,6 +279,54 @@ public class ArchitectureTests
         Assert.True(
             offenders.Count == 0,
             "Enums must serialize as names. Offenders:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    // Phase 7 gate 4. RemoveDirectory and DeleteFile exist so undo can restore an exact prior
+    // state. "Produced by inversion, never by an operation" was convention; this makes it
+    // structural, the same way the Executor rule is. Without it, Prohibition 5 — never delete,
+    // quarantine — is one careless call away from being bypassed.
+    private static readonly string[] InversionOnlyKinds =
+    {
+        "ActionKind.RemoveDirectory",
+        "ActionKind.DeleteFile",
+    };
+
+    private static readonly string[] InversionOnlyFiles =
+    {
+        "JournalInverter.cs", // constructs them
+        "ActionKind.cs",      // declares them
+        "Executor.cs",        // performs them
+        "UndoService.cs",     // checks their preconditions
+    };
+
+    [Fact]
+    public void Only_the_inverter_constructs_inversion_only_actions()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (InversionOnlyFiles.Contains(Path.GetFileName(file), StringComparer.Ordinal))
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            foreach (var kind in InversionOnlyKinds)
+            {
+                if (text.Contains(kind, StringComparison.Ordinal))
+                {
+                    offenders.Add($"{Path.GetFileName(file)} references '{kind}'");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "RemoveDirectory and DeleteFile are produced by inversion only — an operation that needs to " +
+            "remove something quarantines it instead. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)

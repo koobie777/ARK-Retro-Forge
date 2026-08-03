@@ -73,7 +73,11 @@ public static class JournalInverter
                         ActionKind.DeleteFile,
                         action.Source,
                         null,
-                        $"Undo write (file did not exist before): {action.Reason}")
+                        $"Undo write (file did not exist before): {action.Reason}",
+                        // What the session wrote. Carried so the delete can tell an untouched
+                        // file from one the user has edited since — destroying that edit is the
+                        // mirror image of restoring over it, and gets the same refusal.
+                        action.Content)
                     : new PlannedAction(
                         ActionKind.WriteText,
                         action.Source,
