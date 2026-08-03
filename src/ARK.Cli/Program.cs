@@ -22,6 +22,7 @@ var paths = new InstancePaths();
 Log.Logger = ArkLog.Create(paths);
 var settingsStore = new SettingsStore(paths);
 var executor = new Executor(paths);
+var journals = new JournalStore(paths);
 var systems = SystemRegistry.Load(paths.SystemsDirectory);
 var catalog = new DatCatalog(paths);
 var importer = new DatImporter(catalog, systems);
@@ -65,6 +66,8 @@ try
     root.Add(ParseCommand.Build(AnsiConsole.Console, tokenizer, formatter, vocabulary));
     root.Add(ScanCommand.Build(AnsiConsole.Console, ScanRoot));
     root.Add(VerifyCommand.Build(AnsiConsole.Console, VerifyRoot));
+    root.Add(UndoCommand.BuildJournal(AnsiConsole.Console, journals));
+    root.Add(UndoCommand.BuildUndo(AnsiConsole.Console, new UndoService(journals, executor)));
 
     // Handle exceptions here (see catch below) rather than letting System.CommandLine dump a raw
     // stack trace for a user-fixable condition like a malformed settings file.

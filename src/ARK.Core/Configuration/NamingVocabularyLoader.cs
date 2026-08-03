@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 using ARK.Core.Naming;
 
 namespace ARK.Core.Configuration;
@@ -15,8 +16,6 @@ namespace ARK.Core.Configuration;
 /// </remarks>
 public static class NamingVocabularyLoader
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     /// <summary>
     /// Loads every <c>*.json</c> in <paramref name="namingDirectory"/>. A missing directory
     /// yields an empty vocabulary rather than throwing; files are read in name order so the
@@ -31,7 +30,7 @@ public static class NamingVocabularyLoader
         {
             foreach (var file in Directory.EnumerateFiles(namingDirectory, "*.json", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal))
             {
-                var document = JsonSerializer.Deserialize<NamingVocabularyDocument>(File.ReadAllText(file), JsonOptions);
+                var document = JsonSerializer.Deserialize<NamingVocabularyDocument>(File.ReadAllText(file), ArkJson.Read);
                 if (document is not null)
                 {
                     documents.Add(document);

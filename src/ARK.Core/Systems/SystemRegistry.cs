@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 
 namespace ARK.Core.Systems;
 
@@ -10,8 +11,6 @@ namespace ARK.Core.Systems;
 /// </summary>
 public sealed class SystemRegistry
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     private readonly IReadOnlyDictionary<string, SystemDefinition> _byCode;
     private readonly IReadOnlyList<SystemDefinition> _all;
 
@@ -145,7 +144,7 @@ public sealed class SystemRegistry
         {
             foreach (var file in Directory.EnumerateFiles(systemsDirectory, "*.json", SearchOption.TopDirectoryOnly))
             {
-                var definition = JsonSerializer.Deserialize<SystemDefinition>(File.ReadAllText(file), JsonOptions);
+                var definition = JsonSerializer.Deserialize<SystemDefinition>(File.ReadAllText(file), ArkJson.Read);
                 if (definition is not null)
                 {
                     definitions.Add(definition);

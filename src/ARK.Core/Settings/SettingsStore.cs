@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 using ARK.Core.Execution;
 using ARK.Core.Instances;
 
@@ -15,8 +16,6 @@ namespace ARK.Core.Settings;
 public sealed class SettingsStore
 {
     private const string WriteOperation = "settings-write";
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
-
     private readonly InstancePaths _paths;
 
     /// <summary>Creates a store scoped to <paramref name="paths"/>' instance.</summary>
@@ -42,7 +41,7 @@ public sealed class SettingsStore
         var json = File.ReadAllText(file);
         try
         {
-            return JsonSerializer.Deserialize<ArkSettings>(json, JsonOptions)
+            return JsonSerializer.Deserialize<ArkSettings>(json, ArkJson.Write)
                 ?? throw new SettingsFormatException($"Settings file '{file}' is malformed: it deserialized to null.") { Path = file };
         }
         catch (JsonException ex)
@@ -61,7 +60,7 @@ public sealed class SettingsStore
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        var payload = JsonSerializer.Serialize(settings, JsonOptions);
+        var payload = JsonSerializer.Serialize(settings, ArkJson.Write);
         return new Plan(
             SessionId: $"settings-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}",
             CreatedUtc: DateTimeOffset.UtcNow,

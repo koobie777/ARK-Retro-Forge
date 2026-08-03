@@ -293,6 +293,12 @@ Nothing is deleted. Mismatches are reported; quarantine is offered and never aut
 ### Phase 6 — `ark undo`
 The journal already exists from Phase 0. This adds inversion and the verb.
 
+**Nothing persists an enum by its ordinal.** The hash cache did, and deleting one member silently relabelled 592 cached rows. In the journal the same mistake is far worse: `ActionKind` shifting by one makes undo replay a session as the wrong operations — a `Move` read as a `Quarantine` — turning the safety net into the hazard with no signal until the damage is visible. Every enum is written by **name** through the single `ArkJson` serializer, an unrecognized name decodes to an explicit `Unknown`, and anything carrying `Unknown` is refused by undo rather than guessed. An architecture test enforces that no other type builds its own `JsonSerializerOptions`.
+
+**Undo verifies before it acts**, against a projection of the filesystem as each earlier inverse leaves it — not against the world as it stands when the run starts. A precondition failure stops the run, names the action, and changes nothing further. Restoring over a file that has appeared since, or over one edited since, is refused without an explicit per-run `--force`.
+
+`WriteText` is invertible because the `Executor` captures what it displaced at the moment of writing. A null prior content means the file did not exist, so the faithful inverse removes it.
+
 > **Gate:** A synthetic session of moves, renames, and quarantines reverses to the exact starting state. Survives process restart and partial failure.
 
 ### Phase 7 — Deduplication

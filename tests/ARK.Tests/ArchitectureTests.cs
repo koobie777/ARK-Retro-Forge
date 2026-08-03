@@ -223,6 +223,63 @@ public class ArchitectureTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // Phase 6 gate 3. An enum written as its ordinal is silently reinterpreted the moment the enum
+    // changes. The hash cache did exactly that and relabelled 592 rows; in the journal the same
+    // mistake would make undo replay a session as the wrong operations — a Move read as a
+    // Quarantine, a Rename read as a Delete — turning the safety net into the hazard.
+    [Fact]
+    public void Json_options_are_constructed_only_by_the_central_serializer()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            if (Path.GetFileName(file).Equals("ArkJson.cs", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (File.ReadAllText(file).Contains("new JsonSerializerOptions", StringComparison.Ordinal) ||
+                File.ReadAllText(file).Contains("JsonSerializerOptions Options = new", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "JsonSerializerOptions must come from ArkJson so every enum is written by name. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    [Fact]
+    public void Every_enum_round_trips_through_its_name_not_its_ordinal()
+    {
+        var enums = typeof(ARK.Core.Execution.ActionKind).Assembly
+            .GetExportedTypes()
+            .Where(type => type.IsEnum)
+            .ToArray();
+
+        Assert.NotEmpty(enums);
+
+        var offenders = new List<string>();
+        foreach (var type in enums)
+        {
+            var value = Enum.GetValues(type).GetValue(0)!;
+            var json = System.Text.Json.JsonSerializer.Serialize(value, type, ARK.Core.Serialization.ArkJson.Write);
+
+            if (!json.Trim().StartsWith('"'))
+            {
+                offenders.Add($"{type.Name} serialized as {json}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "Enums must serialize as names. Offenders:" + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";

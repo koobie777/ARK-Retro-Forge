@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 
 namespace ARK.Core.Diagnostics;
 
@@ -9,13 +10,11 @@ namespace ARK.Core.Diagnostics;
 /// </summary>
 public static class MedicalBayJson
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
-
     /// <summary>Serializes the whole report to indented JSON.</summary>
     [RequiresUnreferencedCode("Serializes MedicalBayReport with reflection-based System.Text.Json.")]
     public static string Serialize(MedicalBayReport report)
     {
         ArgumentNullException.ThrowIfNull(report);
-        return JsonSerializer.Serialize(report, Options);
+        return JsonSerializer.Serialize(report, ArkJson.Write);
     }
 }

@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using ARK.Core.Instances;
+using ARK.Core.Serialization;
 using Serilog;
 
 namespace ARK.Core.Execution;
@@ -14,12 +14,6 @@ namespace ARK.Core.Execution;
 /// </summary>
 public sealed class Executor
 {
-    private static readonly JsonSerializerOptions JournalJson = new()
-    {
-        WriteIndented = true,
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private readonly InstancePaths _paths;
     private readonly ILogger _log;
 
@@ -78,8 +72,9 @@ public sealed class Executor
 
             try
             {
-                Perform(action);
-                completed.Add(action);
+                // Perform returns the action as it should be journaled: a WriteText comes back
+                // carrying whatever it displaced, which is the only way it can ever be reversed.
+                completed.Add(Perform(action));
                 WriteJournal(plan, completed, journalPath); // incremental: persist before moving on
                 results.Add(new ActionResult(action, ActionStatus.Completed, null));
                 _log.Information("Applied {Kind}: {Source} -> {Destination}", action.Kind, action.Source, action.Destination);
@@ -99,23 +94,47 @@ public sealed class Executor
             results);
     }
 
-    private void Perform(PlannedAction action)
+    private static PlannedAction Perform(PlannedAction action)
     {
         switch (action.Kind)
         {
             case ActionKind.CreateDirectory:
                 Directory.CreateDirectory(action.Source);
-                break;
+                return action;
 
             case ActionKind.Move:
             case ActionKind.Rename:
             case ActionKind.Quarantine:
                 File.Move(action.Source, RequireDestination(action));
-                break;
+                return action;
 
             case ActionKind.WriteText:
+            {
+                // Captured before the write, because afterwards it is gone. Null records that
+                // there was no file here, which makes the inverse "remove it" rather than
+                // "restore nothing".
+                var prior = File.Exists(action.Source) ? File.ReadAllText(action.Source) : null;
                 File.WriteAllText(action.Source, action.Content ?? string.Empty);
-                break;
+                return action with { PriorContent = prior };
+            }
+
+            case ActionKind.RemoveDirectory:
+                // Only when empty. A directory the user has filled since is left exactly alone.
+                if (Directory.Exists(action.Source) && Directory.EnumerateFileSystemEntries(action.Source).Any())
+                {
+                    throw new IOException($"Directory is not empty, refusing to remove: {action.Source}");
+                }
+
+                if (Directory.Exists(action.Source))
+                {
+                    Directory.Delete(action.Source);
+                }
+
+                return action;
+
+            case ActionKind.DeleteFile:
+                File.Delete(action.Source);
+                return action;
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(action), action.Kind, "Unsupported action kind");
@@ -130,8 +149,14 @@ public sealed class Executor
         // of the plan. This CreateDirectory is idempotent, so the plan's own CreateDirectory for
         // journal/ later runs as a no-op and is journaled normally.
         Directory.CreateDirectory(_paths.Journal);
-        var document = new JournalDocument(plan.SessionId, plan.CreatedUtc, plan.Operation, completed);
-        File.WriteAllText(journalPath, JsonSerializer.Serialize(document, JournalJson));
+        var document = new JournalDocument(
+            plan.SessionId,
+            plan.CreatedUtc,
+            plan.Operation,
+            completed,
+            JournalDocument.CurrentSchemaVersion,
+            plan.ReversesSessionId);
+        File.WriteAllText(journalPath, JsonSerializer.Serialize(document, ArkJson.Write));
     }
 
     private static string RequireDestination(PlannedAction action) =>
@@ -165,9 +190,26 @@ public sealed class Executor
                 return (true, null);
 
             case ActionKind.WriteText:
+                // Overwriting is feasible now that the executor records what it displaces, so an
+                // overwrite is reversible rather than a one-way door.
                 return File.Exists(action.Source)
-                    ? (false, $"Target file already exists: {action.Source}")
+                    ? (true, "Overwrites an existing file; prior content is captured for undo")
                     : (true, null);
+
+            case ActionKind.RemoveDirectory:
+                if (!Directory.Exists(action.Source))
+                {
+                    return (true, "Directory already absent");
+                }
+
+                return Directory.EnumerateFileSystemEntries(action.Source).Any()
+                    ? (false, $"Directory is not empty: {action.Source}")
+                    : (true, null);
+
+            case ActionKind.DeleteFile:
+                return File.Exists(action.Source)
+                    ? (true, null)
+                    : (true, "File already absent");
 
             default:
                 return (false, "Unsupported action kind");

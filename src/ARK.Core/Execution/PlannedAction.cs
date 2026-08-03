@@ -21,9 +21,19 @@ namespace ARK.Core.Execution;
 /// Kept separate from <see cref="Destination"/> so a path field never doubles as a data field —
 /// Phase 7 quarantine manifests depend on this separation.
 /// </param>
+/// <param name="PriorContent">
+/// What the target held before a <see cref="ActionKind.WriteText"/> overwrote it, captured by the
+/// <see cref="Executor"/> at the moment of writing and recorded in the journal.
+/// <para>
+/// Without this a <c>WriteText</c> is not reversible at all: the action carries what was written
+/// but nothing about what was displaced. Null means the file did not exist beforehand, so the
+/// faithful inverse is to remove it rather than restore anything.
+/// </para>
+/// </param>
 public record PlannedAction(
     ActionKind Kind,
     string Source,
     string? Destination,
     string Reason,
-    string? Content = null);
+    string? Content = null,
+    string? PriorContent = null);

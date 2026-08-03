@@ -9,8 +9,26 @@ namespace ARK.Core.Execution;
 /// <param name="CreatedUtc">When the originating plan was built.</param>
 /// <param name="Operation">Name of the operation that produced the plan.</param>
 /// <param name="CompletedActions">Actions that ran to completion, in execution order.</param>
+/// <param name="SchemaVersion">
+/// Format version of this journal. A journal newer than the running build is refused rather than
+/// best-guessed: a user who upgrades, undoes, then downgrades must not get a silently mangled
+/// replay of their own collection.
+/// </param>
+/// <param name="ReversesSessionId">
+/// Set when this journal records an undo, naming the session it reversed. This is what makes undo
+/// auditable, and what lets a mistaken undo be seen rather than inferred.
+/// </param>
 public record JournalDocument(
     string SessionId,
     DateTimeOffset CreatedUtc,
     string Operation,
-    IReadOnlyList<PlannedAction> CompletedActions);
+    IReadOnlyList<PlannedAction> CompletedActions,
+    int SchemaVersion = JournalDocument.CurrentSchemaVersion,
+    string? ReversesSessionId = null)
+{
+    /// <summary>Schema version this build writes and is able to read.</summary>
+    public const int CurrentSchemaVersion = 1;
+
+    /// <summary>True when this journal records the reversal of another session.</summary>
+    public bool IsUndo => ReversesSessionId is { Length: > 0 };
+}

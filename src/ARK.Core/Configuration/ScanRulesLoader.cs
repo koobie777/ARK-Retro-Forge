@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 using ARK.Core.Scanning;
 
 namespace ARK.Core.Configuration;
@@ -11,8 +12,6 @@ namespace ARK.Core.Configuration;
 /// </summary>
 public static class ScanRulesLoader
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-
     /// <summary>Loads the rules, falling back to defaults when the file is absent or malformed.</summary>
     [RequiresUnreferencedCode("Deserializes ScanRules with reflection-based System.Text.Json.")]
     public static ScanRules Load(string path)
@@ -24,7 +23,7 @@ public static class ScanRulesLoader
 
         try
         {
-            return JsonSerializer.Deserialize<ScanRules>(File.ReadAllText(path), JsonOptions) ?? new ScanRules();
+            return JsonSerializer.Deserialize<ScanRules>(File.ReadAllText(path), ArkJson.Read) ?? new ScanRules();
         }
         catch (JsonException)
         {

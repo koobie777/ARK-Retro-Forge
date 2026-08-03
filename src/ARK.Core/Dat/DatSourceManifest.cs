@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using ARK.Core.Serialization;
 
 namespace ARK.Core.Dat;
 
@@ -43,10 +44,7 @@ public sealed class DatSourceManifest
         }
 
         using var stream = File.OpenRead(manifestPath);
-        var sources = JsonSerializer.Deserialize<List<DatSourceDefinition>>(stream, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        }) ?? [];
+        var sources = JsonSerializer.Deserialize<List<DatSourceDefinition>>(stream, ArkJson.Read) ?? [];
 
         return new DatSourceManifest(sources);
     }
