@@ -8,6 +8,7 @@ using ARK.Core.Execution;
 using ARK.Core.Hashing;
 using ARK.Core.Instances;
 using ARK.Core.Naming;
+using ARK.Core.Policy;
 using ARK.Core.Scanning;
 using ARK.Core.Settings;
 using ARK.Core.Systems;
@@ -55,7 +56,8 @@ var verificationService = new VerificationService(
     hashCache,
     new InProgressDetector(
         scanRules.IncompleteDownloadExtensions,
-        settingsStore.Read().IncompleteDownloadDirectories));
+        settingsStore.Read().IncompleteDownloadDirectories,
+        TimeSpan.FromMinutes(scanRules.RecentWriteWindowMinutes)));
 
 try
 {
@@ -68,6 +70,9 @@ try
     root.Add(ScanCommand.Build(AnsiConsole.Console, ScanRoot));
     root.Add(VerifyCommand.Build(AnsiConsole.Console, VerifyRoot));
     root.Add(DedupeCommand.Build(AnsiConsole.Console, AnalyzeDuplicates, QuarantineDuplicates));
+    root.Add(CurateCommand.Build(
+        AnsiConsole.Console, AnalyzeVariants, QuarantineVariants, SortVariants,
+        PolicySettings.Resolve(settingsStore.Read())));
     root.Add(UndoCommand.BuildJournal(AnsiConsole.Console, journals));
     root.Add(UndoCommand.BuildUndo(AnsiConsole.Console, new UndoService(journals, executor)));
 
@@ -148,6 +153,61 @@ DedupReport AnalyzeDuplicates(string root, KeepPolicy policy)
         ? (plan, null)
         : (plan, executor.Execute(plan.Plan, apply: true));
 }
+
+// Curation reuses the same scan and verification: units from the scan, eligibility from the
+// verification state. Unlike dedup it needs no hashing — every decision comes from the name.
+CurationReport AnalyzeVariants(string root, VariantPolicy policy)
+{
+    try
+    {
+        var scan = ScanRoot(root);
+        return new CurationService(tokenizer, vocabulary)
+            .Analyze(scan, verificationService.Verify(scan), policy);
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+}
+
+// Removal. Full Phase 7 machinery — manifest, journal, same volume, undo.
+(QuarantinePlan Plan, ExecutionResult? Result) QuarantineVariants(CurationReport report, bool apply)
+{
+    var sessionId = $"curate-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+    var requests = report.Removable
+        .Select(member => new QuarantineRequest(
+            member.Path, member.FileName, null, null, member.Unit.TotalSize,
+            KeptPathFor(report, member), $"Variant removed by policy '{report.Policy.Name}'"))
+        .ToArray();
+
+    var plan = QuarantinePlanner.Build(
+        report.Root, requests, sessionId, DateTimeOffset.UtcNow, report.Policy.Name, ActiveDirectories(report));
+
+    return plan.Plan.Actions.Count == 0 || !apply
+        ? (plan, null)
+        : (plan, executor.Execute(plan.Plan, apply: true));
+}
+
+// Organization. Files move, nothing leaves the collection.
+(SortPlan Plan, ExecutionResult? Result) SortVariants(CurationReport report, string? subfolder, bool apply)
+{
+    var sessionId = $"curate-sort-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+    var plan = SortPlanner.Build(report, sessionId, DateTimeOffset.UtcNow, subfolder, ActiveDirectories(report));
+
+    return plan.Plan.Actions.Count == 0 || !apply
+        ? (plan, null)
+        : (plan, executor.Execute(plan.Plan, apply: true));
+}
+
+string KeptPathFor(CurationReport report, CurationCandidate member) =>
+    report.Resolved.FirstOrDefault(group => group.Remove.Contains(member))?.Keep.FirstOrDefault()?.Path
+    ?? string.Empty;
+
+IEnumerable<string> ActiveDirectories(CurationReport report) => report
+    .ExcludedFor(CurationExclusion.InProgress)
+    .Select(candidate => Path.GetDirectoryName(candidate.Path))
+    .Where(directory => directory is not null)
+    .Distinct(StringComparer.OrdinalIgnoreCase)!;
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {

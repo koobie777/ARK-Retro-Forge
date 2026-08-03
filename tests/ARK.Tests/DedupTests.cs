@@ -257,7 +257,7 @@ public sealed class DedupTests : IDisposable
         Assert.NotNull(entry.RomSha1);
         Assert.Equal(rom.Length, entry.RomSize);
         Assert.Contains("least-nested", entry.KeptReason, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal(KeepPolicy.KeepShortestPath, manifest.Policy);
+        Assert.Equal(KeepPolicy.KeepShortestPath.ToString(), manifest.Policy);
 
         // Gate 16: every move is journaled.
         var journal = journals.Read("dedup-apply");
@@ -323,7 +323,7 @@ public sealed class DedupTests : IDisposable
             new[] { Path.GetDirectoryName(downloading)! });
 
         var refusal = Assert.Single(plan.Refused);
-        Assert.Equal(downloading, refusal.Candidate.Path);
+        Assert.Equal(downloading, refusal.Request.Path);
         Assert.Contains("active-download", refusal.Reason, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(plan.Plan.Actions);
         Assert.Equal(before, Snapshot());

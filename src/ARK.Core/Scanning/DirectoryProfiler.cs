@@ -76,17 +76,25 @@ public sealed class DirectoryProfiler
             new(listing.FullPath, listing.Name, listing.Files.Count, dominantExtension,
                 homogeneity, conformance, outcome, reason, qualifiers, warnings, incomplete);
 
+        // Checked first, and against every segment of the path rather than just the leaf, so an
+        // excluded directory takes its whole subtree with it. Leaf-only matching would exclude
+        // `.ark-quarantine` itself — which holds no files — while still admitting the quarantined
+        // ROM sets nested beneath it, whose leaf names look exactly like the live sets they came
+        // from. Reporting the rule also beats reporting "contains only subdirectories", which is
+        // true of the quarantine root and tells the user nothing about why it was skipped.
+        var excludedSegment = MatchExcludedSegment(listing.FullPath);
+        if (excludedSegment is not null)
+        {
+            warnings.Add($"inside '{excludedSegment}', which is excluded by directory-name rule");
+            return Verdict(DirectoryOutcome.Excluded, ExclusionReason.DirectoryNameRule);
+        }
+
         if (listing.Files.Count == 0)
         {
             // A directory holding only subdirectories is how a tree is organized, not a finding.
             return Verdict(
                 DirectoryOutcome.Excluded,
                 listing.SubdirectoryCount > 0 ? ExclusionReason.Container : ExclusionReason.Empty);
-        }
-
-        if (_rules.ExcludedDirectoryNames.Contains(listing.Name, StringComparer.OrdinalIgnoreCase))
-        {
-            return Verdict(DirectoryOutcome.Excluded, ExclusionReason.DirectoryNameRule);
         }
 
         // Both signals are measured before any verdict, so a rejected directory reports the
@@ -126,6 +134,10 @@ public sealed class DirectoryProfiler
 
         return Verdict(DirectoryOutcome.RomSet, ExclusionReason.None, extension, homogeneity, conformance);
     }
+
+    private string? MatchExcludedSegment(string path) => path
+        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries)
+        .FirstOrDefault(segment => _rules.ExcludedDirectoryNames.Contains(segment, StringComparer.OrdinalIgnoreCase));
 
     private IReadOnlyList<string> ExtractQualifiers(string directoryName)
     {

@@ -20,6 +20,17 @@ public sealed class ScanRules
     public int MinimumFileCount { get; set; } = 5;
 
     /// <summary>
+    /// How recently a file must have been written to count as still in flight, in minutes.
+    /// </summary>
+    /// <remarks>
+    /// The weakest in-progress signal and the only circumstantial one — it infers activity from a
+    /// timestamp rather than observing it. Configurable because the right value depends on the
+    /// user: someone deduplicating a set they just finished copying needs it small or they will
+    /// see everything skipped, while someone with a slow trickle of downloads needs it large.
+    /// </remarks>
+    public int RecentWriteWindowMinutes { get; set; } = 5;
+
+    /// <summary>
     /// Extensions written by torrent and browser clients for a transfer still in flight.
     /// A signal, never proof — see <see cref="ScanReport"/>.
     /// </summary>

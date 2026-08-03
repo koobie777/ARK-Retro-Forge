@@ -11,11 +11,15 @@
   "incompleteDownloadNote": "Signals of a transfer still in flight, NOT proof. A real 0.99 GB file missing 16 MB was observed with no incomplete extension and a full pre-allocated size — it passes every cheap check. Full verification is a later phase.",
   "incompleteDownloadExtensions": [".!qb", ".part", ".!ut", ".bc!", ".crdownload", ".aria2"],
 
+  "recentWriteNote": "How recently a file must have been written to count as still in flight. The weakest in-progress signal and the only circumstantial one — it infers activity from a timestamp rather than observing it. Lower it if you routinely curate a set immediately after copying it; raise it if downloads trickle in slowly.",
+  "recentWriteWindowMinutes": 5,
+
   "discDescriptorNote": "A disc image's track sheet. An archive holding one of these plus its data files is a disc image — correct structure the stubbed disc resolver does not handle yet — not an archive that wrongly contains two games. 1,762 of 1,765 PlayStation archives on the reference drive are .bin + .cue, and classifying them as anomalies buried the five genuinely corrupt archives underneath.",
   "discDescriptorExtensions": [".cue", ".gdi", ".ccd", ".toc", ".m3u"],
 
-  "excludedDirectoryNamesNote": "Escape hatch, empty by design. The two signals already reject emulators, tooling, firmware and cheats on the reference drive, and a name blocklist would be the folder-name reasoning this classifier exists to avoid. Add entries here for directories your own drive gets wrong.",
-  "excludedDirectoryNames": [],
+  "excludedDirectoryNamesNote": "Matched against EVERY segment of a directory's path, not just its leaf, so an entry here excludes the whole subtree beneath it. Otherwise a mostly-empty container would be excluded while the ROM sets nested under it were still admitted. Beyond ARK's own quarantine this is an escape hatch: the two signals already reject emulators, tooling, firmware and cheats on the reference drive, and a name blocklist is the folder-name reasoning this classifier exists to avoid. Add entries for directories your own drive gets wrong.",
+  "quarantineNote": "ARK's quarantine lands INSIDE the tree it deduplicated. Without this entry a later scan walks into it and finds conformant archives scoring high on both signals, so quarantined units re-enter the pipeline as live candidates — and a later run could pick a quarantined copy as the one to keep. An operation's output must not become the next operation's input.",
+  "excludedDirectoryNames": [".ark-quarantine"],
 
   "knownFalsePositiveNote": "Passes both signals and still is not games. 'Nintendo - Wii U - Disc Keys' is 516 flawlessly No-Intro-named archives containing disc keys. Conformant naming does not prove game content. These are admitted but flagged, so the gap is visible rather than silent; a third signal on folder qualifier or archive contents is future work.",
   "knownFalsePositiveDirectories": ["Nintendo - Wii U - Disc Keys"]

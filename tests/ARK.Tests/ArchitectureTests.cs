@@ -86,6 +86,7 @@ public class ArchitectureTests
         "InstancePaths.cs",
         "ToolLocator.cs",
         "QuarantinePaths.cs",
+        "SortPaths.cs",
     };
 
     [Fact]

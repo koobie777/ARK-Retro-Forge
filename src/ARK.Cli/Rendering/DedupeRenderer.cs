@@ -91,6 +91,16 @@ public static class DedupeRenderer
             console.MarkupLineInterpolated($"  [{colour}]{group.Key}[/] — {group.Count()}: {group.First().Detail}");
         }
 
+        // A run that skipped everything because the files are minutes old otherwise reads as
+        // "no duplicates found", with the actual reason buried in a list nobody reaches.
+        var inProgress = report.ExcludedFor(DedupExclusion.InProgress).Count;
+        if (inProgress > 0 && report.Groups.Count == 0)
+        {
+            console.MarkupLineInterpolated(
+                $"[yellow]Nothing was compared: all {inProgress} unit(s) look like they are still being written.[/]");
+            console.MarkupLine("[grey]If you have just finished copying this set, wait for it to settle and re-run — or lower recentWriteWindowMinutes in config/scan/scan-rules.json.[/]");
+        }
+
         console.WriteLine();
     }
 
@@ -106,7 +116,7 @@ public static class DedupeRenderer
 
         foreach (var refusal in plan.Refused)
         {
-            console.MarkupLineInterpolated($"[yellow]Refused:[/] {refusal.Candidate.Name} — {refusal.Reason}");
+            console.MarkupLineInterpolated($"[yellow]Refused:[/] {refusal.Request.Name} — {refusal.Reason}");
         }
 
         var moves = plan.Manifest.Units.Count;

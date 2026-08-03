@@ -326,6 +326,16 @@ Selectable, savable policies. Not a hardcoded rule — a preservationist and a c
 
 > **Gate:** Absent rev tag ranks as Rev 0 / oldest. Pre-release builds never auto-ordered — date tag or ask. `v1.10` sorts above `v1.9`.
 
+**Curation is multi-axis, not a single ranking.** There is no one "best" copy: preferences are independent per axis, and collapsing them into one ranking produces silent, wrong deletions. Each axis is Identity (differing means a *different game*, never compared), Variance (differing means variants of one game, ranked), or Ignored. **Licensing and development status are separate axes** — "keep retail only" must not touch 390 unlicensed titles. **Hardware flags are on no axis at all**; they describe cartridge capability, not release lineage.
+
+Grouping is `ParsedName` token sets plus the identity axes, so the same collection curates differently depending on which axes identify — and the report states which reading produced its decisions. Non-game content never enters a group.
+
+**Every removal here is a real loss of a real release.** Dedup could argue a removed file was recoverable from its byte-identical twin; nothing here can. Presets are per-axis rules with none special-cased, report-only ships as the default, and a policy that cannot order a group reports and skips it whole.
+
+**Quarantine is removal; sort-into-subfolders is organization.** Different risk profiles, never conflated in the report. Both journaled, both reversible, both DRY-RUN by default.
+
+ARK's own quarantine lands inside the tree it curated, so `.ark-quarantine` is excluded from scanning — matched against **every path segment**, not just the leaf, or the quarantined sets nested below it would re-enter the pipeline as live candidates.
+
 ### Phase 8.5 — Collection reports
 The join of catalog (Phase 2), scan (Phase 4), verification (Phase 5), and policy (Phase 8). No new subsystem — this is what the pipeline was built to produce, and it is the headline user-facing feature.
 

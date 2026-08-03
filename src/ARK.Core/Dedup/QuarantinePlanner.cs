@@ -33,13 +33,13 @@ public sealed record QuarantinedUnit(
 /// </remarks>
 /// <param name="SessionId">Session that produced it.</param>
 /// <param name="CreatedUtc">When.</param>
-/// <param name="Policy">The policy that chose what to keep.</param>
+/// <param name="Policy">Label of whatever chose what to keep.</param>
 /// <param name="Root">The root that was deduplicated.</param>
 /// <param name="Units">Every unit moved here.</param>
 public sealed record QuarantineManifest(
     string SessionId,
     DateTimeOffset CreatedUtc,
-    KeepPolicy Policy,
+    string Policy,
     string Root,
     IReadOnlyList<QuarantinedUnit> Units)
 {
@@ -47,10 +47,35 @@ public sealed record QuarantineManifest(
     public long TotalBytes => Units.Sum(unit => unit.RomSize);
 }
 
+/// <summary>
+/// One unit put forward for quarantine, with everything the manifest needs to explain it.
+/// </summary>
+/// <remarks>
+/// Deliberately independent of what decided it. Deduplication removes byte-identical copies and
+/// curation removes distinct releases the user does not want; both produce the same request, so
+/// both get the same manifest, journal, same-volume guarantee and undo — the machinery is written
+/// once and cannot drift apart between them.
+/// </remarks>
+/// <param name="Path">Primary path of the unit to move.</param>
+/// <param name="Name">Display name.</param>
+/// <param name="RomCrc32">CRC32 of the ROM, where known.</param>
+/// <param name="RomSha1">SHA1, where known.</param>
+/// <param name="RomSize">ROM size in bytes.</param>
+/// <param name="KeptPath">The copy kept instead.</param>
+/// <param name="Reason">Why this one goes and that one stays.</param>
+public sealed record QuarantineRequest(
+    string Path,
+    string Name,
+    string? RomCrc32,
+    string? RomSha1,
+    long RomSize,
+    string KeptPath,
+    string Reason);
+
 /// <summary>Why a unit could not be quarantined.</summary>
-/// <param name="Candidate">The unit.</param>
+/// <param name="Request">The unit.</param>
 /// <param name="Reason">What stopped it.</param>
-public sealed record QuarantineRefusal(DedupCandidate Candidate, string Reason);
+public sealed record QuarantineRefusal(QuarantineRequest Request, string Reason);
 
 /// <summary>The plan to quarantine a dedup report's redundant copies, and what it refused.</summary>
 /// <param name="Plan">Actions for the executor. Empty when nothing is quarantinable.</param>
@@ -98,9 +123,47 @@ public static class QuarantinePlanner
         IEnumerable<string>? activeDownloadDirectories = null)
     {
         ArgumentNullException.ThrowIfNull(report);
+
+        var requests = report.Resolved
+            .SelectMany(group => group.Removable.Select(member => new QuarantineRequest(
+                member.Path,
+                member.Name,
+                group.Crc32,
+                group.Sha1,
+                group.RomSize,
+                group.Keep!.Path,
+                $"Duplicate of {group.Keep!.Name} (CRC32 {group.Crc32}); {group.Reason}")))
+            .ToArray();
+
+        return Build(report.Root, requests, sessionId, createdUtc, report.Policy.ToString(), activeDownloadDirectories);
+    }
+
+    /// <summary>
+    /// Builds the plan from explicit requests, whatever produced them.
+    /// </summary>
+    /// <param name="root">Root being operated on; quarantine lands beneath it.</param>
+    /// <param name="requests">Units to move.</param>
+    /// <param name="sessionId">Session id for the quarantine directory and the journal.</param>
+    /// <param name="createdUtc">Plan timestamp.</param>
+    /// <param name="policy">Label of whatever decided these, recorded in the manifest.</param>
+    /// <param name="activeDownloadDirectories">
+    /// Directories showing in-flight transfer signals. Units inside them are refused for writing —
+    /// renaming or moving a file an active client owns breaks the transfer, and on a completed
+    /// torrent still seeding it silently breaks the seed.
+    /// </param>
+    [RequiresUnreferencedCode("Serializes QuarantineManifest with reflection-based System.Text.Json.")]
+    public static QuarantinePlan Build(
+        string root,
+        IReadOnlyList<QuarantineRequest> requests,
+        string sessionId,
+        DateTimeOffset createdUtc,
+        string policy,
+        IEnumerable<string>? activeDownloadDirectories = null)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
 
-        var quarantine = new QuarantinePaths(report.Root, sessionId);
+        var quarantine = new QuarantinePaths(root, sessionId);
 
         var active = (activeDownloadDirectories ?? [])
             .Select(directory => directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
@@ -111,55 +174,48 @@ public static class QuarantinePlanner
         var manifestUnits = new List<QuarantinedUnit>();
         var refused = new List<QuarantineRefusal>();
 
-        foreach (var group in report.Resolved)
+        foreach (var request in requests)
         {
-            foreach (var member in group.Removable)
+            if (!quarantine.IsSameVolume(request.Path))
             {
-                if (!quarantine.IsSameVolume(member.Path))
-                {
-                    refused.Add(new QuarantineRefusal(member,
-                        "on a different volume from the quarantine root — a cross-volume move is a copy, not a move"));
-                    continue;
-                }
-
-                if (active.Any(directory => IsInside(member.Path, directory)))
-                {
-                    refused.Add(new QuarantineRefusal(member,
-                        "inside a directory showing active-download signals — moving it would break the transfer"));
-                    continue;
-                }
-
-                var destination = quarantine.DestinationFor(member.Path);
-
-                // Every level gets its own action, parent first; undo replays in reverse so they
-                // come off leaf-first.
-                foreach (var level in quarantine.DirectoriesToCreate(destination))
-                {
-                    if (directories.Add(level))
-                    {
-                        actions.Add(new PlannedAction(
-                            ActionKind.CreateDirectory, level, null, $"Quarantine directory for session {sessionId}"));
-                    }
-                }
-
-                actions.Add(new PlannedAction(
-                    ActionKind.Quarantine,
-                    member.Path,
-                    destination,
-                    $"Duplicate of {group.Keep!.Name} (CRC32 {group.Crc32}); {group.Reason}"));
-
-                manifestUnits.Add(new QuarantinedUnit(
-                    member.Path,
-                    destination,
-                    group.Crc32,
-                    group.Sha1,
-                    group.RomSize,
-                    group.Keep!.Path,
-                    group.Reason));
+                refused.Add(new QuarantineRefusal(request,
+                    "on a different volume from the quarantine root — a cross-volume move is a copy, not a move"));
+                continue;
             }
+
+            if (active.Any(directory => IsInside(request.Path, directory)))
+            {
+                refused.Add(new QuarantineRefusal(request,
+                    "inside a directory showing active-download signals — moving it would break the transfer"));
+                continue;
+            }
+
+            var destination = quarantine.DestinationFor(request.Path);
+
+            // Every level gets its own action, parent first; undo replays in reverse so they
+            // come off leaf-first.
+            foreach (var level in quarantine.DirectoriesToCreate(destination))
+            {
+                if (directories.Add(level))
+                {
+                    actions.Add(new PlannedAction(
+                        ActionKind.CreateDirectory, level, null, $"Quarantine directory for session {sessionId}"));
+                }
+            }
+
+            actions.Add(new PlannedAction(ActionKind.Quarantine, request.Path, destination, request.Reason));
+
+            manifestUnits.Add(new QuarantinedUnit(
+                request.Path,
+                destination,
+                request.RomCrc32 ?? string.Empty,
+                request.RomSha1,
+                request.RomSize,
+                request.KeptPath,
+                request.Reason));
         }
 
-        var manifest = new QuarantineManifest(sessionId, createdUtc, report.Policy, report.Root, manifestUnits);
+        var manifest = new QuarantineManifest(sessionId, createdUtc, policy, root, manifestUnits);
 
         if (actions.Count > 0)
         {
