@@ -17,4 +17,15 @@ public sealed record ArkSettings
 
     /// <summary>Active system code, persisted so it survives exit and defaults the next launch.</summary>
     public string? ActiveSystem { get; init; }
+
+    /// <summary>
+    /// Directories the user has declared as incomplete-download locations. Anything inside one is
+    /// treated as still being written and is never judged against a DAT.
+    /// </summary>
+    /// <remarks>
+    /// This is the one in-progress signal a client cannot fail to provide. Extensions depend on
+    /// the client being configured to append them, and mtime depends on the transfer being active
+    /// right now; a declared directory is true regardless.
+    /// </remarks>
+    public IReadOnlyList<string> IncompleteDownloadDirectories { get; init; } = [];
 }

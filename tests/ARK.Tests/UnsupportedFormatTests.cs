@@ -19,7 +19,7 @@ public class UnsupportedFormatTests
     private static readonly TokenVocabulary Vocabulary = NamingVocabularyLoader.Load(TestFixtures.ShippedNamingDirectory());
     private static readonly NameTokenizer Tokenizer = new(Vocabulary);
 
-    private static CartridgeUnitResolver Resolver(FakeInspector inspector) =>
+    private static CartridgeUnitResolver Resolver(FakeArchiveInspector inspector) =>
         new(Tokenizer, inspector, ScanRulesLoader.Load(TestFixtures.ShippedScanRulesPath()).DiscDescriptorExtensions);
 
     // Gate 8.
@@ -123,7 +123,7 @@ public class UnsupportedFormatTests
     [Fact]
     public void Unreadable_archive_remains_an_anomaly()
     {
-        var inspector = new FakeInspector { Error = "Cannot determine compressed stream type." };
+        var inspector = new FakeArchiveInspector { Error = "Cannot determine compressed stream type." };
         var unit = Resolver(inspector).Resolve(Profile(), new[] { File("Broken (USA)") })[0];
 
         Assert.True(unit.HasAnomalies);
@@ -142,7 +142,7 @@ public class UnsupportedFormatTests
             .Select(name => new FileEntry(Path.Combine(directory, name + ".zip"), name + ".zip", ".zip", 1024, DateTimeOffset.UnixEpoch))
             .ToArray();
 
-        var inspector = new FakeInspector();
+        var inspector = new FakeArchiveInspector();
         foreach (var file in files)
         {
             inspector.Entries[file.FullPath] = new[]
@@ -175,7 +175,7 @@ public class UnsupportedFormatTests
     private static GameUnit ResolveOne(IReadOnlyList<ArchiveEntry> entries)
     {
         var file = File("Ridge Racer (USA)");
-        var inspector = new FakeInspector();
+        var inspector = new FakeArchiveInspector();
         inspector.Entries[file.FullPath] = entries;
         return Resolver(inspector).Resolve(Profile(), new[] { file })[0];
     }
@@ -187,28 +187,4 @@ public class UnsupportedFormatTests
         @"D:\Set", "Set", 1, ".zip", 1, 1, DirectoryOutcome.RomSet, ExclusionReason.None,
         Array.Empty<string>(), Array.Empty<string>(), Array.Empty<FileEntry>());
 
-    private sealed class FakeInspector : IArchiveInspector
-    {
-        public Dictionary<string, IReadOnlyList<ArchiveEntry>> Entries { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public HashSet<string> Unreadable { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public string? Error { get; set; }
-
-        public bool Handles(string extension) => extension.Equals(".zip", StringComparison.OrdinalIgnoreCase);
-
-        public bool TryReadEntries(string path, out IReadOnlyList<ArchiveEntry> entries, out string? error)
-        {
-            if (Error is not null || Unreadable.Contains(path))
-            {
-                entries = Array.Empty<ArchiveEntry>();
-                error = Error ?? "archive could not be read";
-                return false;
-            }
-
-            error = null;
-            entries = Entries.TryGetValue(path, out var found) ? found : Array.Empty<ArchiveEntry>();
-            return true;
-        }
-    }
 }

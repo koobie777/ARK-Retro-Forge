@@ -95,6 +95,9 @@ public sealed class InstancePaths
     /// <summary>This instance's SQLite DAT catalog database (<c>&lt;root&gt;/db/catalog.db</c>).</summary>
     public string CatalogDatabase => Path.Combine(Db, "catalog.db");
 
+    /// <summary>This instance's SQLite hash cache (<c>&lt;root&gt;/db/hashes.db</c>).</summary>
+    public string HashCacheDatabase => Path.Combine(Db, "hashes.db");
+
     /// <summary>This instance's settings file (<c>&lt;root&gt;/settings.json</c>).</summary>
     public string SettingsFile => Path.Combine(Root, "settings.json");
 

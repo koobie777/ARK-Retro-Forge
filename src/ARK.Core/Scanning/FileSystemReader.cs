@@ -61,6 +61,13 @@ public sealed class FileSystemReader : IFileSystemReader
     /// <inheritdoc />
     public Stream OpenRead(string path) => File.OpenRead(path);
 
+    /// <inheritdoc />
+    public FileEntry? Describe(string path)
+    {
+        var file = new FileInfo(path);
+        return file.Exists ? Describe(file) : null;
+    }
+
     private static FileEntry Describe(FileInfo file) => new(
         file.FullName,
         file.Name,

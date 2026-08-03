@@ -23,4 +23,18 @@ public interface IArchiveInspector
     /// so a corrupt file becomes a reported anomaly rather than a thrown scan.
     /// </summary>
     bool TryReadEntries(string path, out IReadOnlyList<ArchiveEntry> entries, out string? error);
+
+    /// <summary>
+    /// Opens the archive's single entry for reading.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately restricted to archives holding exactly one entry. Hashing must never guess
+    /// which entry is the game, and an archive holding more than one is already reported — either
+    /// as an unsupported format or as an anomaly — before it reaches here.
+    /// </remarks>
+    /// <param name="path">Archive path.</param>
+    /// <param name="stream">The entry's decompressed content stream. The caller disposes it.</param>
+    /// <param name="size">Uncompressed length of the entry, or 0 when the format does not report it.</param>
+    /// <param name="error">Why it could not be opened.</param>
+    bool TryOpenSingleEntry(string path, out Stream stream, out long size, out string? error);
 }

@@ -4,6 +4,7 @@ using ARK.Core.Configuration;
 using ARK.Core.Dat;
 using ARK.Core.Diagnostics;
 using ARK.Core.Execution;
+using ARK.Core.Hashing;
 using ARK.Core.Instances;
 using ARK.Core.Naming;
 using ARK.Core.Scanning;
@@ -11,6 +12,7 @@ using ARK.Core.Settings;
 using ARK.Core.Systems;
 using ARK.Core.Tools;
 using ARK.Core.Units;
+using ARK.Core.Verification;
 using Serilog;
 using Spectre.Console;
 
@@ -44,6 +46,15 @@ var scanService = new ScanService(
     resolvers,
     scanRules);
 
+var archiveInspector = new ArchiveInspector(fileSystem, archiveExtensions);
+var hashCache = new HashCache(paths);
+var verificationService = new VerificationService(
+    new RomHasher(fileSystem, archiveInspector),
+    hashCache,
+    new InProgressDetector(
+        scanRules.IncompleteDownloadExtensions,
+        settingsStore.Read().IncompleteDownloadDirectories));
+
 try
 {
     var root = new RootCommand(
@@ -53,6 +64,7 @@ try
     root.Add(DatCommand.Build(AnsiConsole.Console, catalog, importer, syncService, LoadManifestSources(), EnsureProvisioned));
     root.Add(ParseCommand.Build(AnsiConsole.Console, tokenizer, formatter, vocabulary));
     root.Add(ScanCommand.Build(AnsiConsole.Console, ScanRoot));
+    root.Add(VerifyCommand.Build(AnsiConsole.Console, VerifyRoot));
 
     // Handle exceptions here (see catch below) rather than letting System.CommandLine dump a raw
     // stack trace for a user-fixable condition like a malformed settings file.
@@ -83,6 +95,20 @@ MedicalBayReport BuildMedicalBayReport()
 // which is the honest answer rather than a catalog-wide search that finds the wrong release.
 ScanReport ScanRoot(string root) =>
     scanService.Scan(root, new DatScopeResolver(catalog, systems, tokenizer, vocabulary));
+
+// Verification scans first — it needs the units and the per-directory DAT scope — then hashes.
+// The cache is committed as it goes, so a cancelled run keeps everything it computed.
+VerificationReport VerifyRoot(string root, IProgress<VerificationProgress>? progress, CancellationToken cancellationToken)
+{
+    try
+    {
+        return verificationService.Verify(ScanRoot(root), progress, cancellationToken);
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+}
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {

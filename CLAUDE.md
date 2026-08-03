@@ -226,7 +226,7 @@ Tiered hashing for **deduplication**: group by size (free) → CRC32 survivors �
 
 **Verification is a separate concern and always hashes.** Size and presence prove nothing. Incomplete torrent transfers pre-allocate, and pieces span file boundaries — so a deselected file adjacent to a selected one receives partial data and ends up with the correct name, the correct size, and the wrong contents. Every cheap check passes it.
 
-`ark verify` sorts a set into four states:
+`ark verify` sorts a set into five states:
 
 | State | Meaning |
 |---|---|

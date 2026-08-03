@@ -20,4 +20,14 @@ public interface IFileSystemReader
 
     /// <summary>Opens a file for reading. Used for archive entry lists, never for extraction.</summary>
     Stream OpenRead(string path);
+
+    /// <summary>
+    /// Current metadata for one file, or null when it is gone.
+    /// </summary>
+    /// <remarks>
+    /// Needed to re-read a file's timestamp after hashing it. A file whose mtime moved while it
+    /// was being read was being written during the read, and its hash describes bytes that no
+    /// longer exist.
+    /// </remarks>
+    FileEntry? Describe(string path);
 }

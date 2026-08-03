@@ -137,6 +137,9 @@ internal sealed class InMemoryFileSystemReader : IFileSystemReader
     /// <summary>Set by the scan; asserts that scanning never opens a file to classify a directory.</summary>
     public List<string> Opened { get; } = new();
 
+    /// <summary>Metadata overrides, so a file can be made to look like it changed mid-read.</summary>
+    public Dictionary<string, FileEntry> Overrides { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public IEnumerable<DirectoryListing> EnumerateDirectories(string root) =>
         _listings.Where(listing => listing.FullPath.StartsWith(root, StringComparison.OrdinalIgnoreCase));
 
@@ -146,5 +149,17 @@ internal sealed class InMemoryFileSystemReader : IFileSystemReader
         return _contents.TryGetValue(path, out var bytes)
             ? new MemoryStream(bytes, writable: false)
             : throw new FileNotFoundException(path);
+    }
+
+    public FileEntry? Describe(string path)
+    {
+        if (Overrides.TryGetValue(path, out var overridden))
+        {
+            return overridden;
+        }
+
+        return _listings
+            .SelectMany(listing => listing.Files)
+            .FirstOrDefault(file => string.Equals(file.FullPath, path, StringComparison.OrdinalIgnoreCase));
     }
 }

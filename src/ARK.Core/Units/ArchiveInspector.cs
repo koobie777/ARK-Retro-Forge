@@ -50,4 +50,102 @@ public sealed class ArchiveInspector : IArchiveInspector
             return false;
         }
     }
+
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A corrupt or unsupported archive is reported, never allowed to abort a verification run.")]
+    public bool TryOpenSingleEntry(string path, out Stream stream, out long size, out string? error)
+    {
+        Stream? file = null;
+        IArchive? archive = null;
+
+        try
+        {
+            file = _reader.OpenRead(path);
+            archive = ArchiveFactory.Open(file);
+
+            var entries = archive.Entries.Where(entry => !entry.IsDirectory).Take(2).ToArray();
+            if (entries.Length != 1)
+            {
+                stream = Stream.Null;
+                size = 0;
+                error = entries.Length == 0 ? "archive contains no files" : "archive contains more than one entry";
+                archive.Dispose();
+                file.Dispose();
+                return false;
+            }
+
+            size = entries[0].Size;
+
+            // The entry stream borrows the archive and the file handle, so disposing it must
+            // dispose both. Nothing is written anywhere along this path.
+            stream = new EntryStream(entries[0].OpenEntryStream(), archive, file);
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            archive?.Dispose();
+            file?.Dispose();
+            stream = Stream.Null;
+            size = 0;
+            error = ex.Message;
+            return false;
+        }
+    }
+
+    /// <summary>Read-only view over one archive entry that owns the archive and file handles.</summary>
+    private sealed class EntryStream : Stream
+    {
+        private readonly Stream _inner;
+        private readonly IArchive _archive;
+        private readonly Stream _file;
+
+        public EntryStream(Stream inner, IArchive archive, Stream file)
+        {
+            _inner = inner;
+            _archive = archive;
+            _file = file;
+        }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+
+        public override int Read(Span<byte> buffer) => _inner.Read(buffer);
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _inner.Dispose();
+                _archive.Dispose();
+                _file.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+    }
 }

@@ -24,7 +24,7 @@ public class ScanServiceTests
             new DirectoryProfiler(Tokenizer, rules, new[] { "BigEndian", "Headered", "Decrypted", "NKit RVZ" }),
             new IGameUnitResolver[]
             {
-                new CartridgeUnitResolver(Tokenizer, inspector ?? new NullArchiveInspector()),
+                new CartridgeUnitResolver(Tokenizer, inspector ?? NullArchiveInspector()),
                 new DiscUnitResolver(),
             },
             rules);
@@ -220,29 +220,5 @@ public class ScanServiceTests
         .OrderBy(path => path, StringComparer.Ordinal)
         .Select(path => File.Exists(path) ? $"{path}:{new FileInfo(path).Length}" : path));
 
-    private sealed class NullArchiveInspector : IArchiveInspector
-    {
-        public bool Handles(string extension) => false;
-
-        public bool TryReadEntries(string path, out IReadOnlyList<ArchiveEntry> entries, out string? error)
-        {
-            entries = Array.Empty<ArchiveEntry>();
-            error = null;
-            return true;
-        }
-    }
-
-    private sealed class FakeArchiveInspector : IArchiveInspector
-    {
-        public Dictionary<string, ArchiveEntry[]> Entries { get; } = new(StringComparer.OrdinalIgnoreCase);
-
-        public bool Handles(string extension) => extension.Equals(".zip", StringComparison.OrdinalIgnoreCase);
-
-        public bool TryReadEntries(string path, out IReadOnlyList<ArchiveEntry> entries, out string? error)
-        {
-            error = null;
-            entries = Entries.TryGetValue(path, out var found) ? found : Array.Empty<ArchiveEntry>();
-            return true;
-        }
-    }
+    private static FakeArchiveInspector NullArchiveInspector() => new() { Enabled = false };
 }

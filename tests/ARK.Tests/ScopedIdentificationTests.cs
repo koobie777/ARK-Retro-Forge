@@ -165,21 +165,10 @@ public sealed class ScopedIdentificationTests : IDisposable
         var service = new ScanService(
             new InMemoryFileSystemReader(new[] { new DirectoryListing(directory, directoryName, files) }),
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, new NoArchivesInspector()), new DiscUnitResolver() },
+            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, new FakeArchiveInspector { Enabled = false }), new DiscUnitResolver() },
             rules);
 
         return service.Scan(directory, resolver);
     }
 
-    private sealed class NoArchivesInspector : IArchiveInspector
-    {
-        public bool Handles(string extension) => false;
-
-        public bool TryReadEntries(string path, out IReadOnlyList<ArchiveEntry> entries, out string? error)
-        {
-            entries = Array.Empty<ArchiveEntry>();
-            error = null;
-            return true;
-        }
-    }
 }
