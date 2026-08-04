@@ -105,3 +105,6 @@ ServiceFabricBackup/
 publish/
 *.exe
 !tools/*.exe
+
+# Stray output captures
+dat-list.txt
