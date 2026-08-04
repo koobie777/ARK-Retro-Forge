@@ -114,7 +114,8 @@ public sealed class ScanService
                         claimed.Add(file.FullPath);
                     }
 
-                    units.Add(new ScannedUnit(unit, index?.Find(unit.Name)));
+                    var matches = index?.FindAll(unit.Name);
+                    units.Add(new ScannedUnit(unit, matches is { Count: > 0 } ? matches[0] : null, matches));
                 }
             }
 

@@ -131,6 +131,13 @@ Medical Bay reports catalog coverage so gaps are visible rather than silent.
 
 > **Gate:** `ark dat import` ingests a Daily pack and indexes it. `ark dat sync` fetches a Redump source; second run hits cache. Catalog queryable by name and by hash. Unknown system code reports unrecognized rather than falling back.
 
+**First live network run (Phase 10 hand review):** 79 sources → **52 fetched, 4 cached, 23 failed**, every failure carrying a reason. Two things only a real run could show:
+
+- **A partial-failure guarantee is only as good as its exception list.** The catch filter named `HttpRequestException`, `IOException`, `FormatException`, `InvalidDataException`, `TaskCanceledException` — and Redump's HTML error page threw `XmlException`, which is none of them. The doc comment promised "a failure on one source does not abort the rest"; the run died on source 4 with a stack trace. The filter is now unfiltered, because the contract *is* "never abort", and any enumerated list can only cover the failures already seen.
+- **21 of 79 Redump systems publish no DAT** and serve their ordinary HTML page. That is not an error to fix, it is the catalog's actual shape — detected before parsing and reported as "the source most likely publishes no DAT for this system", because `Reference to undeclared entity 'bull'` describes nothing a user can act on.
+
+**Known gap:** 2 sources (GameCube BIOS, PS2 BIOS) serve raw **clrmamepro** text rather than zipped Logiqx XML. Valid DATs in a format the parser does not read; they fail cleanly and are excluded from coverage. A clrmamepro reader is unbuilt.
+
 ### Phase 2.1 — one system, N DAT variants keyed by qualifier
 
 A DAT name carrying a format qualifier resolves to **(system, qualifier)**, not to a system alone. `(Headered)` and `(Headerless)` are two distinct hash sets over the same ~4,500 games; a headered ROM will never match a headerless DAT, and N64 splits the same way across byte orders.
@@ -382,7 +389,52 @@ What the naming subsystem was built for, and what v1 destroyed collections doing
 
 > **Gate:** Only Verified units canonicalized. No DAT match is refused, never invented. Already-correct names are skipped without a write. Collisions refused; swaps and cycles complete without loss. `ark undo` restores the set byte-for-byte.
 
-### Phase 10 — GUI (Avalonia)
+### Phase 10 — Disc units
+Where v1 died: multi-track read as multi-disc, multi-disc read as variants, CUE sheets rewritten from assumptions. Most of the reference drive still sits outside ARK because of it — 1,762 PSX, 659 GameCube, 140 PS2, 172 PSP, 62 PS3.
+
+**The three "multi" cases share no code path.** Conflating any two is what produced the damage.
+
+| Case | Structure | Unit shape |
+|---|---|---|
+| Multi-track | One game, one disc, audio split across BINs | **One unit** |
+| Multi-disc | One game, N discs | **N units**, grouped into a set |
+| Single-file image | One BIN or one ISO | **One unit** |
+
+A CUE with twelve TRACK entries is one disc. Track count says nothing about disc count.
+
+**The CUE is the manifest.** Membership comes from parsing it, never from filename similarity. A CUE naming a file that is not present is an *incomplete unit* — reported, never partially assembled.
+
+**No CUE is ever written.** Redump DATs hash every constituent file including the `.cue`, so a CUE matching its DAT hash is provably correct and must not be touched. One that does not match is reported, not repaired — regenerating it would rewrite the file describing where the game's data lives.
+
+**A multi-disc set moves whole or not at all.** Quarantining Disc 2 of a three-disc set leaves a broken game and a user who does not know it. A set verifies only when every disc in it does.
+
+**A bare `.bin` is not claimed as a disc.** A BIN named by a CUE is claimed *through* that CUE, which is the only membership evidence worth trusting. One with no CUE anywhere is far likelier a Mega Drive ROM than an orphaned track, and claiming the extension would file the entire Genesis library as discs. The single-file disc shapes are `.iso` and `.img`.
+
+**Resolver order is disc first.** The cartridge resolver claims every file it is offered, so it must run last: a disc has positive evidence — a CUE, an ISO — and a cartridge is the residue.
+
+**A loose multi-file disc unit cannot be renamed.** Renaming the tracks invalidates the `FILE` lines naming them, and the only way to keep the unit coherent is to rewrite the CUE. That is forbidden, so the unit is refused whole rather than renaming the sheet and orphaning what it points at. Archived disc images are unaffected — the archive is renamed and the entries inside keep their names.
+
+> **Gate:** CUE + BINs resolve to one unit. `(Disc 1)` and `(Disc 2)` are two units in one set, never merged. A CUE referencing a missing file is incomplete, never partially resolved. No CUE is written. Sets are atomic.
+>
+> **Validated against the real drive.** `F:\PSX` — 1,767 files, 1,765 archives, the set v1 destroyed:
+>
+> | | Before | After |
+> |---|---|---|
+> | Disc units | 0 | **1,762** |
+> | Unsupported format | 1,762 | **0** |
+> | Anomalies | 2 corrupt archives | 2 corrupt archives |
+>
+> Multi-disc grouping reproduces the drive exactly: 199 disc-numbered archives → **91 groups, 75 genuine multi-disc sets**, 16 lone discs whose siblings are absent. Largest set is *Riven* at five discs, held as five units.
+
+**Found on the real drive, not predicted:** one archive in 1,765 (*MediEvil (USA) (Demo 2)*) holds a lone `.bin` and **no CUE**. Its Redump game declares both a `.bin` and a `.cue`, so a single-file unit judged against whichever entry indexed first would report corruption on a healthy file — the exact false alarm the five-state model exists to prevent. Catalog lookups now return the whole bucket and the entry is selected by extension.
+
+**The hash cache extends to constituents**, keyed `<archive path>|<entry name>` and invalidated by the containing file's own size and mtime. Without it Phase 5's "a second pass hashes approximately nothing" would be false for precisely the collections where it matters — a 490 GB set would re-hash in full on every run.
+
+**End-to-end on real Redump data.** *Final Fantasy VII (USA)* Discs 1–3 plus two single-disc titles, against the synced `Sony - PlayStation` DAT (60,168 entries): 5 identified → 5 disc units → **5 Verified**, 25 constituents hashed, 3.1 GB. Second pass: 0 hashed, 25 cached. One byte flipped at offset 400,000,000 of the 531 MB Disc 2 → **Mismatched**, only that unit's 2 constituents re-hashed, the set reported *"1 of 3 discs mismatched"*, and `rename` refused it while calling the other four already-correct with no write.
+
+**The named hazard, refused on real data.** *Fear Effect 2 - Retro Helix (USA)* ships as two revisions × four discs. Under `latest-revision`, disc number being identity yields four groups of two, and all four non-Rev discs are removed — a whole set, allowed, applied, and `ark undo` restored 4.1 GB byte-for-byte. Remove one Rev 1 disc from the directory and the same policy wants three of the four non-Rev discs, which would leave a lone Disc 4 of an unplayable game: **all three refused under `--apply`, nothing moved.** This is the failure Prohibition 4 was written for, exercised against the collection v1 destroyed.
+
+### Phase 11 — GUI (Avalonia)
 Flagship interface over the same Core. Confirmation flows — candidate picking, dedup review, variant approval — are where a GUI genuinely beats a terminal.
 
 ---
@@ -402,6 +454,8 @@ Flagship interface over the same Core. Confirmation flows — candidate picking,
 | NES header variants | iNES 1.0 vs NES 2.0. Same ROM data, different hash. |
 | Article inversion | `Legend of Zelda, The` and `The Legend of Zelda` group as one game. Multilingual articles. |
 | Cross-volume quarantine | A "move" across volumes is a copy. Same volume by default. |
+| Bare `.bin` | Mega Drive ROM or orphaned disc track — indistinguishable by extension. Claimed only through a CUE that names it. |
+| Multi-entry DAT games | A Redump game is several ROM entries under one name. Taking the first compares a BIN against a CUE's hash. |
 | Clean-set bias | US-only No-Intro sets contain none of the messy cases. Passing on them alone means little. |
 
 ---

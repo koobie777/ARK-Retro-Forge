@@ -1,4 +1,6 @@
+using ARK.Core.Naming;
 using ARK.Core.Scanning;
+using ARK.Core.Units;
 using Spectre.Console;
 
 namespace ARK.Cli.Rendering;
@@ -48,6 +50,23 @@ public static class ScanRenderer
 
         console.Write(table);
         console.MarkupLine("[grey]Identification is by name only. Hash verification is a later phase.[/]");
+
+        // Which resolver claimed what. A collection that is mostly discs and a collection that is
+        // mostly cartridges behave differently downstream, and the count is the fastest way to see
+        // that a disc set resolved rather than falling through as unsupported.
+        var cartridges = report.Units.Count(unit => unit.Unit.Kind == GameUnitKind.Cartridge);
+        var discs = report.Units.Count(unit => unit.Unit.Kind == GameUnitKind.Disc);
+
+        if (discs > 0)
+        {
+            var multiDisc = report.Units
+                .Where(unit => unit.Unit.Kind == GameUnitKind.Disc)
+                .Count(unit => unit.Unit.Name.TokensOf(TokenCategory.Disc).Count > 0);
+
+            console.MarkupLineInterpolated(
+                $"[grey]{report.Units.Count} unit(s): {cartridges} cartridge, {discs} disc ({multiDisc} carrying a disc number).[/]");
+        }
+
         console.WriteLine();
     }
 

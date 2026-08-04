@@ -1,5 +1,6 @@
 using ARK.Core.Naming;
 using ARK.Core.Scanning;
+using ARK.Core.Units;
 using ARK.Core.Verification;
 
 namespace ARK.Core.Policy;
@@ -93,7 +94,11 @@ public sealed class CurationService
             .ThenBy(group => group.Title, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return new CurationReport(scan.Root, policy, groups, excluded);
+        // Grouped over every scanned disc unit, not just the eligible ones: a set is broken just as
+        // thoroughly when the disc that would be left behind was excluded from curation.
+        var sets = DiscSetGrouper.Group(scan.Units.Select(unit => unit.Unit), _vocabulary);
+
+        return new CurationReport(scan.Root, policy, groups, excluded, sets);
     }
 
 }

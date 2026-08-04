@@ -180,7 +180,7 @@ public sealed class VerificationTests : IDisposable
         Directory.CreateDirectory(paths.Db);
         var cache = new HashCache(paths);
 
-        var report = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector())
+        var report = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector(), Vocabulary)
             .Verify(ScanOf(file, Entry("Tekken 3 (USA)", "aaaaaaaa")));
 
         var unit = Assert.Single(report.InState(VerificationState.InProgress));
@@ -262,7 +262,7 @@ public sealed class VerificationTests : IDisposable
         var paths = new InstancePaths("second-run", _root);
         Directory.CreateDirectory(paths.Db);
         var cache = new HashCache(paths);
-        var service = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector());
+        var service = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector(), Vocabulary);
         var scan = ScanOf(file, Entry("Game (USA)", Crc32Of(rom)));
 
         var first = service.Verify(scan);
@@ -328,7 +328,7 @@ public sealed class VerificationTests : IDisposable
             }
         });
 
-        var report = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector())
+        var report = new VerificationService(new RomHasher(reader, inspector), cache, new InProgressDetector(), Vocabulary)
             .Verify(ScanOf(files.Select(file => (file, (CatalogEntry?)null)).ToArray()), progress, cts.Token);
 
         Assert.True(report.Cancelled);
@@ -361,13 +361,13 @@ public sealed class VerificationTests : IDisposable
         var scan = new ScanService(
             fileSystem,
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, inspector), new DiscUnitResolver() },
+            new IGameUnitResolver[] { new DiscUnitResolver(Tokenizer, inspector, fileSystem), new CartridgeUnitResolver(Tokenizer, inspector) },
             rules).Scan(_root);
 
         var paths = new InstancePaths("read-only", Path.Combine(_root, "instance"));
         Directory.CreateDirectory(paths.Db);
         var cache = new HashCache(paths);
-        new VerificationService(new RomHasher(fileSystem, inspector), cache, new InProgressDetector()).Verify(scan);
+        new VerificationService(new RomHasher(fileSystem, inspector), cache, new InProgressDetector(), Vocabulary).Verify(scan);
         cache.Close();
 
         // The instance directory is ARK's own; the scanned tree itself is untouched.
@@ -441,7 +441,8 @@ public sealed class VerificationTests : IDisposable
         return new VerificationService(
             new RomHasher(reader, inspector),
             cache,
-            new InProgressDetector(extensions, declaredDirectories));
+            new InProgressDetector(extensions, declaredDirectories),
+            Vocabulary);
     }
 
     private static ScanReport ScanOf(FileEntry file, CatalogEntry? match, string? qualifier = null) =>

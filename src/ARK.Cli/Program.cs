@@ -40,10 +40,15 @@ var formatter = new NameFormatter(tokenizer);
 var scanRules = ScanRulesLoader.Load(paths.ScanRulesPath);
 var fileSystem = new FileSystemReader();
 var archiveExtensions = systems.All.SelectMany(system => system.ArchiveExtensions).Distinct(StringComparer.OrdinalIgnoreCase);
+var archiveInspector = new ArchiveInspector(fileSystem, archiveExtensions);
+
+// Disc first. The cartridge resolver claims every file it is offered, so anything reaching it is
+// what the disc resolver declined — which is the correct order, because a disc has positive
+// evidence (a cue sheet, an ISO) and a cartridge is the residue.
 var resolvers = new IGameUnitResolver[]
 {
-    new CartridgeUnitResolver(tokenizer, new ArchiveInspector(fileSystem, archiveExtensions), scanRules.DiscDescriptorExtensions),
-    new DiscUnitResolver(),
+    new DiscUnitResolver(tokenizer, archiveInspector, fileSystem),
+    new CartridgeUnitResolver(tokenizer, archiveInspector, scanRules.DiscDescriptorExtensions),
 };
 var scanService = new ScanService(
     fileSystem,
@@ -51,7 +56,6 @@ var scanService = new ScanService(
     resolvers,
     scanRules);
 
-var archiveInspector = new ArchiveInspector(fileSystem, archiveExtensions);
 var hashCache = new HashCache(paths);
 var verificationService = new VerificationService(
     new RomHasher(fileSystem, archiveInspector),
@@ -59,7 +63,8 @@ var verificationService = new VerificationService(
     new InProgressDetector(
         scanRules.IncompleteDownloadExtensions,
         settingsStore.Read().IncompleteDownloadDirectories,
-        TimeSpan.FromMinutes(scanRules.RecentWriteWindowMinutes)));
+        TimeSpan.FromMinutes(scanRules.RecentWriteWindowMinutes)),
+    vocabulary);
 
 try
 {
@@ -134,7 +139,7 @@ DedupReport AnalyzeDuplicates(string root, KeepPolicy policy)
     {
         var scan = ScanRoot(root);
         var verification = verificationService.Verify(scan);
-        return new DedupService(new RomHasher(fileSystem, archiveInspector), hashCache)
+        return new DedupService(new RomHasher(fileSystem, archiveInspector), hashCache, vocabulary)
             .Analyze(scan, verification, policy);
     }
     finally
@@ -153,7 +158,7 @@ DedupReport AnalyzeDuplicates(string root, KeepPolicy policy)
         .Where(directory => directory is not null)
         .Distinct(StringComparer.OrdinalIgnoreCase)!;
 
-    var plan = QuarantinePlanner.Build(report, sessionId, DateTimeOffset.UtcNow, active!);
+    var plan = QuarantinePlanner.Build(report, sessionId, DateTimeOffset.UtcNow, active!, report.Sets);
 
     return plan.Plan.Actions.Count == 0 || !apply
         ? (plan, null)
@@ -180,14 +185,18 @@ CurationReport AnalyzeVariants(string root, VariantPolicy policy)
 (QuarantinePlan Plan, ExecutionResult? Result) QuarantineVariants(CurationReport report, bool apply)
 {
     var sessionId = $"curate-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+    var setKeys = QuarantinePlanner.SetKeysByPath(report.Sets);
     var requests = report.Removable
         .Select(member => new QuarantineRequest(
             member.Path, member.FileName, null, null, member.Unit.TotalSize,
-            KeptPathFor(report, member), $"Variant removed by policy '{report.Policy.Name}'"))
+            KeptPathFor(report, member), $"Variant removed by policy '{report.Policy.Name}'",
+            member.Unit.Files.Select(file => file.FullPath).ToArray(),
+            setKeys.GetValueOrDefault(member.Path)))
         .ToArray();
 
     var plan = QuarantinePlanner.Build(
-        report.Root, requests, sessionId, DateTimeOffset.UtcNow, report.Policy.Name, ActiveDirectories(report));
+        report.Root, requests, sessionId, DateTimeOffset.UtcNow, report.Policy.Name,
+        ActiveDirectories(report), report.Sets);
 
     return plan.Plan.Actions.Count == 0 || !apply
         ? (plan, null)

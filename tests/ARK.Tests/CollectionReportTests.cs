@@ -322,7 +322,7 @@ public class CollectionReportTests
             var scan = new ScanService(
                 fileSystem,
                 new DirectoryProfiler(Tokenizer, rules),
-                new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, inspector), new DiscUnitResolver() },
+                new IGameUnitResolver[] { new DiscUnitResolver(Tokenizer, inspector, fileSystem), new CartridgeUnitResolver(Tokenizer, inspector) },
                 rules).Scan(root);
 
             var verification = new VerificationReport(

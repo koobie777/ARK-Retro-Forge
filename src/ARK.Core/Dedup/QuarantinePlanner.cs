@@ -3,6 +3,7 @@ using System.Text.Json;
 using ARK.Core.Execution;
 using ARK.Core.Instances;
 using ARK.Core.Serialization;
+using ARK.Core.Units;
 
 namespace ARK.Core.Dedup;
 
@@ -63,6 +64,15 @@ public sealed record QuarantineManifest(
 /// <param name="RomSize">ROM size in bytes.</param>
 /// <param name="KeptPath">The copy kept instead.</param>
 /// <param name="Reason">Why this one goes and that one stays.</param>
+/// <param name="Files">
+/// Every file belonging to the unit, when it is more than the primary path. A disc unit is a cue
+/// sheet plus its track BINs, and moving the cue alone leaves tracks behind that describe nothing
+/// — Prohibition 4 in its literal form. Null means the unit is its primary path and nothing else.
+/// </param>
+/// <param name="SetKey">
+/// Identity of the multi-disc set this unit belongs to, when it belongs to one. Used to refuse a
+/// removal that would break the set.
+/// </param>
 public sealed record QuarantineRequest(
     string Path,
     string Name,
@@ -70,7 +80,13 @@ public sealed record QuarantineRequest(
     string? RomSha1,
     long RomSize,
     string KeptPath,
-    string Reason);
+    string Reason,
+    IReadOnlyList<string>? Files = null,
+    string? SetKey = null)
+{
+    /// <summary>Every file this request moves — the primary path when nothing else was recorded.</summary>
+    public IReadOnlyList<string> AllFiles => Files is { Count: > 0 } files ? files : new[] { Path };
+}
 
 /// <summary>Why a unit could not be quarantined.</summary>
 /// <param name="Request">The unit.</param>
@@ -115,14 +131,21 @@ public static class QuarantinePlanner
     /// renaming or moving a file an active client owns breaks the transfer, and on a completed
     /// torrent still seeding it silently breaks the seed.
     /// </param>
+    /// <param name="discSets">
+    /// Multi-disc sets present in the collection, so a removal that would break one is refused.
+    /// </param>
     [RequiresUnreferencedCode("Serializes QuarantineManifest with reflection-based System.Text.Json.")]
     public static QuarantinePlan Build(
         DedupReport report,
         string sessionId,
         DateTimeOffset createdUtc,
-        IEnumerable<string>? activeDownloadDirectories = null)
+        IEnumerable<string>? activeDownloadDirectories = null,
+        IEnumerable<DiscSet>? discSets = null)
     {
         ArgumentNullException.ThrowIfNull(report);
+
+        var sets = discSets?.ToArray();
+        var setKeys = SetKeysByPath(sets);
 
         var requests = report.Resolved
             .SelectMany(group => group.Removable.Select(member => new QuarantineRequest(
@@ -132,10 +155,27 @@ public static class QuarantinePlanner
                 group.Sha1,
                 group.RomSize,
                 group.Keep!.Path,
-                $"Duplicate of {group.Keep!.Name} (CRC32 {group.Crc32}); {group.Reason}")))
+                $"Duplicate of {group.Keep!.Name} (CRC32 {group.Crc32}); {group.Reason}",
+                member.Unit.Files.Select(file => file.FullPath).ToArray(),
+                setKeys.GetValueOrDefault(member.Path))))
             .ToArray();
 
-        return Build(report.Root, requests, sessionId, createdUtc, report.Policy.ToString(), activeDownloadDirectories);
+        return Build(report.Root, requests, sessionId, createdUtc, report.Policy.ToString(), activeDownloadDirectories, sets);
+    }
+
+    /// <summary>Maps each disc unit's primary path to the set it belongs to.</summary>
+    public static Dictionary<string, string> SetKeysByPath(IEnumerable<DiscSet>? discSets)
+    {
+        var keys = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var set in discSets ?? [])
+        {
+            foreach (var unit in set.Units)
+            {
+                keys[unit.PrimaryPath] = set.Key;
+            }
+        }
+
+        return keys;
     }
 
     /// <summary>
@@ -151,6 +191,11 @@ public static class QuarantinePlanner
     /// renaming or moving a file an active client owns breaks the transfer, and on a completed
     /// torrent still seeding it silently breaks the seed.
     /// </param>
+    /// <param name="discSets">
+    /// Multi-disc sets present in the collection. A request removing only part of one is refused:
+    /// quarantining Disc 2 of a three-disc set leaves a broken game and a user who does not know
+    /// it.
+    /// </param>
     [RequiresUnreferencedCode("Serializes QuarantineManifest with reflection-based System.Text.Json.")]
     public static QuarantinePlan Build(
         string root,
@@ -158,7 +203,8 @@ public static class QuarantinePlanner
         string sessionId,
         DateTimeOffset createdUtc,
         string policy,
-        IEnumerable<string>? activeDownloadDirectories = null)
+        IEnumerable<string>? activeDownloadDirectories = null,
+        IEnumerable<DiscSet>? discSets = null)
     {
         ArgumentNullException.ThrowIfNull(requests);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
@@ -168,6 +214,8 @@ public static class QuarantinePlanner
         var active = (activeDownloadDirectories ?? [])
             .Select(directory => directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             .ToArray();
+
+        var partialSets = PartialSets(requests, discSets);
 
         var actions = new List<PlannedAction>();
         var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -190,24 +238,40 @@ public static class QuarantinePlanner
                 continue;
             }
 
-            var destination = quarantine.DestinationFor(request.Path);
-
-            // Every level gets its own action, parent first; undo replays in reverse so they
-            // come off leaf-first.
-            foreach (var level in quarantine.DirectoriesToCreate(destination))
+            if (request.SetKey is { Length: > 0 } key && partialSets.TryGetValue(key, out var setDetail))
             {
-                if (directories.Add(level))
+                refused.Add(new QuarantineRefusal(request, setDetail));
+                continue;
+            }
+
+            // Every file in the unit moves, or none does. A cue sheet without its tracks is not a
+            // smaller problem than losing the disc — it is the same problem, silently.
+            var moved = new List<(string From, string To)>();
+            foreach (var source in request.AllFiles)
+            {
+                var target = quarantine.DestinationFor(source);
+                moved.Add((source, target));
+
+                // Every level gets its own action, parent first; undo replays in reverse so they
+                // come off leaf-first.
+                foreach (var level in quarantine.DirectoriesToCreate(target))
                 {
-                    actions.Add(new PlannedAction(
-                        ActionKind.CreateDirectory, level, null, $"Quarantine directory for session {sessionId}"));
+                    if (directories.Add(level))
+                    {
+                        actions.Add(new PlannedAction(
+                            ActionKind.CreateDirectory, level, null, $"Quarantine directory for session {sessionId}"));
+                    }
                 }
             }
 
-            actions.Add(new PlannedAction(ActionKind.Quarantine, request.Path, destination, request.Reason));
+            foreach (var (from, to) in moved)
+            {
+                actions.Add(new PlannedAction(ActionKind.Quarantine, from, to, request.Reason));
+            }
 
             manifestUnits.Add(new QuarantinedUnit(
                 request.Path,
-                destination,
+                quarantine.DestinationFor(request.Path),
                 request.RomCrc32 ?? string.Empty,
                 request.RomSha1,
                 request.RomSize,
@@ -232,6 +296,42 @@ public static class QuarantinePlanner
             new Plan(sessionId, createdUtc, "dedup-quarantine", actions),
             manifest,
             refused);
+    }
+
+    /// <summary>
+    /// Set keys where the requests would remove some discs but not all, mapped to the refusal.
+    /// </summary>
+    /// <remarks>
+    /// This is the hazard named before any code existed: a byte-identical Disc 2 shared between two
+    /// releases, removed because a hash matched, gutting an otherwise complete set. Phase 7
+    /// prevented the file-level form by operating on units; a set spans units, so the guard has to
+    /// live here where every removal — dedup's and curation's alike — passes through.
+    /// </remarks>
+    private static Dictionary<string, string> PartialSets(
+        IReadOnlyList<QuarantineRequest> requests,
+        IEnumerable<DiscSet>? discSets)
+    {
+        var partial = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (discSets is null)
+        {
+            return partial;
+        }
+
+        var requestedPaths = requests.SelectMany(request => request.AllFiles).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var set in discSets.Where(set => set.IsMultiDisc))
+        {
+            var discs = set.Units.Count;
+            var going = set.Units.Count(unit => unit.Files.Any(file => requestedPaths.Contains(file.FullPath)));
+
+            if (going > 0 && going < discs)
+            {
+                partial[set.Key] =
+                    $"would remove {going} of {discs} discs in '{set.Title}' — a multi-disc set is removed whole or not at all";
+            }
+        }
+
+        return partial;
     }
 
     private static bool IsInside(string path, string directory) =>

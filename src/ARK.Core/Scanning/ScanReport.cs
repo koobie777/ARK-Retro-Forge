@@ -22,10 +22,22 @@ public enum ScanBucket
 /// The matched catalog entry, or null. Matching is by name only — hash verification is a later
 /// phase, and until then "identified" means "claims to be this release", not "is".
 /// </param>
-public sealed record ScannedUnit(GameUnit Unit, CatalogEntry? Match)
+/// <param name="AllMatches">
+/// Every catalog entry the unit's name matched. A Redump game is several ROM entries under one
+/// game name — the track BINs and the cue sheet — and a disc unit verifies only when all of them
+/// match, so the whole bucket has to survive the scan rather than just its first element.
+/// </param>
+public sealed record ScannedUnit(
+    GameUnit Unit,
+    CatalogEntry? Match,
+    IReadOnlyList<CatalogEntry>? AllMatches = null)
 {
     /// <summary>Which bucket this unit's files belong to.</summary>
     public ScanBucket Bucket => Match is null ? ScanBucket.Candidate : ScanBucket.Identified;
+
+    /// <summary>Catalog entries for this unit, falling back to the single match.</summary>
+    public IReadOnlyList<CatalogEntry> Entries =>
+        AllMatches is { Count: > 0 } all ? all : Match is null ? Array.Empty<CatalogEntry>() : new[] { Match };
 }
 
 /// <summary>A file that is not ROM content, and why.</summary>

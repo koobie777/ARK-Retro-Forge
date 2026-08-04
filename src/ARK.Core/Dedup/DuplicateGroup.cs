@@ -127,13 +127,25 @@ public sealed record DedupExclusionEntry(DedupCandidate Candidate, DedupExclusio
 /// <param name="Excluded">Units that took no part, each with a stated reason.</param>
 /// <param name="Policy">The policy applied.</param>
 /// <param name="Hashed">Units that required hashing this run.</param>
+/// <param name="DiscSets">Multi-disc sets among the scanned units.</param>
 public sealed record DedupReport(
     string Root,
     IReadOnlyList<DuplicateGroup> Groups,
     IReadOnlyList<DedupExclusionEntry> Excluded,
     KeepPolicy Policy,
-    int Hashed)
+    int Hashed,
+    IReadOnlyList<DiscSet>? DiscSets = null)
 {
+    /// <summary>
+    /// Multi-disc sets present in the collection, so a removal breaking one can be refused.
+    /// </summary>
+    /// <remarks>
+    /// This is where the hazard bites hardest. A Disc 2 shared byte-for-byte between two releases
+    /// is a genuine duplicate by every measure dedup has, and collapsing it guts the set it was
+    /// holding up.
+    /// </remarks>
+    public IReadOnlyList<DiscSet> Sets => DiscSets ?? Array.Empty<DiscSet>();
+
     /// <summary>Groups the policy resolved.</summary>
     public IReadOnlyList<DuplicateGroup> Resolved => Groups.Where(group => !group.IsTie).ToArray();
 

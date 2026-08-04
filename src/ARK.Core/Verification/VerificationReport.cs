@@ -62,6 +62,11 @@ public sealed record VerifiedUnit(
 /// <param name="Elapsed">Wall-clock duration.</param>
 /// <param name="BytesHashed">Total ROM bytes read this run.</param>
 /// <param name="Cancelled">Whether the run was interrupted before finishing.</param>
+/// <param name="DiscSets">
+/// Verdicts for multi-disc sets. A set is only as complete as its worst disc, so this says
+/// something the per-unit states do not: that a game is unplayable, not merely that one file
+/// failed.
+/// </param>
 public sealed record VerificationReport(
     string Root,
     IReadOnlyList<VerifiedUnit> Units,
@@ -69,8 +74,15 @@ public sealed record VerificationReport(
     int CacheHits,
     TimeSpan Elapsed,
     long BytesHashed,
-    bool Cancelled = false)
+    bool Cancelled = false,
+    IReadOnlyList<DiscSetVerdict>? DiscSets = null)
 {
+    /// <summary>Multi-disc sets and how each stands.</summary>
+    public IReadOnlyList<DiscSetVerdict> Sets => DiscSets ?? Array.Empty<DiscSetVerdict>();
+
+    /// <summary>Sets with at least one disc that did not verify.</summary>
+    public IReadOnlyList<DiscSetVerdict> IncompleteSets => Sets.Where(set => !set.IsComplete).ToArray();
+
     /// <summary>Units in one state.</summary>
     public IReadOnlyList<VerifiedUnit> InState(VerificationState state) =>
         Units.Where(unit => unit.State == state).ToArray();

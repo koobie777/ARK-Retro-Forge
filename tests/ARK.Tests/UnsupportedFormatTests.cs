@@ -131,10 +131,11 @@ public class UnsupportedFormatTests
         Assert.Equal("unreadable-archive", Assert.Single(unit.Anomalies).Code);
     }
 
-    // Gate 9 and 11 at report level: a set that is entirely disc images produces no anomalies at
-    // all, and the one corrupt archive beside them is not buried.
+    // Phase 4.1 asserted these 39 archives were unsupported-format, because the disc resolver was
+    // stubbed. Phase 10 gate 12 inverts exactly that: a .bin + .cue archive is now a resolved disc
+    // unit. The corrupt archive beside them must still stand out, which is what this always tested.
     [Fact]
-    public void Report_separates_a_field_of_disc_images_from_the_one_corrupt_archive()
+    public void Report_resolves_a_field_of_disc_images_and_still_isolates_the_corrupt_archive()
     {
         var names = TestFixtures.ReadCorpus("real-names.txt").Take(40).ToArray();
         var directory = @"D:\Sony - PlayStation";
@@ -150,27 +151,40 @@ public class UnsupportedFormatTests
                 new ArchiveEntry("disc.cue", 100),
                 new ArchiveEntry("disc.bin", 700_000_000),
             };
+            inspector.SetEntry(file.FullPath, "disc.cue", CueBytes("disc.bin"));
         }
 
         inspector.Unreadable.Add(files[7].FullPath);
 
         var rules = ScanRulesLoader.Load(TestFixtures.ShippedScanRulesPath());
+        var reader = new InMemoryFileSystemReader(new[] { new DirectoryListing(directory, "Sony - PlayStation", files) });
         var report = new ScanService(
-            new InMemoryFileSystemReader(new[] { new DirectoryListing(directory, "Sony - PlayStation", files) }),
+            reader,
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { Resolver(inspector), new DiscUnitResolver() },
+            new IGameUnitResolver[] { new DiscUnitResolver(Tokenizer, inspector, reader), Resolver(inspector) },
             rules).Scan(directory);
 
-        Assert.Equal(39, report.UnsupportedFormats.Count);
+        // Nothing unsupported any more: the disc resolver handles this shape now.
+        Assert.Empty(report.UnsupportedFormats);
+        Assert.Equal(39, report.Units.Count(unit => unit.Unit.Kind == GameUnitKind.Disc));
 
         // One anomaly, not forty. The corrupt archive is visible instead of being 1 line in 40.
         var anomaly = Assert.Single(report.Anomalies);
         Assert.Equal("unreadable-archive", Assert.Single(anomaly.Unit.Anomalies).Code);
 
-        // Unsupported-format units are still real games in a real ROM set, so they still bucket.
         Assert.True(report.IsComplete);
         Assert.Equal(40, report.CandidateFileCount);
     }
+
+    private static byte[] CueBytes(params string[] binNames) =>
+        System.Text.Encoding.UTF8.GetBytes(string.Join(
+            "\n",
+            binNames.SelectMany((name, i) => new[]
+            {
+                $"FILE \"{name}\" BINARY",
+                $"  TRACK {i + 1:00} MODE2/2352",
+                "    INDEX 01 00:00:00",
+            })));
 
     private static GameUnit ResolveOne(IReadOnlyList<ArchiveEntry> entries)
     {

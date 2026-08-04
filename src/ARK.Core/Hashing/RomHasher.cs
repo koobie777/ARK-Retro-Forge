@@ -110,6 +110,72 @@ public sealed class RomHasher
         }
     }
 
+    /// <summary>
+    /// Hashes one named entry inside an archive.
+    /// </summary>
+    /// <remarks>
+    /// A disc image archive holds several entries — track BINs plus the cue sheet — and each has
+    /// its own DAT hash, so <see cref="Compute"/>'s single-entry path cannot verify one. Nothing is
+    /// extracted: the entry is streamed exactly as it is.
+    /// </remarks>
+    /// <param name="file">The archive.</param>
+    /// <param name="entryName">Entry to hash.</param>
+    /// <param name="entrySize">Uncompressed size, used for format detection.</param>
+    /// <param name="purpose">How much hashing is enough.</param>
+    /// <param name="cancellationToken">Cancels a long read.</param>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "One unreadable entry is a reported finding, never allowed to abort a run of thousands.")]
+    public RomHashResult ComputeEntry(
+        FileEntry file,
+        string entryName,
+        long entrySize,
+        HashPurpose purpose = HashPurpose.Verification,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        var before = _reader.Describe(file.FullPath);
+        if (before is null)
+        {
+            return RomHashResult.Failed(RomReadStatus.Unreadable, "file no longer exists");
+        }
+
+        Stream? stream = null;
+        try
+        {
+            if (!_inspector.TryOpenEntry(file.FullPath, entryName, out stream, out var error))
+            {
+                return RomHashResult.Failed(RomReadStatus.Unreadable, error ?? "entry could not be opened");
+            }
+
+            // Never normalized: a disc track is not a cartridge dump, and header stripping or byte
+            // swapping has no meaning here.
+            var hash = Hash(stream, entrySize, purpose, normalize: false, cancellationToken);
+
+            var after = _reader.Describe(file.FullPath);
+            if (after is null || after.ModifiedUtc != before.ModifiedUtc || after.Size != before.Size)
+            {
+                return RomHashResult.Failed(
+                    RomReadStatus.ChangedDuringRead,
+                    "file changed while being read — it is being written to");
+            }
+
+            return new RomHashResult(RomReadStatus.Ok, hash, null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return RomHashResult.Failed(RomReadStatus.Unreadable, ex.Message);
+        }
+        finally
+        {
+            stream?.Dispose();
+        }
+    }
+
     private static RomHash Hash(
         Stream stream,
         long length,

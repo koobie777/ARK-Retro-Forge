@@ -84,12 +84,32 @@ public sealed class DatSyncService
 
                 results.Add(new DatSyncResult(source.Name, SyncOutcome.Fetched, $"Indexed {indexed} entr{(indexed == 1 ? "y" : "ies")}"));
             }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or FormatException or InvalidDataException or TaskCanceledException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                results.Add(new DatSyncResult(source.Name, SyncOutcome.Failed, ex.Message));
+                // The user asked to stop. Everything already indexed is committed; re-raise so the
+                // run ends rather than being recorded as 79 individual failures.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Deliberately unfiltered. The contract above is that one bad source never aborts
+                // the rest, and an exception list can only ever be as complete as the failures
+                // already seen — a live run against Redump threw XmlException from an HTML error
+                // page, which the previous filter did not name, and the whole 79-source sync died
+                // on source 4 with a stack trace.
+                results.Add(new DatSyncResult(source.Name, SyncOutcome.Failed, Describe(ex)));
             }
         }
 
         return new DatSyncSummary(results);
     }
+
+    /// <summary>A one-line reason a user can act on, never a stack trace.</summary>
+    private static string Describe(Exception ex) => ex switch
+    {
+        HttpRequestException http => $"download failed: {http.Message}",
+        InvalidDataException invalid => invalid.Message,
+        System.Xml.XmlException xml => $"response is not a readable DAT: {xml.Message}",
+        _ => ex.Message,
+    };
 }

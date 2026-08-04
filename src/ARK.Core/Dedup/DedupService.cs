@@ -1,5 +1,7 @@
 using ARK.Core.Hashing;
+using ARK.Core.Naming;
 using ARK.Core.Scanning;
+using ARK.Core.Units;
 using ARK.Core.Verification;
 
 namespace ARK.Core.Dedup;
@@ -26,14 +28,24 @@ public sealed class DedupService
 {
     private readonly RomHasher _hasher;
     private readonly HashCache _cache;
+    private readonly TokenVocabulary _vocabulary;
 
     /// <summary>Creates a dedup service.</summary>
-    public DedupService(RomHasher hasher, HashCache cache)
+    /// <param name="hasher">Computes ROM hashes.</param>
+    /// <param name="cache">Hash cache, so a second run over an unchanged set hashes nothing.</param>
+    /// <param name="vocabulary">
+    /// Used to group disc units into multi-disc sets. Required rather than optional: a missing
+    /// vocabulary would mean no sets, no set guard, and a silently unprotected collection — the
+    /// opposite of how a safety check should fail.
+    /// </param>
+    public DedupService(RomHasher hasher, HashCache cache, TokenVocabulary vocabulary)
     {
         ArgumentNullException.ThrowIfNull(hasher);
         ArgumentNullException.ThrowIfNull(cache);
+        ArgumentNullException.ThrowIfNull(vocabulary);
         _hasher = hasher;
         _cache = cache;
+        _vocabulary = vocabulary;
     }
 
     /// <summary>
@@ -120,7 +132,12 @@ public sealed class DedupService
         }
 
         var hashedCount = _cache.Misses;
-        return new DedupReport(scan.Root, groups, excluded, policy, hashedCount);
+
+        // Grouped over every scanned disc unit, not just the eligible ones: a set is broken just as
+        // thoroughly when the disc left behind was one dedup never considered.
+        var sets = DiscSetGrouper.Group(scan.Units.Select(unit => unit.Unit), _vocabulary);
+
+        return new DedupReport(scan.Root, groups, excluded, policy, hashedCount, sets);
     }
 
     // Tier 3 — a shared CRC32 is not proof. 32-bit collisions are real at this scale, so any

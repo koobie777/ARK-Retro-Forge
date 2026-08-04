@@ -21,6 +21,16 @@ internal static class DatReader
                 return ReadFromZip(seekable);
             }
 
+            // Rejected before parsing, because the parser's own error does not describe what
+            // happened. Redump serves its ordinary HTML page for systems that have no DAT
+            // published — 21 of its 79 sources on a live run — and "Reference to undeclared entity
+            // 'bull'" tells a user nothing about a site that simply has nothing to offer yet.
+            if (LooksLikeHtml(seekable))
+            {
+                throw new InvalidDataException(
+                    "the response is an HTML page, not a DAT — the source most likely publishes no DAT for this system");
+            }
+
             seekable.Position = 0;
             return [(null, LogiqxParser.Parse(seekable))];
         }
@@ -51,6 +61,23 @@ internal static class DatReader
         }
 
         return results;
+    }
+
+    private static bool LooksLikeHtml(Stream seekable)
+    {
+        seekable.Position = 0;
+        Span<byte> header = stackalloc byte[64];
+        var read = seekable.Read(header);
+        seekable.Position = 0;
+
+        if (read <= 0)
+        {
+            return false;
+        }
+
+        var text = System.Text.Encoding.ASCII.GetString(header[..read]).TrimStart('﻿', ' ', '\t', '\r', '\n');
+        return text.StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("<html", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeZip(Stream seekable)

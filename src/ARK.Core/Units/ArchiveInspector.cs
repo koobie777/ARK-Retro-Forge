@@ -94,6 +94,46 @@ public sealed class ArchiveInspector : IArchiveInspector
         }
     }
 
+    /// <inheritdoc />
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A corrupt or unsupported archive is reported, never allowed to abort a scan.")]
+    public bool TryOpenEntry(string path, string entryName, out Stream stream, out string? error)
+    {
+        Stream? file = null;
+        IArchive? archive = null;
+
+        try
+        {
+            file = _reader.OpenRead(path);
+            archive = ArchiveFactory.Open(file);
+
+            var entry = archive.Entries.FirstOrDefault(candidate =>
+                !candidate.IsDirectory &&
+                string.Equals(candidate.Key, entryName, StringComparison.OrdinalIgnoreCase));
+
+            if (entry is null)
+            {
+                stream = Stream.Null;
+                error = $"entry '{entryName}' not found";
+                archive.Dispose();
+                file.Dispose();
+                return false;
+            }
+
+            stream = new EntryStream(entry.OpenEntryStream(), archive, file);
+            error = null;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            archive?.Dispose();
+            file?.Dispose();
+            stream = Stream.Null;
+            error = ex.Message;
+            return false;
+        }
+    }
+
     /// <summary>Read-only view over one archive entry that owns the archive and file handles.</summary>
     private sealed class EntryStream : Stream
     {

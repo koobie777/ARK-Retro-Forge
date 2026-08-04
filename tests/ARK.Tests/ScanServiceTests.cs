@@ -19,13 +19,14 @@ public class ScanServiceTests
     private static ScanService Build(IFileSystemReader reader, IArchiveInspector? inspector = null)
     {
         var rules = Rules();
+        var archives = inspector ?? NullArchiveInspector();
         return new ScanService(
             reader,
             new DirectoryProfiler(Tokenizer, rules, new[] { "BigEndian", "Headered", "Decrypted", "NKit RVZ" }),
             new IGameUnitResolver[]
             {
-                new CartridgeUnitResolver(Tokenizer, inspector ?? NullArchiveInspector()),
-                new DiscUnitResolver(),
+                new DiscUnitResolver(Tokenizer, archives, reader),
+                new CartridgeUnitResolver(Tokenizer, archives),
             },
             rules);
     }
@@ -181,18 +182,22 @@ public class ScanServiceTests
         }
     }
 
-    // Part B: the disc resolver's contract exists; its implementation does not.
+    // Part B: the disc resolver claims disc shapes and declines everything else. Phase 4 asserted
+    // it claimed nothing at all; Phase 10 implemented it, so the contract this pins is now the
+    // narrower one — a cue is a disc, a cartridge ROM is not.
     [Fact]
-    public void Disc_resolver_is_defined_but_claims_nothing_yet()
+    public void Disc_resolver_claims_disc_shapes_and_nothing_else()
     {
-        var resolver = new DiscUnitResolver();
+        var resolver = new DiscUnitResolver(Tokenizer, NullArchiveInspector(), new InMemoryFileSystemReader([]));
 
         Assert.Equal(GameUnitKind.Disc, resolver.Kind);
-        Assert.False(resolver.CanResolve(Entry(@"D:\Set", "Whatever (USA)", ".cue")));
-        Assert.Empty(resolver.Resolve(
-            new DirectoryProfile(@"D:\Set", "Set", 0, ".cue", 1, 1, DirectoryOutcome.RomSet, ExclusionReason.None,
-                Array.Empty<string>(), Array.Empty<string>(), Array.Empty<FileEntry>()),
-            Array.Empty<FileEntry>()));
+        Assert.True(resolver.CanResolve(Entry(@"D:\Set", "Whatever (USA)", ".cue")));
+        Assert.True(resolver.CanResolve(Entry(@"D:\Set", "Whatever (USA)", ".iso")));
+        Assert.False(resolver.CanResolve(Entry(@"D:\Set", "Whatever (USA)", ".sfc")));
+
+        // A bare .bin is deliberately not claimed: a Mega Drive ROM and an orphaned disc track are
+        // indistinguishable by extension, and claiming it would file the Genesis library as discs.
+        Assert.False(resolver.CanResolve(Entry(@"D:\Set", "Whatever (USA)", ".bin")));
     }
 
     [Fact]

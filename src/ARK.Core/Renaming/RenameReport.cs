@@ -63,6 +63,18 @@ public enum RenameRefusal
 
     /// <summary>Inside a directory showing active-download signals.</summary>
     ActiveDownload,
+
+    /// <summary>
+    /// A loose multi-file disc unit — a cue sheet plus its track files.
+    /// </summary>
+    /// <remarks>
+    /// Renaming the tracks invalidates the <c>FILE</c> lines that name them, and the only way to
+    /// keep the unit coherent is to rewrite the cue sheet. That is forbidden: a cue matching its
+    /// DAT hash is provably correct, and ARK does not edit the file describing where a game's data
+    /// lives. Archived disc images are unaffected — the archive is renamed and the entries inside
+    /// keep their names.
+    /// </remarks>
+    LooseDiscUnit,
 }
 
 /// <summary>One unit's rename decision.</summary>

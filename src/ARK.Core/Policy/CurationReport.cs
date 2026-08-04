@@ -77,12 +77,23 @@ public sealed record VariantGroup(
 /// <param name="Policy">The policy applied.</param>
 /// <param name="Groups">Variant groups found.</param>
 /// <param name="Excluded">Units that took no part, each with a reason.</param>
+/// <param name="DiscSets">Multi-disc sets among the scanned units.</param>
 public sealed record CurationReport(
     string Root,
     VariantPolicy Policy,
     IReadOnlyList<VariantGroup> Groups,
-    IReadOnlyList<(CurationCandidate Candidate, CurationExclusion Reason, string Detail)> Excluded)
+    IReadOnlyList<(CurationCandidate Candidate, CurationExclusion Reason, string Detail)> Excluded,
+    IReadOnlyList<DiscSet>? DiscSets = null)
 {
+    /// <summary>
+    /// Multi-disc sets among the scanned units, so a removal breaking one can be refused.
+    /// </summary>
+    /// <remarks>
+    /// Carried on the report rather than recomputed by each caller: the CLI has no business
+    /// grouping units, and a second implementation is a second chance to group them differently.
+    /// </remarks>
+    public IReadOnlyList<DiscSet> Sets => DiscSets ?? Array.Empty<DiscSet>();
+
     /// <summary>Groups the policy resolved.</summary>
     public IReadOnlyList<VariantGroup> Resolved => Groups.Where(group => !group.IsRefused).ToArray();
 

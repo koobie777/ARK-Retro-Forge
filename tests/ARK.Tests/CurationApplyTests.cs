@@ -210,7 +210,7 @@ public sealed class CurationApplyTests : IDisposable
         return new ScanService(
             fileSystem,
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, inspector), new DiscUnitResolver() },
+            new IGameUnitResolver[] { new DiscUnitResolver(Tokenizer, inspector, fileSystem), new CartridgeUnitResolver(Tokenizer, inspector) },
             rules).Scan(_root);
     }
 

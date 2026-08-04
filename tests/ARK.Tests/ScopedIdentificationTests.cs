@@ -162,10 +162,16 @@ public sealed class ScopedIdentificationTests : IDisposable
             .ToArray();
 
         var rules = ScanRulesLoader.Load(TestFixtures.ShippedScanRulesPath());
+        var reader = new InMemoryFileSystemReader(new[] { new DirectoryListing(directory, directoryName, files) });
+        var inspector = new FakeArchiveInspector { Enabled = false };
         var service = new ScanService(
-            new InMemoryFileSystemReader(new[] { new DirectoryListing(directory, directoryName, files) }),
+            reader,
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, new FakeArchiveInspector { Enabled = false }), new DiscUnitResolver() },
+            new IGameUnitResolver[]
+            {
+                new DiscUnitResolver(Tokenizer, inspector, reader),
+                new CartridgeUnitResolver(Tokenizer, inspector),
+            },
             rules);
 
         return service.Scan(directory, resolver);

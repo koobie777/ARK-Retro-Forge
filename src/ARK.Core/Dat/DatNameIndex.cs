@@ -84,6 +84,23 @@ public sealed class DatNameIndex
     /// <summary>Finds the entry matching a raw name by tokenizing it first.</summary>
     public CatalogEntry? Find(string name) => Find(_tokenizer.Parse(name));
 
+    /// <summary>
+    /// Every catalog entry sharing a parsed name's key.
+    /// </summary>
+    /// <remarks>
+    /// A Redump game is several ROM entries under one game name — the track BINs and the cue sheet
+    /// — and a disc unit verifies only when every one of them matches.
+    /// <see cref="Find(ParsedName)"/> returning the first would compare one file and call the disc
+    /// good.
+    /// </remarks>
+    public IReadOnlyList<CatalogEntry> FindAll(ParsedName parsed)
+    {
+        var key = NameMatchKey.For(parsed, _vocabulary);
+        return key.Length > 0 && _byKey.TryGetValue(key, out var bucket)
+            ? bucket
+            : Array.Empty<CatalogEntry>();
+    }
+
     private static string StripExtension(string value)
     {
         var dot = value.LastIndexOf('.');

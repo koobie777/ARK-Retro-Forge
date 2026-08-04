@@ -37,4 +37,18 @@ public interface IArchiveInspector
     /// <param name="size">Uncompressed length of the entry, or 0 when the format does not report it.</param>
     /// <param name="error">Why it could not be opened.</param>
     bool TryOpenSingleEntry(string path, out Stream stream, out long size, out string? error);
+
+    /// <summary>
+    /// Opens one named entry for reading.
+    /// </summary>
+    /// <remarks>
+    /// Needed to read a cue sheet out of an archive without extracting anything: the sheet is the
+    /// manifest that says which other entries belong to the same disc, so it has to be read before
+    /// the unit's membership is known. Still reading only — nothing is written anywhere.
+    /// </remarks>
+    /// <param name="path">Archive path.</param>
+    /// <param name="entryName">Entry to open, matched case-insensitively.</param>
+    /// <param name="stream">The entry's decompressed content stream. The caller disposes it.</param>
+    /// <param name="error">Why it could not be opened.</param>
+    bool TryOpenEntry(string path, string entryName, out Stream stream, out string? error);
 }

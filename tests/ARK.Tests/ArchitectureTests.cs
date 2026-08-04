@@ -332,6 +332,55 @@ public class ArchitectureTests
             Environment.NewLine + string.Join(Environment.NewLine, offenders));
     }
 
+    // Phase 10 gate 10, structurally rather than behaviourally. Redump DATs hash every constituent
+    // file including the .cue, so a sheet matching its DAT hash is provably correct and must never
+    // be touched; one that does not match is reported, not repaired. v1 generated cue sheets from
+    // what it believed the structure was, and that is the root defect this phase exists to close.
+    // No production code may name a .cue as a write destination.
+    [Fact]
+    public void No_cue_sheet_is_ever_written()
+    {
+        var sourceRoot = FindSourceRoot();
+        var offenders = new List<string>();
+
+        // Any expression that would produce a .cue path for writing. Reading one is fine and is
+        // how membership is learned in the first place.
+        string[] forbidden =
+        {
+            "WriteAllText(",
+            "WriteAllLines(",
+            "WriteAllBytes(",
+            "OpenWrite(",
+            "CreateText(",
+            "StreamWriter(",
+        };
+
+        foreach (var file in EnumerateProductionSources(sourceRoot))
+        {
+            var text = File.ReadAllText(file);
+
+            // Only the executor may write at all, and it writes journal and manifest JSON. The
+            // check that matters here is that nothing anywhere composes a .cue destination.
+            if (text.Contains(".cue\"", StringComparison.Ordinal) ||
+                text.Contains(".cue'", StringComparison.Ordinal))
+            {
+                foreach (var call in forbidden)
+                {
+                    if (text.Contains(call, StringComparison.Ordinal))
+                    {
+                        offenders.Add($"{Path.GetFileName(file)} names a .cue and calls '{call}'");
+                    }
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "No cue sheet is ever written. A cue matching its DAT hash is provably correct; one that " +
+            "does not is reported, never regenerated. Offenders:" +
+            Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
     private static IEnumerable<string> EnumerateProductionSources(string sourceRoot)
     {
         var obj = $"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}";

@@ -70,7 +70,44 @@ public static class VerifyRenderer
         RenderPivots(console, report);
         RenderMismatched(console, report, listAll);
         RenderInProgress(console, report);
+        RenderDiscSets(console, report, listAll);
         RenderFormatContradictions(console, report);
+    }
+
+    // A set is only as complete as its worst disc. Reporting Disc 1 Verified and Disc 2 Mismatched
+    // as two unrelated rows tells the truth about the files and hides the fact that the game is
+    // unplayable — and the disc that fails is usually the one reached hours in.
+    private static void RenderDiscSets(IAnsiConsole console, VerificationReport report, bool listAll)
+    {
+        if (report.Sets.Count == 0)
+        {
+            return;
+        }
+
+        var incomplete = report.IncompleteSets;
+        console.MarkupLineInterpolated(
+            $"[bold]Multi-disc sets[/] — {report.Sets.Count - incomplete.Count} complete, {incomplete.Count} incomplete");
+
+        if (incomplete.Count == 0)
+        {
+            console.MarkupLine("[grey]Every disc of every set verified.[/]");
+            console.WriteLine();
+            return;
+        }
+
+        foreach (var verdict in listAll ? incomplete : incomplete.Take(PreviewRows))
+        {
+            var colour = verdict.State == DiscSetState.Damaged ? "red" : "yellow";
+            console.MarkupLineInterpolated($"  [{colour}]{verdict.Set.Title}[/] — {verdict.Detail}");
+        }
+
+        if (!listAll && incomplete.Count > PreviewRows)
+        {
+            console.MarkupLineInterpolated($"[grey]  … and {incomplete.Count - PreviewRows} more. --list-all to see them.[/]");
+        }
+
+        console.MarkupLine("[grey]A set is complete only when every disc in it verifies.[/]");
+        console.WriteLine();
     }
 
     private static void RenderStates(IAnsiConsole console, VerificationReport report)

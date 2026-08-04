@@ -1,6 +1,7 @@
 using ARK.Core.Instances;
 using ARK.Core.Naming;
 using ARK.Core.Scanning;
+using ARK.Core.Units;
 using ARK.Core.Verification;
 
 namespace ARK.Core.Renaming;
@@ -55,6 +56,16 @@ public sealed class RenameService
                 continue;
             }
 
+            // Also before either mode: a loose cue plus its tracks cannot be renamed coherently
+            // without rewriting the cue's FILE lines, and no cue is written. Refused whole rather
+            // than renaming the sheet and orphaning the tracks it names.
+            if (IsLooseDiscUnit(unit))
+            {
+                decisions.Add(Refuse(unit, file, RenameRefusal.LooseDiscUnit,
+                    $"a loose cue sheet with {unit.Files.Count - 1} track file(s) — renaming them would require rewriting the cue, which ARK never does"));
+                continue;
+            }
+
             decisions.Add(mode == RenameMode.Canonicalize
                 ? Canonicalize(scanned, verified, file)
                 : Normalize(scanned, file));
@@ -64,6 +75,12 @@ public sealed class RenameService
         // to what else wants it.
         return new RenameReport(scan.Root, mode, ResolveCollisions(decisions));
     }
+
+    /// <summary>
+    /// A disc unit spread across several real files, as opposed to one archive or one ISO.
+    /// </summary>
+    private static bool IsLooseDiscUnit(GameUnit unit) =>
+        unit.Kind == GameUnitKind.Disc && unit.Files.Count > 1;
 
     private static RenameDecision Canonicalize(ScannedUnit scanned, VerifiedUnit? verified, FileEntry file)
     {

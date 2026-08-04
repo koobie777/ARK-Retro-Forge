@@ -365,7 +365,7 @@ public sealed class DedupTests : IDisposable
         var scan = new ScanService(
             fileSystem,
             new DirectoryProfiler(Tokenizer, rules),
-            new IGameUnitResolver[] { new CartridgeUnitResolver(Tokenizer, inspector), new DiscUnitResolver() },
+            new IGameUnitResolver[] { new DiscUnitResolver(Tokenizer, inspector, fileSystem), new CartridgeUnitResolver(Tokenizer, inspector) },
             rules).Scan(_root);
 
         var verification = new VerificationReport(
@@ -374,7 +374,7 @@ public sealed class DedupTests : IDisposable
                 unit.Unit.PrimaryPath, unit.Unit.Files[0].Name, unit.Unit.SetFolder, null, state, "test fixture")).ToArray(),
             0, 0, TimeSpan.Zero, 0);
 
-        return new DedupService(new RomHasher(fileSystem, inspector), cache ?? Cache("dedup"))
+        return new DedupService(new RomHasher(fileSystem, inspector), cache ?? Cache("dedup"), Vocabulary)
             .Analyze(scan, verification, policy);
     }
 

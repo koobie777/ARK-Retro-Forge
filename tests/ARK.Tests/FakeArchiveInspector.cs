@@ -14,6 +14,9 @@ internal sealed class FakeArchiveInspector : IArchiveInspector
     /// <summary>Decompressed content for the single entry, keyed by archive path.</summary>
     public Dictionary<string, byte[]> Contents { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Decompressed content per named entry, keyed by "archive path|entry name".</summary>
+    public Dictionary<string, byte[]> EntryContents { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Archives that fail to open.</summary>
     public HashSet<string> Unreadable { get; } = new(StringComparer.OrdinalIgnoreCase);
 
@@ -78,4 +81,32 @@ internal sealed class FakeArchiveInspector : IArchiveInspector
         error = null;
         return true;
     }
+
+    public bool TryOpenEntry(string path, string entryName, out Stream stream, out string? error)
+    {
+        if (Error is not null || Unreadable.Contains(path))
+        {
+            stream = Stream.Null;
+            error = Error ?? "archive could not be read";
+            return false;
+        }
+
+        if (!EntryContents.TryGetValue(Key(path, entryName), out var bytes))
+        {
+            stream = Stream.Null;
+            error = $"entry '{entryName}' not found";
+            return false;
+        }
+
+        OnOpenEntry?.Invoke(path);
+
+        stream = new MemoryStream(bytes, writable: false);
+        error = null;
+        return true;
+    }
+
+    /// <summary>Registers one named entry's bytes.</summary>
+    public void SetEntry(string path, string entryName, byte[] bytes) => EntryContents[Key(path, entryName)] = bytes;
+
+    private static string Key(string path, string entryName) => path + "|" + entryName;
 }
