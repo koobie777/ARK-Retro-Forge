@@ -363,7 +363,26 @@ Output must be exportable in a form usable for re-acquisition — the missing li
 
 Catalog tokenization is memoized per run and scoped to the DATs the scan actually resolved to; the join is indexed on the token-set match key, never O(n·m).
 
-### Phase 9 — GUI (Avalonia)
+### Phase 9 — Rename + Organize
+What the naming subsystem was built for, and what v1 destroyed collections doing.
+
+**Two modes, never confused.** *Canonicalize* takes the name from the DAT entry the unit's hash confirmed — the default, and the only mode requiring no flag. *Normalize* reformats the unit's own existing name to repair v1-style damage; it is an explicit opt-in, reported separately, and claims only that the result is well-formed, never that it is correct.
+
+**ARK never derives a canonical name from a filename.** The tokenizer exists to *understand* names, never to *authorize* them. No DAT match means no known canonical name: refused and reported, never guessed. This is the single rule separating this phase from v1.
+
+**Verification gates renaming.** Only Verified units are canonicalized. A corrupt file wearing its canonical name looks verified forever after — worse than v1's damage, which at least announced itself in the filename.
+
+**Check before write.** A unit already carrying its canonical name is skipped with no filesystem write, so a conformant set is a no-op. The comparison is *ordinal*: `game (usa).zip` → `Game (USA).zip` is a real correction.
+
+**The planner projects the filesystem across the whole batch** before planning any move. Two units canonicalizing to one name are refused and reported — never overwritten, never suffixed, because a disambiguating suffix is a fabricated name. Swaps and cycles stage through temporary names; so do case-only renames, which `File.Move` handles unreliably on a case-insensitive filesystem.
+
+**Archives are renamed, never rewritten.** The entry inside keeps its name. Rewriting means recompressing — slow, changes archive bytes, and touches ROM data for a cosmetic gain that DAT verification does not care about.
+
+*Organize* moves units into a directory structure (default: the DAT name). Distinct from rename, separately reported, and neither is a removal.
+
+> **Gate:** Only Verified units canonicalized. No DAT match is refused, never invented. Already-correct names are skipped without a write. Collisions refused; swaps and cycles complete without loss. `ark undo` restores the set byte-for-byte.
+
+### Phase 10 — GUI (Avalonia)
 Flagship interface over the same Core. Confirmation flows — candidate picking, dedup review, variant approval — are where a GUI genuinely beats a terminal.
 
 ---

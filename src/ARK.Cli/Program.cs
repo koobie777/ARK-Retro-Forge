@@ -9,6 +9,7 @@ using ARK.Core.Hashing;
 using ARK.Core.Instances;
 using ARK.Core.Naming;
 using ARK.Core.Policy;
+using ARK.Core.Renaming;
 using ARK.Core.Reporting;
 using ARK.Core.Scanning;
 using ARK.Core.Settings;
@@ -76,6 +77,8 @@ try
         PolicySettings.Resolve(settingsStore.Read())));
     root.Add(ReportCommand.Build(
         AnsiConsole.Console, BuildCollectionReport, PolicySettings.Resolve(settingsStore.Read())));
+    root.Add(RenameCommand.BuildRename(AnsiConsole.Console, DecideRenames, ApplyRenames));
+    root.Add(RenameCommand.BuildOrganize(AnsiConsole.Console, OrganizeRoot));
     root.Add(UndoCommand.BuildJournal(AnsiConsole.Console, journals));
     root.Add(UndoCommand.BuildUndo(AnsiConsole.Console, new UndoService(journals, executor)));
 
@@ -240,6 +243,67 @@ CollectionReport BuildCollectionReport(string root, VariantPolicy policy)
         hashCache.Close();
     }
 }
+
+// Renaming needs the scan (for the DAT match) and verification (for the state that authorizes it).
+// A unit is canonicalized only when its hash confirmed the entry whose name it will take.
+RenameReport DecideRenames(string root, RenameMode mode)
+{
+    try
+    {
+        var scan = ScanRoot(root);
+        return new RenameService(formatter).Decide(scan, verificationService.Verify(scan), mode);
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+}
+
+(RenamePlan Plan, ExecutionResult? Result) ApplyRenames(RenameReport report, bool apply)
+{
+    var sessionId = $"rename-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}";
+    var plan = RenamePlanner.Build(report, sessionId, DateTimeOffset.UtcNow, ActiveRenameDirectories(report));
+
+    return plan.Plan.Actions.Count == 0 || !apply
+        ? (plan, null)
+        : (plan, executor.Execute(plan.Plan, apply: true));
+}
+
+(OrganizePlan Plan, ExecutionResult? Result) OrganizeRoot(string root, bool apply)
+{
+    OrganizePlan plan;
+    try
+    {
+        var scan = ScanRoot(root);
+        var verification = verificationService.Verify(scan);
+        plan = OrganizePlanner.Build(
+            scan, verification, $"organize-{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}", DateTimeOffset.UtcNow,
+            ActiveDirectoriesFrom(verification));
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+
+    return plan.Plan.Actions.Count == 0 || !apply
+        ? (plan, null)
+        : (plan, executor.Execute(plan.Plan, apply: true));
+}
+
+// In-flight units are already refused by RenameService before they reach a plan, in either mode.
+// This passes their directories through as well, so a unit that merely sits beside one is caught
+// even when its own timestamp looks settled.
+IEnumerable<string> ActiveRenameDirectories(RenameReport report) => report
+    .RefusedFor(RenameRefusal.ActiveDownload)
+    .Select(decision => Path.GetDirectoryName(decision.Path))
+    .Where(directory => directory is not null)
+    .Distinct(StringComparer.OrdinalIgnoreCase)!;
+
+IEnumerable<string> ActiveDirectoriesFrom(VerificationReport verification) => verification
+    .InState(VerificationState.InProgress)
+    .Select(unit => Path.GetDirectoryName(unit.Path))
+    .Where(directory => directory is not null)
+    .Distinct(StringComparer.OrdinalIgnoreCase)!;
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {
