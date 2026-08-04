@@ -355,6 +355,14 @@ Output must be exportable in a form usable for re-acquisition — the missing li
 
 > **Gate:** Missing/unrecognized/upgradable computed against a declared target set. Pivots by system and by region. Changing the policy changes the missing count and nothing else. Export is machine-readable.
 
+**The key inversion: the policy runs over the catalog.** Phase 8 runs it over *your files* to decide what to remove; this runs the identical policy over *the DAT* to decide what you should have. Same grouping, same ranking, same axes, same refusals — different input. `VariantEngine` is the one implementation both call, so curation and the reports can never describe different collections.
+
+**Four states, not three.** Present · Missing · **Damaged** · Unrecognized. Damaged is a Mismatched file for a title *inside* the target set — a gap you can close, and you already know which title. The same file outside the target set is Unrecognized and must not inflate the missing count.
+
+**Region matching is set intersection.** `(USA, Europe)` satisfies a USA target — it *is* that release. `(World)` satisfies every region target and is never collapsed into a region list.
+
+Catalog tokenization is memoized per run and scoped to the DATs the scan actually resolved to; the join is indexed on the token-set match key, never O(n·m).
+
 ### Phase 9 — GUI (Avalonia)
 Flagship interface over the same Core. Confirmation flows — candidate picking, dedup review, variant approval — are where a GUI genuinely beats a terminal.
 

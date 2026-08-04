@@ -9,6 +9,7 @@ using ARK.Core.Hashing;
 using ARK.Core.Instances;
 using ARK.Core.Naming;
 using ARK.Core.Policy;
+using ARK.Core.Reporting;
 using ARK.Core.Scanning;
 using ARK.Core.Settings;
 using ARK.Core.Systems;
@@ -73,6 +74,8 @@ try
     root.Add(CurateCommand.Build(
         AnsiConsole.Console, AnalyzeVariants, QuarantineVariants, SortVariants,
         PolicySettings.Resolve(settingsStore.Read())));
+    root.Add(ReportCommand.Build(
+        AnsiConsole.Console, BuildCollectionReport, PolicySettings.Resolve(settingsStore.Read())));
     root.Add(UndoCommand.BuildJournal(AnsiConsole.Console, journals));
     root.Add(UndoCommand.BuildUndo(AnsiConsole.Console, new UndoService(journals, executor)));
 
@@ -208,6 +211,35 @@ IEnumerable<string> ActiveDirectories(CurationReport report) => report
     .Select(candidate => Path.GetDirectoryName(candidate.Path))
     .Where(directory => directory is not null)
     .Distinct(StringComparer.OrdinalIgnoreCase)!;
+
+// The join the pipeline was built to produce. Nothing new is computed: the catalog says what
+// exists, the scan what you have, verification whether it is correct, and the policy what you want.
+// Only the DATs the scanned directories actually resolved to are tokenized — running the policy
+// over all 1.5M catalog entries would be both slow and meaningless.
+CollectionReport BuildCollectionReport(string root, VariantPolicy policy)
+{
+    try
+    {
+        var scan = ScanRoot(root);
+        var verification = verificationService.Verify(scan);
+
+        var scoped = scan.RomSetDirectories
+            .Select(directory => directory.Scope?.DatName)
+            .Where(name => name is { Length: > 0 })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .SelectMany(name => catalog.EntriesForDat(name!))
+            .ToArray();
+
+        var cache = new CatalogNameCache(tokenizer);
+        var target = new TargetSetBuilder(cache, vocabulary).Build(scoped, policy);
+
+        return new CollectionReportService(vocabulary).Build(scan, verification, target, cache);
+    }
+    finally
+    {
+        hashCache.Close();
+    }
+}
 
 IReadOnlyList<DatSourceDefinition> LoadManifestSources()
 {
